@@ -1,0 +1,16 @@
+# Made when the program runs: your content, your settings and your exports.
+/Content/
+/Settings/
+/Desktop Export/
+/Website Export/
+/app/logs/
+/app/webview-data/
+
+# Third-party, about 106 MB: take app/Dependencies from the release zip.
+/app/Dependencies/
+
+# The two programs: build them (node scripts/build-app.js) or take them from the release zip.
+/MugenStudio.exe
+/MugenStudio.exe.old*
+/app/studio-server.exe
+/app/studio-server.exe.old*

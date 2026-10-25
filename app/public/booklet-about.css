@@ -1,0 +1,231 @@
+/* MUGEN STUDIO - THE BOOKLET: the About tab (rd-about, 2026-10-18).
+   The booklet lying open on its first spread: the FRONT COVER on the left page
+   (SHiZUKA with her glasses swirling, the logotype, the band, the publisher)
+   and the STAFF page on the right (what the Studio is, the band line-up, the
+   credits, the controls). Inks and components: themes.css + booklet.css; this
+   file only lays out the About panel, so every rule is scoped under
+   #panel-about (studio.html's own <style> loads after this file).
+
+   THE COVER is the shape of a 2000s DVD-case booklet (13.5 x 18.4 cm, 0.73
+   wide per tall) at the full height of the page area, bleeding to the head
+   rule, the foot rule and the left trim; it is never wider than 46% of the
+   window. Everything inside it is sized in container units, so it scales as
+   one object. A narrow or portrait window stacks the spread: the cover first
+   (whole, at its shape), the staff page under it, the page scrolling.
+
+   SHIZUKA on the cover is studio.html's aboutTab (GRAIL 3.1 "SHiZUKA's
+   swirling glasses"): the lens-holed picture over one canvas per lens, the
+   swirl's own clock. THE COVER IS ALWAYS DARK (2026-10-22, the owner: "I
+   would rather that part of the screen be always dark and scary looking like
+   the previous look we had"): it prints on the old dark pane's ink in every
+   printing and every Look, and she is the old pane's shadow again - her body
+   faded toward the left and the bottom and multiplied into the cover, her own
+   violet behind her, entering as a silhouette each time the tab opens. So her
+   box must NOT be a stacking context (no z-index, transform, opacity below 1
+   or filter), or her body would have nothing under it to blend with.
+   aboutTab.fit() sizes her: 110% of the cover's width, capped at 68% of its
+   height, standing on the foot strip, her far hair cropped by the cover's
+   right edge. */
+
+/* ------------------------------------------------------------------ */
+/* THE SPREAD                                                           */
+/* ------------------------------------------------------------------ */
+#panel-about { --ab-cover-w: min(calc((100vh - var(--topbar-h, var(--head-h)) - var(--foot-h)) * .73), 46vw); }
+/* the frame stays a .pframe (fitRoster, the tab's padding rule) but prints as the spread */
+#panel-about > #aboutFrame.pframe {
+  display: grid; grid-template-columns: var(--ab-cover-w) var(--fold) minmax(0, 1fr);
+  height: calc(100vh - var(--topbar-h, var(--head-h)) - var(--foot-h)); min-height: 0;
+  margin: -18px 0 -14px calc(-1 * var(--ab-bleed, 24px));
+  border: 0; background: var(--paper); color: var(--ink); overflow: hidden; isolation: auto;
+}
+#panel-about > #aboutFrame > .bk-fold { min-height: 0; }
+
+/* ------------------------------------------------------------------ */
+/* THE FRONT COVER                                                      */
+/* ------------------------------------------------------------------ */
+/* ALWAYS DARK: its own inks, never the printing's - the old dark pane's ground (#161130 as it rendered),
+   a deeper black for the field and the strips, her violet. isolation makes the cover the group her body
+   multiplies into. */
+#panel-about .ab-cover { --cv-ground: #161130; --cv-deep: #0b0815; --cv-ink: #ece8f6; --cv-dim: #a59dc2; --cv-violet: 170, 102, 255;
+  position: relative; overflow: hidden; container-type: size; min-width: 0; min-height: 0;
+  background: var(--cv-ground); color: var(--cv-ink); isolation: isolate; }
+/* top strip: where a 2000s cover printed its platform band, this one prints the kind of book and the printing */
+#panel-about .cv-top { position: absolute; left: 0; right: 0; top: 0; z-index: 5; height: 9cqh; max-height: 56px; min-height: 36px;
+  display: flex; align-items: center; gap: 12px; padding: 0 5cqw; background: var(--cv-deep); color: var(--cv-ink);
+  box-shadow: inset 0 -2px 0 rgba(var(--cv-violet), .5); }
+#panel-about .cv-kind { display: flex; align-items: baseline; gap: 10px; min-width: 0; line-height: 1; white-space: nowrap; }
+#panel-about .cv-kind .jp { font: 700 clamp(14px, 3.3cqw, 19px)/1 var(--f-jp); letter-spacing: .16em; }
+#panel-about .cv-kind .en { font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 108%; }
+#panel-about .cv-pr { margin-left: auto; font: 700 var(--t-11)/1 var(--f-disp); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* the title field: the deep black with a falling bottom edge, a thin cut of her violet along it */
+#panel-about .cv-field, #panel-about .cv-cut { position: absolute; left: 0; right: 0; height: 49cqh;
+  clip-path: polygon(0 0, 100% 0, 100% 66%, 0 100%); }
+#panel-about .cv-field { top: 0; z-index: 0; background: var(--cv-deep); }
+#panel-about .cv-cut { top: 4.6cqw; z-index: 0; background: rgba(var(--cv-violet), .12); }
+
+/* the logotype: MUGEN in the band's own type, STUDIO reversed out of a band2 bar with speed-cut ends */
+#panel-about h2.cv-title { position: absolute; z-index: 6; left: 5cqw; top: calc(clamp(36px, 9cqh, 56px) + 3.4cqh); margin: 0; padding: 0; border: 0;
+  display: flex; flex-direction: column; align-items: flex-start; text-transform: uppercase; color: var(--cv-ink);
+  background: none; letter-spacing: 0; -webkit-text-fill-color: currentColor; }
+#panel-about .cv-title .w1 { font: italic 900 21.6cqw/.84 var(--f-disp); font-stretch: 125%; letter-spacing: -.035em; padding-left: .5cqw; color: var(--cv-ink); }
+#panel-about .cv-title .w2 { position: relative; isolation: isolate; margin: 1.6cqw 0 0 -1cqw; padding: 1.3cqw 6.4cqw 1.5cqw 2.2cqw;
+  font: italic 900 14.6cqw/.84 var(--f-disp); font-stretch: 125%; letter-spacing: .01em; color: var(--cv-ink); }
+#panel-about .cv-title .w2::before { content: ''; position: absolute; inset: 0; z-index: -1; background: #3a2766;
+  clip-path: polygon(3.2cqw 0, 100% 0, calc(100% - 3.2cqw) 100%, 0 100%); }
+#panel-about .cv-title .w3 { margin-top: 2.6cqh; font: italic 800 clamp(13px, 3.4cqw, 20px)/1 var(--f-disp); font-stretch: 112%;
+  text-transform: none; color: var(--cv-dim); }
+
+/* SHiZUKA: the picture with its lens holes over the swirl canvases (aboutTab places her box). NO z-index
+   here (see the top): her box sits in the cover's own layer, after the field in the markup, under the
+   title (6) and the strips (5). */
+#panel-about .aboutArt { position: absolute; right: 0; bottom: 0; width: 100%; aspect-ratio: 1446 / 1300;
+  pointer-events: none; user-select: none;
+  --fade: linear-gradient(90deg, transparent 0%, #000 55%), linear-gradient(0deg, transparent 0%, #000 45%); }
+/* Hidden until her art and the first swirl are ready; the silhouette's entry is her fade-in. (Not opacity:
+   that would make the box a stacking context.) */
+#panel-about .aboutArt.wait { visibility: hidden; }
+#panel-about .aboutArt[hidden] { display: none; }
+/* Her own violet behind her, so she sits in the dark rather than on it. */
+#panel-about .aboutArt::before { content: ''; position: absolute; inset: 8% -10% -6% 8%;
+  background: radial-gradient(closest-side, rgba(var(--cv-violet), .2), rgba(var(--cv-violet), .06) 55%, transparent 80%); }
+#panel-about .aboutArt canvas, #panel-about .aboutArt img { position: absolute; display: block; }
+#panel-about .aboutArt img { inset: 0; width: 100%; height: 100%; }
+/* HER BODY fades into the dark toward the left and the bottom, always, and is multiplied into it: a shadow
+   in her own violet glow. Only her glasses keep their full strength: they are the canvases under the
+   holes, which none of this touches. */
+#panel-about .aboutArt img { -webkit-mask-image: var(--fade); mask-image: var(--fade);
+  -webkit-mask-composite: source-in; mask-composite: intersect; }
+#panel-about .aboutArt img.body { mix-blend-mode: multiply; }
+/* ON ENTRY she is a silhouette - black, a violet rim, the glasses swirling in it - and settles into the
+   blend (aboutTab's enter). */
+#panel-about .aboutArt img.shade { opacity: 0; transition: opacity 1.8s ease-in-out;
+  filter: brightness(0) drop-shadow(0 0 1.2px rgba(var(--cv-violet), .95)) drop-shadow(0 0 10px rgba(var(--cv-violet), .35)); }
+#panel-about .aboutArt.entering img.shade { opacity: 1; transition: none; }
+
+/* foot strip: the band, credited as the About tab credits them, and the publisher's plate */
+#panel-about .cv-foot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; height: 7cqh; max-height: 46px; min-height: 34px;
+  display: flex; align-items: center; gap: 6px; padding: 0 0 0 5cqw; background: var(--cv-deep); color: var(--cv-ink); }
+#panel-about .cv-foot .with { font: 700 var(--t-12)/1 var(--f-disp); margin-right: 2px; }
+#panel-about .ab-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; color: var(--onmember);
+  font: italic 900 var(--t-12)/1 var(--f-disp); font-stretch: 108%; white-space: nowrap; text-transform: none; }
+#panel-about .ab-chip.wb { background: var(--wb); } #panel-about .ab-chip.ar { background: var(--ar); } #panel-about .ab-chip.sz { background: var(--sz); }
+/* the publisher's plate at the cover's outer foot corner: the running head's imprint, mirrored */
+#panel-about .cv-pub { position: relative; isolation: isolate; align-self: stretch; margin-left: auto; display: flex; align-items: center;
+  padding: 0 5cqw 0 calc(var(--slant) + 18px); color: var(--onband); white-space: nowrap;
+  font: italic 800 clamp(15px, 3.4cqw, 20px)/1 var(--f-disp); font-stretch: 108%; }
+#panel-about .cv-pub::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--band);
+  clip-path: polygon(var(--slant) 0, 100% 0, 100% 100%, 0 100%); }
+#panel-about .cv-pub::after { content: ''; position: absolute; top: 0; bottom: 0; left: -9px; width: calc(var(--slant) + 7px); z-index: -1;
+  background: var(--band2); clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+
+/* ------------------------------------------------------------------ */
+/* THE STAFF PAGE                                                       */
+/* ------------------------------------------------------------------ */
+#panel-about .ab-staff { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#panel-about .ab-staff > .bk-secband { flex: 0 0 var(--secband-h); }
+#panel-about .ab-staff > .bk-secband h2.bk-secband-t { border: 0; text-transform: none; letter-spacing: 0; color: var(--onband); }
+#panel-about .ab-staff .bk-secband-meta > span b { font-weight: 700; }
+#panel-about .ab-staff .bk-secband-meta { min-width: 0; }
+@media (max-width: 1240px) { #panel-about .ab-staff .bk-secband-meta > span { display: none; } }
+#panel-about #aboutNotices { text-transform: none; letter-spacing: 0; }
+#panel-about .ab-staff > .pbody { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 18px var(--m) 28px 0; position: static; z-index: auto; }
+#panel-about .aboutText { max-width: 980px; container: abstaff / inline-size; font: 400 var(--t-13)/1.5 var(--f-body); color: var(--ink); }
+#panel-about .aboutText p { margin: 0; text-wrap: pretty; }
+#panel-about .aboutText a { color: var(--mark); text-decoration: none; border-bottom: 1.5px solid var(--mark); }
+#panel-about .aboutText a:hover { background: var(--mark); color: var(--onmark); }
+#panel-about .aboutText .bk-sh { margin: 22px 0 12px; }
+
+/* intro: the lede and the links, then what it does and why it exists */
+#panel-about .ab-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); column-gap: 26px; row-gap: 12px; align-items: start; }
+#panel-about .aboutLede { font: 600 var(--t-16)/1.45 var(--f-body); max-width: 34ch; }
+#panel-about .aboutLinks { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+#panel-about .aboutLinks li { display: grid; grid-template-columns: 58px minmax(0, 1fr); column-gap: 8px; align-items: baseline; }
+#panel-about .aboutLinks .k { font: 700 var(--t-11)/1.2 var(--f-disp); text-transform: uppercase; letter-spacing: .04em; color: var(--ink2); }
+#panel-about .aboutLinks a { justify-self: start; font: 400 var(--t-13)/1.3 var(--f-data); overflow-wrap: anywhere; }
+#panel-about .aboutLinks .d { grid-column: 2; font-size: var(--t-12); color: var(--ink2); }
+#panel-about .ab-what p { font-size: var(--t-12); line-height: 1.55; }
+#panel-about .ab-what p + p { margin-top: 8px; }
+#panel-about .ab-what b { font: 800 var(--t-11)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .04em; margin-right: 6px; }
+
+/* THE BAND: one line-up on one baseline, each member centered over their own strip, at the sizes the owner set
+   by eye (2026-10-20: "She's far too big. DJ-AR is far too small. Ignore the scale instructions"): SHiZUKA 70% of
+   --h, WB 50%, DJ AR 42%, all three ON the rule; under it each member's strip, voice and a tip from their own deck */
+#panel-about .ab-bandlede { font-size: var(--t-12); color: var(--ink2); margin: -4px 0 10px; }
+#panel-about .ab-band { --h: clamp(120px, calc((100cqw - 190px) / 2.25), 210px);
+  display: grid; grid-template-columns: minmax(min-content, 1fr) minmax(150px, .8fr) minmax(min-content, 1fr);
+  column-gap: 18px; row-gap: 0; align-items: end; }
+#panel-about .ab-fig { grid-row: 1; justify-self: center; align-self: end; display: flex; align-items: flex-end; margin: 0; padding: 0 0 6px;
+  border: 0; background: none; box-shadow: none; cursor: pointer; text-transform: none; height: auto; min-height: 0; min-width: 0; color: inherit; }
+#panel-about .ab-fig:hover { background: none; }
+#panel-about .ab-fig::before, #panel-about .ab-fig::after { display: none; }
+#panel-about .ab-fig.wb { grid-column: 1; } #panel-about .ab-fig.ar { grid-column: 2; } #panel-about .ab-fig.sz { grid-column: 3; }
+/* the canon heights; each picture keeps its own proportions (width follows) */
+#panel-about .ab-fig > img { display: block; width: auto; max-width: none; }
+#panel-about .ab-fig.sz > img { height: calc(var(--h) * .7); }
+#panel-about .ab-fig.wb > img { height: calc(var(--h) * .5); }
+#panel-about .ab-fig.ar > img { height: calc(var(--h) * .42); image-rendering: auto; }
+/* ALL THREE ON THE RULE: each box keeps only the rule's 3px under it and each picture is pushed 5px further down,
+   so SHiZUKA's boots and hand, WB's shoes and DJ AR's claws overlap the rule and are drawn IN FRONT of it (the
+   rule is the band's ::before, painted first). The owner, 2026-10-20: "fine if that makes her boots clip onto the
+   white line, that's a good design choice" - then "lower DJ-AR to clip the line too. Make him actually stand on
+   it. WB too." */
+#panel-about .ab-fig.wb, #panel-about .ab-fig.ar, #panel-about .ab-fig.sz { padding-bottom: 3px; }
+#panel-about .ab-fig > img { transform: translateY(5px); }
+#panel-about .ab-fig .bk-szart { flex: none; }
+/* the baseline rule they all stand on */
+#panel-about .ab-band::before { content: ''; grid-row: 1; grid-column: 1 / -1; align-self: end; height: 3px; background: var(--ink); }
+#panel-about .ab-mem { grid-row: 2; align-self: start; min-width: 0; padding-top: 8px; }
+#panel-about .ab-mem.wb { grid-column: 1; } #panel-about .ab-mem.ar { grid-column: 2; } #panel-about .ab-mem.sz { grid-column: 3; }
+#panel-about .ab-strip { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 9px; color: var(--onmember); }
+#panel-about .ab-strip b { font: italic 900 var(--t-16)/1 var(--f-disp); font-stretch: 112%; text-transform: none; }
+#panel-about .ab-strip span { margin-left: auto; font: 700 var(--t-11)/1 var(--f-disp); white-space: nowrap; }
+#panel-about .ab-mem.wb .ab-strip { background: var(--wb); } #panel-about .ab-mem.ar .ab-strip { background: var(--ar); } #panel-about .ab-mem.sz .ab-strip { background: var(--sz); }
+#panel-about .ab-voice { margin-top: 7px; font-size: var(--t-12); line-height: 1.45; color: var(--ink2); }
+#panel-about .ab-q { margin: 7px 0 0; padding: 0 0 0 10px; border-left: 3px solid var(--wb); font-size: var(--t-12); line-height: 1.5; color: var(--ink); min-height: 1.5em; }
+#panel-about .ab-mem.ar .ab-q { border-left-color: var(--ar); } #panel-about .ab-mem.sz .ab-q { border-left-color: var(--sz); }
+#panel-about .ab-fig:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* CREDITS: role, leader dots, name; a one-line note under each */
+#panel-about .ab-crs { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 26px; row-gap: 6px; }
+#panel-about .ab-cr { display: grid; grid-template-columns: max-content minmax(14px, 1fr) auto; align-items: baseline; align-content: start; column-gap: 8px; }
+#panel-about .ab-cr.wide { grid-column: 1 / -1; }
+#panel-about .ab-cr dt { font: 700 var(--t-11)/26px var(--f-disp); text-transform: uppercase; letter-spacing: .04em; color: var(--ink2); }
+#panel-about .ab-cr .lead { align-self: center; margin-top: 6px; border-bottom: 2px dotted var(--ink2); }
+#panel-about .ab-cr dd { margin: 0; font: 700 var(--t-13)/26px var(--f-body); text-align: right; white-space: nowrap; }
+#panel-about .ab-cr .note { grid-column: 1 / -1; margin: -3px 0 0; font-size: var(--t-12); line-height: 1.45; color: var(--ink2); }
+#panel-about .ab-cr .note a { font-family: var(--f-data); }
+
+/* CONTROLS: the Studio's real keys, printed like a manual's controls page; keycaps drawn square */
+#panel-about .ab-ctl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 26px; }
+#panel-about .ab-ctl table { width: 100%; border-collapse: collapse; }
+#panel-about .ab-ctl td { padding: 4px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; font-size: var(--t-12); line-height: 1.4; color: var(--ink); }
+#panel-about .ab-ctl td:first-child { width: 1%; white-space: nowrap; padding-right: 12px; }
+#panel-about .ab-ctl tr.grp td { border-bottom: 2px solid var(--ink); padding-top: 12px; font: 800 var(--t-11)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .04em; }
+#panel-about .ab-kc { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; margin-right: 3px;
+  border: 2px solid var(--ink); border-bottom-width: 4px; background: var(--sunk); color: var(--ink);
+  font: 700 var(--t-11)/1 var(--f-disp); vertical-align: middle; }
+#panel-about .ab-kc svg { width: 11px; height: 11px; fill: currentColor; }
+
+/* the staff page, narrow: one column, the members as rows under the line-up */
+@container abstaff (max-width: 600px) {
+  #panel-about .ab-intro { grid-template-columns: minmax(0, 1fr); }
+  #panel-about .aboutLede { font-size: var(--t-13); max-width: none; }
+  #panel-about .ab-band { --h: clamp(96px, calc((100cqw - 48px) / 2.45), 190px);
+    grid-template-columns: max-content max-content minmax(0, 1fr); column-gap: 24px; }
+  #panel-about .ab-band::before { grid-column: 1 / -1; }
+  #panel-about .ab-mem.wb, #panel-about .ab-mem.ar, #panel-about .ab-mem.sz { grid-column: 1 / -1; }
+  #panel-about .ab-mem.wb { grid-row: 2; } #panel-about .ab-mem.ar { grid-row: 3; } #panel-about .ab-mem.sz { grid-row: 4; }
+  #panel-about .ab-mem + .ab-mem { padding-top: 12px; }
+  #panel-about .ab-crs, #panel-about .ab-ctl { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* a narrow or portrait window: the spread stacks, the cover first at its own shape */
+@media (max-width: 900px), (max-aspect-ratio: 1/1) {
+  #panel-about > #aboutFrame.pframe { display: block; height: auto; overflow: visible; margin-bottom: 0; }
+  #panel-about .ab-cover { width: min(100%, 560px); aspect-ratio: .73; }
+  #panel-about > #aboutFrame > .bk-fold { display: none; }
+  #panel-about .ab-staff { border-top: 2px solid var(--rule); margin-top: 18px; }
+  #panel-about .ab-staff > .pbody { overflow: visible; padding-left: var(--m); }
+}
+@media (prefers-reduced-motion: reduce) { #panel-about * { transition: none !important; } }

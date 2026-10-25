@@ -1,0 +1,833 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>WebMUGEN</title>
+<style>
+  html, body { background: #111; color: #eee; font-family: monospace; margin: 0; padding: 12px; }
+  #apptitle { font-size: 22px; font-weight: bold; color: #6af; margin: 0 0 10px;
+              display: inline-block; vertical-align: middle; }
+  #apptitle .ver { font-size: 12px; font-weight: normal; color: #888; margin-left: 8px; }
+  #apptitle .credit { font-size: 12px; font-weight: normal; color: #778; margin-left: 10px; }
+  #boot { white-space: pre-wrap; font-size: 13px; line-height: 16px; }
+  canvas { border: 1px solid #444; display: block; margin: 8px auto; }
+  /* The boot strip folds away once the game is actually running, so the
+     picture gets the page instead of sharing it with a loading log nobody
+     needs any more. #chromeshow brings it back. */
+  #chrome { transition: opacity .45s ease, max-height .45s ease; overflow: hidden;
+            max-height: 400px; opacity: 1; }
+  #chrome.folded { max-height: 0; opacity: 0; }
+  /* Two controls, never both at once, because the two states have different
+     free space. Folded: a fixed pill top-LEFT, where the hidden title used to
+     be - top-right is the netplay panel's spot and it would sit on top of the
+     room code. Unfolded: an inline control in the strip itself, so nothing is
+     floating over the page at all. */
+  #chromeshow { position: fixed; top: 6px; left: 10px; z-index: 900;
+                font: 12px monospace; cursor: pointer; padding: 2px 8px; border-radius: 4px;
+                border: 1px solid #3a3a44; background: #1c1c22cc; color: #667;
+                opacity: .5; transition: opacity .2s ease; }
+  #chromeshow:hover { border-color: #6a8; color: #cfd; opacity: 1; }
+  #chromehide { font: 12px monospace; cursor: pointer; margin-left: 12px;
+                padding: 1px 7px; border-radius: 4px; vertical-align: middle;
+                border: 1px solid #3a3a44; background: #1c1c22; color: #778; }
+  #chromehide:hover { border-color: #6a8; color: #cfd; }
+</style>
+</head>
+<body>
+<script>
+// ---------------------------------------------------------------------------
+// BUILD BRANDING - this is the block to edit (or let `node export.js` rewrite
+// it from roster.json's siteTitle / siteVersion / siteCredit fields).
+//
+// It exists so a build made with the Modding Kit ships under ITS OWN name.
+// Leave it as the neutral default and nobody's build claims to be anybody
+// else's; set it and your build is yours.
+//
+//   title       big heading + browser tab name
+//   version     small gray text after the title ('' hides it)
+//   credit      optional small note beside it, e.g. 'by yourname'
+//   hideBootUI  seconds after the game starts drawing before the boot strip
+//               folds away. 0 = never fold.
+window.IKEMEN_BRAND = {
+  title: 'WebMUGEN',
+  version: '',
+  credit: '',
+  hideBootUI: 6,
+};
+</script>
+<button id="chromeshow" title="Show build info and boot options">&#9776; info</button>
+<div id="chrome">
+<div id="apptitle"></div><button id="chromehide" title="Hide the boot strip">&#9650; hide</button>
+<div id="boot">Ikemen GO / WebAssembly boot...</div>
+<div id="compare"></div>
+<div id="netcode"></div>
+<div id="aspect"></div>
+<div id="storage"></div>
+</div>
+<script>
+// Apply branding. textContent throughout: the title is author-supplied and
+// must never be able to inject markup into the page.
+(function () {
+  var b = window.IKEMEN_BRAND || {};
+  var t = document.getElementById('apptitle');
+  t.textContent = b.title || 'WebMUGEN';
+  document.title = (b.title || 'WebMUGEN') + (b.version ? ' ' + b.version : '');
+  if (b.version) {
+    var v = document.createElement('span');
+    v.className = 'ver'; v.textContent = b.version; t.appendChild(v);
+  }
+  if (b.credit) {
+    var c = document.createElement('span');
+    c.className = 'credit'; c.textContent = b.credit; t.appendChild(c);
+  }
+})();
+</script>
+<script>
+// Render size selector. Read at load by vfs.js, which patches GameWidth/Height
+// in config.ini before the engine starts.
+//
+// This is a real trade, not a quality setting. Every pixel is drawn on the one
+// thread that also runs the game, and 720p is THREE TIMES the pixels of 4:3
+// (921k vs 307k) - that shows up as framerate on a weak machine or a crowded
+// match, NOT as the GC freezes (those scale with the heap, and sprites are the
+// same size at either setting). 4:3 is the cheaper picture; 720p is what makes a
+// widescreen screenpack fill the frame instead of being cut off, at native size
+// for the 1280x720 motifs rather than scaled down to 854.
+(function () {
+  // Defaults to what the build already shipped, so turning this on changes
+  // nothing until someone chooses. 16:9 is only worth its cost while the
+  // screenpack is widescreen, which the shipped ones are.
+  var KEY = 'ikemen-aspect';
+  window.ikemenAspect = localStorage.getItem(KEY) === '4:3' ? '4:3' : '16:9';
+  var box = document.getElementById('aspect');
+  box.style.cssText = 'font:12px monospace;margin:2px 0 4px;color:#9ab;';
+  function btn(v, label, on, title) {
+    return '<button data-ar="' + v + '" title="' + title + '" style="'
+      + 'font:12px monospace;cursor:pointer;margin:0 2px;padding:2px 8px;border-radius:4px;'
+      + 'border:1px solid ' + (on ? '#6a8' : '#555') + ';background:' + (on ? '#254' : '#222')
+      + ';color:' + (on ? '#cfd' : '#999') + ';">' + label + (on ? ' ✓' : '') + '</button>';
+  }
+  // '4:3' is the stored name of the LIGHTER choice, kept so a returning
+  // player's pick survives. Its size follows the screenpack's shape (vfs.js),
+  // so a widescreen pack is never cut off; the label fills in once vfs.js
+  // has read the pack.
+  var ar = window.ikemenAspect;
+  box.innerHTML = 'Picture: '
+    + btn('4:3', '480p', ar === '4:3', 'Lighter - under half the pixels of 720p, in the screenpack\'s own shape, so nothing is cut off.')
+    + btn('16:9', '720p 1280x720', ar === '16:9', 'Sharpest. Over twice the pixels of 480p - costs framerate.')
+    + '<span style="color:#667;margin-left:6px">(offline setting)</span>';
+  window.ikemenPictureDecided = function (p) {
+    var light = box.querySelector('button[data-ar="4:3"]');
+    if (!light || !p) return;
+    light.innerHTML = '480p ' + (p.wideMotif ? '854x480' : '640x480') + (ar === '4:3' ? ' ✓' : '');
+  };
+  box.querySelectorAll('button').forEach(function (b) {
+    b.onclick = function () {
+      var v = b.getAttribute('data-ar');
+      if (v === window.ikemenAspect) return;
+      localStorage.setItem(KEY, v);
+      location.reload();
+    };
+  });
+})();
+</script>
+<script>
+// Online netcode selector. The choice is persisted and read at load by vfs.js
+// (which patches RollbackNetcode in config.ini before the engine starts) and
+// enforced peer-to-peer by webrtc.js (both players must pick the same mode).
+// Rollback = default as of 2026-08-11 (its one reproducible desync - skipping
+// the win pose - is now disabled engine-side while a rollback session runs);
+// Delay = the fallback for players who prefer it. Changing it reloads to apply.
+// NOTE the default flips only for players who never chose: an explicit stored
+// pick is honored either way.
+(function () {
+  var KEY = 'ikemen-netcode';
+  window.ikemenNetcode = localStorage.getItem(KEY) === 'delay' ? 'delay' : 'rollback';
+  var box = document.getElementById('netcode');
+  box.style.cssText = 'font:12px monospace;margin:2px 0 4px;color:#9ab;';
+  function btn(v, label, on, title) {
+    return '<button data-nc="' + v + '" title="' + title + '" style="'
+      + 'font:12px monospace;cursor:pointer;margin:0 2px;padding:2px 8px;border-radius:4px;'
+      + 'border:1px solid ' + (on ? '#6a8' : '#555') + ';background:' + (on ? '#254' : '#222')
+      + ';color:' + (on ? '#cfd' : '#999') + ';">' + label + (on ? ' ✓' : '') + '</button>';
+  }
+  var nc = window.ikemenNetcode;
+  box.innerHTML = 'Online netcode: '
+    + btn('rollback', 'Rollback', nc === 'rollback', 'Recommended — instant response. Win-pose skip is disabled between rounds to keep it in sync.')
+    + btn('delay', 'Delay', nc === 'delay', 'Fallback — adds a little constant input lag; lets you skip win poses.')
+    + '<span style="color:#667;margin-left:6px">(both players must match)</span>';
+  box.querySelectorAll('button').forEach(function (b) {
+    b.onclick = function () {
+      var v = b.getAttribute('data-nc');
+      if (v === window.ikemenNetcode) return;
+      localStorage.setItem(KEY, v);
+      location.reload();
+    };
+  });
+})();
+</script>
+<script>
+// COMPARE WITH A FRIEND. The Build ID line above asks two players to match
+// twelve hex characters by eye, over chat, twice (the Engine ID too) - and
+// the online check that follows only ever says "differ", never which of the
+// three rules broke. This row does the reading: "Copy mine" puts one
+// chat-pasteable line on the clipboard (Build ID, Engine, Netcode, Upload
+// stamp, the three part hashes); "Check" takes the friend's line back and
+// prints one verdict per rule, naming which part moved when both lines carry
+// parts. The judging lives in build-compare.js so node can test it - this
+// block is only the DOM, and it reads the page's globals at click time, never
+// earlier: the Engine ID lands only after the wasm download, and a Check
+// before that has to say so rather than "same".
+//
+// Local by design: nothing is fetched, nothing is sent, and every string a
+// friend typed reaches the page as textContent.
+(function () {
+  var box = document.getElementById('compare');
+  if (!box) return;
+  box.style.cssText = 'font:12px monospace;margin:2px 0 4px;color:#9ab;';
+  function btn(text, title) {
+    var b = document.createElement('button');
+    b.textContent = text; b.title = title;
+    b.style.cssText = 'font:12px monospace;cursor:pointer;margin:0 2px;padding:2px 8px;'
+      + 'border-radius:4px;border:1px solid #555;background:#222;color:#999;';
+    return b;
+  }
+  var label = document.createElement('span');
+  label.textContent = 'Compare with a friend: ';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.spellcheck = false;
+  input.placeholder = 'paste their Build ID line';
+  input.title = 'Paste the "Build ID: ..." line from your friend\'s loading screen (or the line their '
+    + '"Copy mine" made), then Check. Nothing leaves this page.';
+  input.style.cssText = 'font:12px monospace;width:34ch;max-width:60vw;margin:0 2px;padding:2px 6px;'
+    + 'border-radius:4px;border:1px solid #444;background:#111;color:#cfc;vertical-align:middle;';
+  var check = btn('Check', 'Compare the pasted line with this page: content, engine, netcode and theme, one verdict each.');
+  var copy = btn('Copy mine', 'Put this page\'s line on the clipboard - send it to your friend over chat, '
+    + 'and they paste it here on their side.');
+  var hint = document.createElement('span');
+  hint.style.cssText = 'color:#667;margin-left:6px';
+  hint.textContent = '(local - nothing is sent)';
+  var out = document.createElement('div');
+  out.style.cssText = 'white-space:pre-wrap;margin-left:1em;';
+  box.appendChild(label); box.appendChild(input); box.appendChild(check);
+  box.appendChild(copy); box.appendChild(hint); box.appendChild(out);
+
+  // The strip's own colors: ok like a ticked button, DIFFERS like Reset.
+  var COLOR = { ok: '#cfd', differs: '#fbb', unknown: '#9ab', error: '#fbb' };
+  function show(lines) {
+    out.textContent = '';
+    lines.forEach(function (l) {
+      var d = document.createElement('div');
+      d.style.color = COLOR[l.state] || '#9ab';
+      d.textContent = l.text;
+      out.appendChild(d);
+    });
+  }
+  function note(state, text) { show([{ state: state, text: text }]); }
+  function mine() {
+    return {
+      build: globalThis.ikemenBuildHex,
+      engine: globalThis.ikemenEngineId,    // undefined = still downloading, '' = hash failed
+      netcode: window.ikemenNetcode,
+      upload: globalThis.ikemenAssetStamp,  // absent on an unpacked dev server
+      parts: globalThis.ikemenBuildParts,
+    };
+  }
+  // A page uploaded on its own, without build-compare.js beside it, must say
+  // so rather than throw - single-file page fixes are a normal deployment.
+  function judge() {
+    var c = globalThis.ikemenBuildCompare;
+    if (!c) note('error', 'Compare helper missing - build-compare.js did not load. Re-upload the site with all of its files.');
+    return c;
+  }
+  function doCheck() {
+    try {
+      var c = judge(); if (!c) return;
+      show(c.verdict(mine(), input.value).lines);
+    } catch (e) { note('error', 'Check failed: ' + (e && e.message || e)); }
+  }
+  function doCopy() {
+    try {
+      var c = judge(); if (!c) return;
+      var m = mine();
+      if (!m.build) {
+        note('error', 'Your own Build ID is not available yet - wait for "VFS ready", or hard-refresh (Ctrl+F5).');
+        return;
+      }
+      var line = c.line(m);
+      var tail = (m.engine === undefined || m.engine === null)
+        ? ' (without the Engine ID - it is still downloading; copy again once the line above shows it)' : '';
+      // Manual path: the line goes INTO the box, selected, so Ctrl+C works
+      // where the clipboard API is missing (plain http) or was refused.
+      var manual = function () {
+        input.value = line; input.focus(); input.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) {}
+        note(ok ? 'ok' : 'unknown', ok
+          ? 'Copied - send it to your friend over chat' + tail
+          : 'Your line is in the box, selected - press Ctrl+C, then paste your friend\'s line over it' + tail);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(line).then(function () {
+          note('ok', 'Copied - send it to your friend over chat' + tail);
+        }, manual);
+      } else {
+        manual();
+      }
+    } catch (e) { note('error', 'Copy failed: ' + (e && e.message || e)); }
+  }
+  // The engine listens for keys and clicks on the whole document and
+  // preventDefaults every key it maps, so without this the box never gets a
+  // character and Ctrl+V dies. Swallowing mousedown also hides the click from
+  // #chrome's own "someone is reading, do not fold" listener, so that is
+  // called by hand.
+  ['mousedown', 'mouseup', 'click', 'dblclick', 'wheel', 'contextmenu']
+    .forEach(function (t) { box.addEventListener(t, function (e) { e.stopPropagation(); }); });
+  // Keys are swallowed only while the INPUT holds them. A clicked button
+  // keeps focus on Windows, and a key stopped on its way up from a focused
+  // button never reaches the engine's document listener - the game's
+  // keyboard was dead until the player clicked the canvas. The buttons also
+  // drop focus after their click, for the same reason.
+  ['keydown', 'keyup', 'keypress']
+    .forEach(function (t) { box.addEventListener(t, function (e) { if (e.target === input) e.stopPropagation(); }); });
+  var keepOpen = function () { if (window.ikemenCancelBootFold) window.ikemenCancelBootFold(); };
+  box.addEventListener('mousedown', keepOpen);
+  box.addEventListener('focusin', keepOpen);
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); doCheck(); }
+  });
+  check.onclick = function () { doCheck(); check.blur(); };
+  copy.onclick = function () { doCopy(); copy.blur(); };
+})();
+</script>
+<script>
+// BROWSER DATA — show what this browser is holding, and offer a way out.
+//
+// The game persists across three surfaces, and NONE is cleared by re-uploading
+// the build (that is the point of them, but it is also a trap):
+//   * IndexedDB 'ikemen-mods'  - the Mod Studio file overlay
+//   * localStorage 'ikemen-mod-*' / 'ikemen-lite*' - that overlay's roster lists
+//   * localStorage 'ikemen-vfs11:' - engine files the game wrote back (config.ini)
+//
+// Field failure this fixes (2026-08-12): after adding characters in the browser
+// Mod Studio, a NEW upload of the site appeared to change nothing - the overlay
+// kept shadowing the shipped roster - and because the Build ID hashes overlay
+// bytes, that browser also could not netplay against a clean build. There was no
+// in-game way to clear it, and the browser's own "clear site data" is buried.
+// Chromium additionally refuses PASTED console commands until you type
+// 'allow pasting', which makes localStorage.clear() look broken.
+//
+// Identity is deliberately separate: 'ikemen-identity' holds the ranked name and
+// its recovery code, which is the ONLY copy. Wiping it silently would cost a
+// player their ladder account, so it takes its own confirm.
+(function () {
+  var box = document.getElementById('storage');
+  if (!box) return;
+  box.style.cssText = 'font:12px monospace;margin:2px 0 4px;color:#9ab;';
+
+  var MODS_DB = 'ikemen-mods';
+  var LISTS = ['ikemen-mod-chars', 'ikemen-mod-stages', 'ikemen-mod-music',
+    'ikemen-lite-themes', 'ikemen-mod-hidden-chars', 'ikemen-mod-hidden-stages'];
+  // Studio settings are swept BY PREFIX, not named one by one. The old
+  // hand-written list held three keys and had silently fallen four behind:
+  // 'ikemen-lite:advanced', ':layout', ':rules' and ':shipTune' all survived a
+  // Reset. Two of those bite hard - shipTune describes .cns overlays that live
+  // in IndexedDB, which Reset DOES delete, so the Studio was left insisting a
+  // shipped character had 1500 health with nothing behind it; and 'advanced'
+  // surviving is why Advanced mode looked like it was on by default.
+  // A prefix cannot fall behind the next key someone adds.
+  var LITE_PREFIX = 'ikemen-lite:';
+  var VFS_PREFIX = 'ikemen-vfs11:';
+
+  function countAdded() {
+    var n = 0;
+    LISTS.forEach(function (k) {
+      try { var v = JSON.parse(localStorage.getItem(k)); if (Array.isArray(v)) n += v.length; } catch (e) {}
+    });
+    return n;
+  }
+  function countEngineFiles() {
+    var n = 0;
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(VFS_PREFIX) === 0) n++;
+    }
+    return n;
+  }
+  // Studio settings: Advanced mode, the select-screen layout, match rules,
+  // shipped-character tuning, theme and music picks. Counted so the line does
+  // not read "none stored" while the Studio is holding a roster layout and a
+  // .cns overlay - which is what it did, and which hid the Reset button
+  // entirely, since the button only renders when something is listed.
+  function countLiteSettings() {
+    var n = 0;
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(LITE_PREFIX) === 0) n++;
+    }
+    return n;
+  }
+
+  function wipe(alsoIdentity, done) {
+    try {
+      LISTS.forEach(function (k) { localStorage.removeItem(k); });
+      localStorage.removeItem('ikemen-netcode');
+      localStorage.removeItem('ikemen-aspect');
+      localStorage.removeItem('ikemen-build-rules');
+      if (alsoIdentity) localStorage.removeItem('ikemen-identity');
+      // Prefix sweeps last, and BACKWARDS: removeItem reindexes the store, so a
+      // forward loop skips entries.
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (!k) continue;
+        if (k.indexOf(VFS_PREFIX) === 0 || k.indexOf(LITE_PREFIX) === 0) localStorage.removeItem(k);
+      }
+    } catch (e) {}
+    // Deleting the DB hangs on 'blocked' while another tab holds it open, so
+    // never wait unconditionally - report and reload anyway.
+    var settled = false;
+    var finish = function (msg) { if (!settled) { settled = true; done(msg); } };
+    try {
+      var req = indexedDB.deleteDatabase(MODS_DB);
+      req.onsuccess = function () { finish(''); };
+      req.onerror = function () { finish(' (added content may remain - close other tabs and retry)'); };
+      req.onblocked = function () { finish(' (another tab has the game open - close it and retry)'); };
+      setTimeout(function () { finish(' (timed out - close other tabs and retry)'); }, 3000);
+    } catch (e) { finish(' (could not clear added content: ' + e.message + ')'); }
+  }
+
+  function render() {
+    var added = countAdded(), files = countEngineFiles() + countLiteSettings();
+    var ident = null;
+    try { ident = JSON.parse(localStorage.getItem('ikemen-identity')); } catch (e) {}
+    var bits = [];
+    if (added) bits.push(added + ' added item' + (added === 1 ? '' : 's'));
+    if (files) bits.push(files + ' saved setting' + (files === 1 ? '' : 's'));
+    if (ident && ident.name) bits.push('online name "' + ident.name + '"');
+
+    box.textContent = '';
+    var label = document.createElement('span');
+    label.textContent = 'Browser data: ' + (bits.length ? bits.join(', ') : 'none stored') + ' ';
+    box.appendChild(label);
+    // One sentence, always: Reset on this line is the blunt fix for a Build ID
+    // that will not match a friend's, and the Studio holds the precise one.
+    var tip = document.createElement('span');
+    tip.style.cssText = 'color:#667;margin-left:6px';
+    tip.textContent = '(to match a friend exactly, use Send my build / Import a build on the Studio page)';
+    if (!bits.length) { box.appendChild(tip); return; }
+
+    var btn = document.createElement('button');
+    btn.textContent = 'Reset';
+    btn.title = 'Remove content you added here and your saved settings, then reload. '
+      + 'This does NOT touch the game on the server - only what THIS browser stored. '
+      + 'Use it when an update seems not to apply, or when your Build ID will not match '
+      + 'another player. Your online name is kept unless you confirm otherwise.';
+    btn.style.cssText = 'font:12px monospace;cursor:pointer;margin:0 2px;padding:2px 8px;'
+      + 'border-radius:4px;border:1px solid #a66;background:#322;color:#fbb;';
+    btn.onclick = function () {
+      if (!window.confirm('Reset this browser’s game data?\n\n'
+        + 'Removes: content you added here' + (files ? ', saved settings' : '') + '.\n'
+        + 'Keeps: the game itself, and your online name.\n\n'
+        + 'The server copy is untouched.')) return;
+      var keepIdentity = true;
+      if (ident && ident.name) {
+        keepIdentity = !window.confirm('Also sign out of online name "' + ident.name + '"?\n\n'
+          + 'OK = also remove it.  Cancel = keep it.\n\n'
+          + 'Your recovery code is the ONLY way back into that name. Do not remove it '
+          + 'unless you have that code written down.');
+      }
+      btn.disabled = true;
+      btn.textContent = 'Resetting...';
+      wipe(!keepIdentity, function (note) {
+        label.textContent = 'Browser data cleared' + note + ' - reloading... ';
+        setTimeout(function () { location.reload(); }, note ? 2500 : 400);
+      });
+    };
+    box.appendChild(btn);
+    box.appendChild(tip);
+  }
+  try { render(); } catch (e) { /* never block boot over a diagnostic */ }
+})();
+</script>
+<script>
+// glfw-js scales the canvas backing store by devicePixelRatio while the
+// engine renders assuming a 1:1 framebuffer, which squeezes the picture
+// into a corner. Pin the ratio to 1 before anything reads it.
+Object.defineProperty(window, 'devicePixelRatio', { value: 1, writable: false });
+
+// glfw-js (the v1 build) sizes its canvas from window.innerWidth/Height
+// ("HACK: Go fullscreen?" in its source), so we pin those to the render
+// resolution. The V2 build sizes its own canvas from config, so this pin
+// is unused there but harmless. v1 is 4:3, so 640x480 is correct for it.
+const GLFW_W = 640, GLFW_H = 480;
+Object.defineProperty(window, 'innerWidth', { get: () => GLFW_W });
+Object.defineProperty(window, 'innerHeight', { get: () => GLFW_H });
+
+// Display sizing derives aspect from the canvas's ACTUAL backing-store
+// resolution (canvas.width/height, set by the engine from its config), so
+// a 4:3 build and a 16:9 build both display correctly with no hardcoded
+// numbers. The picture is fit into the viewport in both dimensions so it
+// scales rather than crops. The space reserved above is MEASURED from the
+// boot strip rather than hardcoded, so when the strip folds away the picture
+// grows into it; __reserveBottom lets the netplay panel dock below the game.
+var __reserveBottom = 0;
+function ikemenFitCanvas() {
+  var canvas = document.querySelector('body > canvas');
+  if (!canvas || !canvas.width || !canvas.height) return;
+  var aspect = canvas.width / canvas.height;
+  var chrome = document.getElementById('chrome');
+  var chromeH = chrome ? chrome.getBoundingClientRect().height : 0;
+  var reserve = Math.round(chromeH) + 26 + __reserveBottom;
+  canvas.style.setProperty('width',
+    'min(calc(100vw - 26px), calc((100vh - ' + reserve + 'px) * ' + aspect + '))', 'important');
+  canvas.style.setProperty('height', 'auto', 'important');
+  canvas.style.setProperty('aspect-ratio', canvas.width + ' / ' + canvas.height, 'important');
+  canvas.style.imageRendering = 'pixelated';
+  canvas.style.display = 'block';
+  canvas.style.margin = '0 auto';
+  var boot = document.getElementById('boot');
+  // Exactly 5 lines at the pinned 16px line-height: a cap that isn't a
+  // multiple of the line height leaves a half-sliced line at the top edge.
+  if (boot) { boot.style.maxHeight = '80px'; boot.style.overflow = 'hidden'; }
+}
+// The netplay overlay calls this to reserve a strip below the game so it
+// docks under the picture instead of over it.
+window.ikemenReserveBottom = function (px) { __reserveBottom = px | 0; ikemenFitCanvas(); };
+
+// Fold the boot strip away once the game is actually DRAWING - not merely
+// once the page loaded, because the download can take minutes and the log is
+// the only reassurance during it. Folding is canceled permanently if the
+// engine dies, since then that text is the only diagnostic the player has.
+(function () {
+  var chrome = document.getElementById('chrome');
+  var show = document.getElementById('chromeshow');
+  var hide = document.getElementById('chromehide');
+  if (!chrome || !show || !hide) return;
+  var delay = (window.IKEMEN_BRAND && window.IKEMEN_BRAND.hideBootUI);
+  delay = (typeof delay === 'number') ? delay : 6;
+  var folded = false, canceled = false, timer = null;
+
+  function setFolded(v) {
+    folded = v;
+    chrome.classList.toggle('folded', v);
+    show.style.display = v ? 'block' : 'none';
+    // Let the CSS transition finish before re-measuring, then keep measuring
+    // for its duration so the canvas grows in step with the fold.
+    var t0 = Date.now();
+    var iv = setInterval(function () {
+      ikemenFitCanvas();
+      if (Date.now() - t0 > 550) clearInterval(iv);
+    }, 40);
+  }
+  // Opening it manually is a deliberate act, so it stays open until it is
+  // deliberately closed again - no surprise re-folding mid-read.
+  function toggle() {
+    canceled = true;
+    if (timer) { clearTimeout(timer); timer = null; }
+    setFolded(!folded);
+  }
+  show.addEventListener('click', toggle);
+  hide.addEventListener('click', toggle);
+  setFolded(false);
+  // Any click on the strip itself keeps it open - the player is reading it.
+  chrome.addEventListener('mousedown', function () {
+    if (timer) { clearTimeout(timer); timer = null; canceled = true; }
+  });
+  window.ikemenCancelBootFold = function () {
+    canceled = true;
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (folded) setFolded(false);
+  };
+
+  if (delay > 0) {
+    // __ikemenEngineFrames is stamped by the engine's frame pump, so a rising
+    // value means real frames are being presented.
+    var seen = -1;
+    var watch = setInterval(function () {
+      var f = window.__ikemenEngineFrames;
+      if (typeof f !== 'number') return;
+      if (seen < 0) { seen = f; return; }
+      if (f > seen && !canceled) {
+        clearInterval(watch);
+        timer = setTimeout(function () { if (!canceled) setFolded(true); }, delay * 1000);
+      }
+    }, 250);
+  }
+})();
+new MutationObserver(ikemenFitCanvas).observe(document.documentElement, { childList: true, subtree: true });
+window.addEventListener('resize', ikemenFitCanvas);
+setInterval(ikemenFitCanvas, 1000); // catch a late canvas-resolution change
+// Capture the first Go panic block so it survives console log rotation.
+window.__panics = [];
+(function () {
+  const orig = console.warn;
+  let capturing = false, lines = 0;
+  console.warn = function (...args) {
+    const s = args.join(' ');
+    if (!capturing && s.startsWith('panic:')) capturing = true;
+    if (capturing && lines < 15) { window.__panics.push(s); lines++; }
+    return orig.apply(this, args);
+  };
+})();
+</script>
+<script src="./build-id.js"></script>
+<script src="./build-compare.js"></script>
+<script src="./vfs.js"></script>
+<script src="./webrtc.js"></script>
+<script src="./identity.js"></script>
+<script src="./wasm_exec.js"></script>
+<script>
+(async () => {
+  const boot = document.getElementById('boot');
+  // The boot div is height-capped once the game starts; keep it pinned to
+  // the newest line so progress never looks frozen behind the fold.
+  const log = (m) => { boot.textContent += '\n' + m; boot.scrollTop = boot.scrollHeight; console.log('[boot]', m); };
+  try {
+    log('Loading virtual filesystem manifest...');
+    const nFiles = await ikemenVfsInit('./ikemen-fs/manifest.json', [
+      'external/script/main.lua',
+      'save/config.json',
+      'save/stats.json',
+    ], (got, total) => {
+      const done = total && got >= total;
+      // Replace ANY previous progress line (not just a trailing one - other
+      // log lines get appended mid-download, which used to strand a stale
+      // progress line in view while updates piled up below the fold).
+      boot.textContent = boot.textContent.replace(/\nDownloading game data[^\n]*/g, '') +
+        (done ? '\nDownloading game data: complete.'
+              : `\nDownloading game data: ${(got / 1e6).toFixed(1)}${total ? ' / ' + (total / 1e6).toFixed(1) : ''} MB`);
+      boot.scrollTop = boot.scrollHeight;
+    });
+    log(`VFS ready: ${nFiles} files.`);
+
+    // Build ID: covers the shipped content, every browser-side mod, and the
+    // theme pick - computed by vfs.js during init (the same value the netplay
+    // build-check exchanges). Two players whose IDs match here will pass the
+    // online content check; any roster/mod/theme difference changes it.
+    try {
+      if (globalThis.ikemenBuildHex) {
+        log(`Build ID: ${globalThis.ikemenBuildHex}  (must match your opponent for netplay)`);
+      } else if (globalThis.ikemenBuildIdError) {
+        // vfs.js booted without build-id.js beside it: say so rather than
+        // print the older manifest-only number, which nobody else has.
+        log(`Build ID: unavailable - ${globalThis.ikemenBuildIdError}`);
+      } else {
+        // Fallback (older vfs.js): manifest-only hash.
+        const mres = await fetch('./ikemen-fs/manifest.json', { cache: 'no-cache' });
+        const mbuf = new Uint8Array(await mres.arrayBuffer());
+        let h1 = 0xdeadbeef ^ mbuf.length, h2 = 0x41c6ce57 ^ mbuf.length;
+        for (let i = 0; i < mbuf.length; i++) {
+          h1 = Math.imul(h1 ^ mbuf[i], 2654435761);
+          h2 = Math.imul(h2 ^ mbuf[i], 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        const hex = ((h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0')).slice(0, 12);
+        log(`Build ID: ${hex}  (must match your opponent for netplay)`);
+      }
+    } catch (e) { log('Build ID: unavailable (' + e.message + ')'); }
+
+    // Graphics check. A browser that has hardware acceleration switched off
+    // still gives you a working WebGL2 context - it just rasterises on the CPU
+    // instead of the GPU. The game runs and looks correct, so the only symptom
+    // is that it eats a whole CPU and drops below 60fps, which reads as "the
+    // game is badly optimized" rather than "my browser setting is wrong". That
+    // cost a strong machine (Ryzen 7 5800X + RTX 4080) a 60%-CPU sub-60fps
+    // session, diagnosed only by switching browsers (field-hit 2026-08-11).
+    //
+    // failIfMajorPerformanceCaveat is the verdict: the browser REFUSES the
+    // context when it would not be hardware-backed. The renderer name is only
+    // supporting detail - Brave and friends may mask it.
+    //
+    // This probe deliberately uses a THROWAWAY canvas: a second getContext on
+    // the real one returns the first context and ignores these attributes. The
+    // probe context is released immediately because browsers cap live contexts
+    // and the engine still needs its own.
+    try {
+      const strict = document.createElement('canvas');
+      const hw = strict.getContext('webgl2', { failIfMajorPerformanceCaveat: true });
+      // A SECOND canvas for the name: getContext on a canvas that already has
+      // one returns that same context and silently ignores the new attributes,
+      // so reusing the strict canvas would report nothing when the strict call
+      // is the one that failed - exactly the case we most need to name.
+      const any = document.createElement('canvas');
+      const soft = any.getContext('webgl2');
+      let name = '';
+      if (soft) {
+        const dbg = soft.getExtension('WEBGL_debug_renderer_info');
+        if (dbg) name = String(soft.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+      }
+      globalThis.ikemenGpuHardware = !!hw;
+      globalThis.ikemenGpuName = name;
+      // Chromium reports e.g. "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080
+      // (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)". Keep the card, drop the
+      // device id and the backend/shader-model tail - this line is read at a
+      // glance by a player reporting a problem, not parsed.
+      const short = name
+        .replace(/^ANGLE \(([^,]*), ([^,]*)(,.*)?\)$/, '$2')
+        .replace(/\s*\(0x[0-9a-fA-F]+\)/, '')
+        .replace(/\s+(Direct3D|OpenGL|Vulkan|vs_\d).*$/, '')
+        .trim();
+      if (hw) {
+        log('Graphics: GPU' + (short ? ' - ' + short : ''));
+      } else {
+        log('Graphics: SOFTWARE RENDERING - your GPU is not being used.');
+        log('  Turn on "Use graphics acceleration when available" in your');
+        log('  browser settings, then FULLY QUIT and reopen the browser.');
+        // Never fold the strip away on a bad result: this is the one message
+        // that has to survive until the player actually reads it.
+        if (window.ikemenCancelBootFold) window.ikemenCancelBootFold();
+      }
+      for (const ctx of [hw, soft]) {
+        const lose = ctx && ctx.getExtension('WEBGL_lose_context');
+        if (lose) lose.loseContext();
+      }
+    } catch (e) { log('Graphics: check unavailable (' + e.message + ')'); }
+
+    log('Fetching ikemen.wasm (~17 MB)...');
+    const go = new Go();
+    go.argv = ['ikemen'];
+    // GC tuning. Mark cost scales with the live heap and steals the single
+    // wasm thread, so a bigger multiplier does not mean less stutter - it
+    // trades frequent short pauses for rare long ones (measured up to ~700ms
+    // at high values). Heavy characters (40MB+ of assets) inflate the heap and
+    // make that trade worse, which is why it bites hardest in training with
+    // several on stage.
+    //
+    // 100 is Go's default and what the v1 build ran, unturned, for the whole of
+    // its life - including 8-character Simul. Field test: 500 and 200 both read
+    // as noticeable freezes; 100 reads as smooth. Frequent and short beats rare
+    // and long at 60fps, so don't "optimize" this upwards again without
+    // measuring what a player actually feels.
+    //
+    // GOMEMLIMIT caps total heap so the target can't balloon with big rosters.
+    go.env = { GOGC: '100', GOMEMLIMIT: '800MiB' };
+    const params = new URLSearchParams(location.search);
+    // Diagnostics: ?gctrace=1 prints a console line for every GC cycle
+    // (pause times included) so stutter can be correlated with collections;
+    // ?profile=1 makes the engine write heap profiles to save/logs/.
+    if (params.get('gctrace')) go.env.GODEBUG = 'gctrace=1';
+    // ?gogc=200 etc: more headroom between collections, fewer but longer.
+    if (params.get('gogc')) go.env.GOGC = params.get('gogc');
+    if (params.get('profile')) go.env.IKEMEN_PROFILE = '1';
+    // ?paldebug=1: log palette resolution for scene-band sprites (see
+    // src/anim_paldebug.go in the engine).
+    if (params.get('paldebug')) go.env.IKEMEN_PALDEBUG = '1';
+    // Quick-match support: index.html?p1=DongHwan&p2=sakura jumps straight
+    // into a VS match using the engine's own command-line handling.
+    if (params.get('p1')) {
+      go.argv.push('-p1', params.get('p1'));
+      if (params.get('p1pal')) go.argv.push('-p1.pal', params.get('p1pal'));
+      if (params.get('p2')) go.argv.push('-p2', params.get('p2'));
+      if (params.get('p2pal')) go.argv.push('-p2.pal', params.get('p2pal'));
+      if (params.get('p2ai')) go.argv.push('-p2.ai', params.get('p2ai'));
+      if (params.get('stage')) go.argv.push('-s', params.get('stage'));
+      // loadmotif=1: the screenpack loaded before the fight, as in a match
+      // picked from the menus - without it a quick match has no lifebars of
+      // the build's own (a read-only build's match, vfslib matchFor).
+      if (params.get('loadmotif')) go.argv.push('-loadmotif');
+    }
+    // instantiateStreaming needs the server to send Content-Type:
+    // application/wasm; fall back to buffered compile for hosts that don't.
+    // The ?v= stamp (set by vfs.js from the manifest, which is fetched
+    // no-store) changes with every export, so no cache layer - browser or
+    // proxy - can hand back yesterday's engine. Plain revalidation was not
+    // enough in the field: a player needed incognito to see a new build.
+    const wasmUrl = './ikemen.wasm' + (globalThis.ikemenAssetStamp
+      ? '?v=' + encodeURIComponent(globalThis.ikemenAssetStamp) : '');
+
+    // ENGINE ID. The Build ID deliberately hashes CONTENT - the manifest, the
+    // player's mods, the theme - and the wasm is not content, so swapping the
+    // engine never moved it. Two players could therefore run different engines,
+    // show the same Build ID, pass the netplay build check and play. That is
+    // exactly the question that could not be answered during the 2026-08-28
+    // desync hunt: nobody on either machine could tell which engine they had.
+    //
+    // Hashed from the BYTES ACTUALLY LOADED, not from a stamp written at export
+    // time. A stamp lies the moment someone copies a wasm in by hand, which is
+    // precisely what happened while chasing that desync.
+    //
+    // Free: `res.clone()` tees the body that instantiateStreaming is already
+    // consuming, so there is no second download and streaming compilation is
+    // kept. Hashed 32 bits at a time so a 24 MB engine costs a few tens of ms.
+    const engineHash = (buf) => {
+      let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+      const n = buf.byteLength & ~3;
+      const w = new Uint32Array(buf, 0, n / 4);
+      for (let i = 0; i < w.length; i++) {
+        h1 = Math.imul(h1 ^ w[i], 2654435761);
+        h2 = Math.imul(h2 ^ w[i], 1597334677);
+      }
+      // Trailing bytes: a length change alone must not collide.
+      const tail = new Uint8Array(buf, n);
+      for (let i = 0; i < tail.length; i++) h1 = Math.imul(h1 ^ tail[i], 2654435761);
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return ((h2 >>> 0).toString(16).padStart(8, '0') +
+              (h1 >>> 0).toString(16).padStart(8, '0')).slice(0, 12);
+    };
+    // Written ONTO the existing Build ID line rather than logged as a new one.
+    // #chrome is `max-height:400px; overflow:hidden`, and by the time the engine
+    // has been fetched the strip is already taller than that on a normal
+    // display - so a fresh line here is in the DOM but clipped out of sight.
+    // That is exactly how the first attempt shipped: verified with a DOM text
+    // read, which happily returns clipped content, instead of with a screenshot.
+    //
+    // Putting it on the Build ID line also puts the two IDs that must match
+    // side by side, which is how anyone actually compares them.
+    const showEngineId = (text) => {
+      try {
+        const before = boot.textContent;
+        boot.textContent = before.replace(
+          /^(Build ID: \S+)(\s\s+)/m, (_m, head, gap) => head + '   Engine: ' + text + gap);
+        // If the Build ID line never appeared (fallback paths above), do not
+        // silently swallow the id - fall back to its own line.
+        if (boot.textContent === before) log('Engine ID: ' + text);
+        boot.scrollTop = boot.scrollHeight;
+      } catch (e) {
+        log('Engine ID: ' + text);
+      }
+      console.log('[boot] Engine ID:', text);
+    };
+    const noteEngine = async (resp) => {
+      try {
+        globalThis.ikemenEngineId = engineHash(await resp.arrayBuffer());
+        showEngineId(globalThis.ikemenEngineId);
+      } catch (e) {
+        // Never block boot on a diagnostic. An absent id is treated as a
+        // mismatch-unknown by webrtc.js rather than as a match.
+        globalThis.ikemenEngineId = '';
+        showEngineId('unavailable');
+      }
+    };
+
+    let result;
+    try {
+      const res = await fetch(wasmUrl, { cache: 'no-cache' });
+      const forHash = res.clone();
+      result = await WebAssembly.instantiateStreaming(res, go.importObject);
+      await noteEngine(forHash);
+    } catch (e) {
+      console.warn('instantiateStreaming failed, buffering instead:', e.message);
+      const resp = await fetch(wasmUrl, { cache: 'no-cache' });
+      const bytes = await resp.arrayBuffer();
+      globalThis.ikemenEngineId = engineHash(bytes.slice(0));
+      showEngineId(globalThis.ikemenEngineId);
+      result = await WebAssembly.instantiate(bytes, go.importObject);
+    }
+    log('Starting engine... (this can take a while; watch the console)');
+    await go.run(result.instance);
+    log('Engine exited.');
+    // The engine is gone; this log is now the player's only diagnostic, so
+    // unfold the strip and keep it open.
+    if (window.ikemenCancelBootFold) window.ikemenCancelBootFold();
+  } catch (e) {
+    log('BOOT ERROR: ' + (e && e.message || e));
+    console.error(e);
+    if (window.ikemenCancelBootFold) window.ikemenCancelBootFold();
+  }
+})();
+</script>
+</body>
+</html>

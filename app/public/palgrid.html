@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/themes.css">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/booklet.css">
+<script src="/booklet.js"></script>
+<title>All palette slots</title>
+<style>
+  /* The all-slots palette grid (ROADMAP item 7), in its own window on
+     purpose: the Studio page carries none of it, and closing the window
+     drops all of it - there is no timer, no storage, nothing the Studio
+     keeps.
+
+     PRINTED AS THE BOOKLET'S COLOR PLATES (docs/STUDIO-BOOKLET.md): the
+     section band with the character's name and the size control, a side
+     head, and one plate per selectable palette - its number, its name, the
+     palette as a printer's color bar, the sprite on the plate ground. Every
+     color is a printing token (themes.css) except the palette's own colors,
+     which are content. The behavior is the old window's. */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t-13)/1.45 var(--f-body); display: flex; flex-direction: column;
+    user-select: none; cursor: default; }      /* nothing selects, nothing drags - the Studio's rule */
+  img { -webkit-user-drag: none; user-drag: none; }
+
+  /* ---- the band ---- */
+  #band .bk-secband-t .t { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+  /* the size control: [-] 3x [+] as one segmented strip, then Auto */
+  .zoom { display: flex; align-items: center; gap: 8px; }
+  /* The flex above beats the UA's [hidden]: with no character the size
+     buttons showed with nothing to size. */
+  .zoom[hidden] { display: none !important; }
+  .zoom .lbl { font: 700 var(--t-12)/1 var(--f-disp); color: var(--ink2); text-transform: uppercase; letter-spacing: .03em; }
+  .zoom .bk-seg > button { min-width: 26px; padding: 0 6px; font: 800 var(--t-13)/1 var(--f-disp); }
+  .zoom .bk-seg > button:disabled { color: var(--ink2); background: var(--paper); cursor: default; }
+  .zoom .bk-seg > b { display: inline-grid; place-items: center; min-width: 38px; padding: 0 6px; border-left: 2px solid var(--ink); border-right: 2px solid var(--ink);
+    font: italic 800 var(--t-13)/1 var(--f-disp); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+  /* ---- the page ---- */
+  /* the gutter is always there, so a scrollbar appearing cannot change the width the sizes were worked out from */
+  main { scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  .facts { color: var(--ink2); font-size: var(--t-12); margin: 0 0 10px; line-height: 1.5; max-width: 80em; }
+  .facts b { color: var(--ink); font-weight: 700; }
+  .facts code { font-family: var(--f-data); font-size: var(--t-12); }
+  /* THE SPRITES FOLLOW THE WINDOW. They used to be drawn at their own size and
+     only ever made SMALLER (max-height 180px), so on a big window they were
+     the same postage stamps with more empty room round them, and looking for
+     a wrong pixel meant zooming the whole browser. Now every sprite is drawn
+     at --k, a WHOLE multiple of its size (pixel art at 2.5x is mush; at 2x and
+     3x it is the art), and a column is as wide as the widest sprite at that
+     multiple (--cw). The script picks --k from the window; see layout(). */
+  .grid { --k: 1; --cw: 190px; display: grid; grid-template-columns: repeat(auto-fill, minmax(max(190px, var(--cw)), 1fr)); gap: 16px; }
+  /* one plate: the number and name over a 3px rule, the color bar, the art */
+  .cell { min-width: 0; border-top: 3px solid var(--ink); padding-top: 6px; }
+  .cell .hd { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .cell .hd .no { flex: none; font: italic 800 var(--t-16)/1 var(--f-disp); font-stretch: 110%; font-variant-numeric: tabular-nums; color: var(--mark); }
+  /* The palette's name as its file spells it, so never uppercased. */
+  .cell .hd .nm { min-width: 0; font: 700 var(--t-13)/1.2 var(--f-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell .hd .tag { flex: none; margin-left: auto; max-width: 45%; font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the palette itself, as the color bar at the edge of a printed sheet */
+  .cell .sw { display: flex; height: 8px; margin: 7px 0 8px; outline: 1px solid var(--rule); }
+  .cell .sw i { flex: 1 1 auto; }
+  .cell .art { display: flex; align-items: flex-end; justify-content: center; padding: 8px; min-height: 60px; }
+  .cell .art + .art { margin-top: 6px; }
+  /* A palette the .def names but the disk does not have: the plate says so in
+     words; only its art is faded (text keeps its full ink). */
+  .cell.gone .art { opacity: .35; }
+  .cell.gone .tag { color: var(--bad); }
+  /* --w and --h are the sprite's own size, known from the animation before the
+     image arrives, so nothing jumps as the pictures load. max-width is only
+     for a window narrower than one sprite; object-fit keeps its shape then. */
+  .cell .art img { image-rendering: pixelated; width: calc(var(--w) * var(--k) * 1px); height: calc(var(--h) * var(--k) * 1px); max-width: 100%; object-fit: contain; }
+  .cell .lab { font: 400 var(--t-11)/1.3 var(--f-data); color: var(--ink2); margin-top: 4px; }
+  .note { margin-top: 14px; max-width: 70em; }
+  .palhint { color: var(--ink2); font-size: var(--t-12); }
+</style>
+</head>
+<body>
+  <header class="bk-secband" id="band">
+    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who">&hellip;</span><span class="k" lang="ja">カラー</span></h1>
+    <div class="bk-secband-meta">
+      <span class="zoom" id="zoom" hidden>
+        <span class="lbl">Size</span>
+        <span class="bk-seg sm" role="group" aria-label="Sprite size">
+          <button type="button" id="zOut" title="Smaller (the - key)" aria-label="Smaller">&minus;</button><b id="zN" aria-live="polite">1&times;</b><button type="button" id="zIn" title="Bigger (the + key)" aria-label="Bigger">+</button>
+        </span>
+        <button type="button" id="zAuto" class="bk-btn sm on" aria-pressed="true" title="Let the window decide: the sprites grow as the window does - as big as shows every slot at once, and never smaller than the window's size calls for (the 0 key)">Auto</button>
+      </span>
+    </div>
+  </header>
+  <main class="bk-single">
+    <h2 class="bk-sh" id="sh">All palette slots <span class="k" lang="ja">全スロット</span><span class="aside">Preview only: nothing is written</span></h2>
+    <div class="facts" id="facts">Reading&hellip;</div>
+    <div class="grid" id="grid"></div>
+    <div class="note bk-caption" id="note"></div>
+  </main>
+<script src="./ikemen/animview-core.js"></script>
+<script>
+  // WHAT THIS SHOWS. One cell per SELECTABLE palette (the same list the
+  // Studio's palette panel offers): the standing pose drawn in that color,
+  // and under it, for a receiver, her pair art drawn in that color too -
+  // but only when that art FOLLOWS the body palette. Pair art that shares the
+  // body palette takes every color the player picks, and on every color
+  // but the one it was painted against it is garbage (GRAIL 4.5); pair art
+  // on its own palette never changes and is shown once, not twelve times.
+  const q = new URLSearchParams(location.search);
+  const char = q.get('char') || '';
+  // Pair art only when the Studio asks (pair=1: the bundle's H-MUGEN module on
+  // and the character a receiver, hmodule.js) - never on the scan's word alone.
+  const pairArt = q.get('pair') === '1';
+  const name = q.get('name') || char;
+  document.getElementById('who').textContent = name || 'no character';
+  document.title = (name || 'Palettes') + ' — all slots';
+  const facts = document.getElementById('facts'), grid = document.getElementById('grid'), note = document.getElementById('note');
+  const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const get = async (u) => { const r = await fetch(u); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.statusText); return j; };
+  const spr = (gi, slot) => '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + gi[0] + '&index=' + gi[1] + (slot !== undefined ? '&pal=' + encodeURIComponent(slot) : '');
+  // The first frame the ENGINE draws of an action: what a still of it looks
+  // like. Not the first element with a sprite - an element with time 0 (or a
+  // -1 that restarts the totals) is skipped by animSeek and never loads its
+  // sprite (anim.go:638-652, 675-679, 693) - but the first run of the engine's
+  // timeline (airTimeline, the animation player's own) that loads a sprite the
+  // file has.
+  const firstFrame = (anim) => {
+    const frames = (anim && anim.frames) || [];
+    if (!frames.length || typeof airTimeline !== 'function') return null;
+    const run = airTimeline(frames.map((f) => f.time), Number(anim.loopStart) || 0).runs
+      .find((r) => r.spr >= 0 && frames[r.spr].w && frames[r.spr].h);
+    return run ? frames[run.spr] : null;
+  };
+
+  // ---- THE SPRITES FOLLOW THE WINDOW ----
+  // --k is a WHOLE multiple, picked from the window, the larger of two answers:
+  //   FIT    the biggest multiple at which every slot is on screen at once,
+  //          facts and note included. Three slots in a big window fill it.
+  //   FLOOR  one more multiple for every 520x390 of window, whatever the slot
+  //          count: a character with forty slots cannot fit at any size, and
+  //          "then draw them tiny" is the complaint this answers. It scrolls.
+  // and never so large that one sprite is wider than the window. The header's
+  // - / + overrides it for as long as the window lives (this page keeps
+  // nothing, by design); "auto" hands it back. Worked out again on resize -
+  // once per frame at most, and the DOM is touched only when the answer changes.
+  const CAP = 8, GAP = 16, CELL_EXTRA_W = 16;      // the grid's gap; a plate's art padding 8+8 (no side borders)
+  let sized = null, manual = 0, K = 1;
+  const main = document.querySelector('main'), zN = document.getElementById('zN');
+  const autoK = () => {
+    const cs = getComputedStyle(main);
+    const availW = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const sh = document.getElementById('sh');
+    const availH = main.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - (sh ? sh.offsetHeight + 10 : 0) - facts.offsetHeight - 10 - note.offsetHeight - 14;
+    const first = grid.querySelector('.cell');
+    // what a cell is besides sprite (its header, swatch, labels, padding): measured, at the size drawn now
+    const over = first ? Math.max(0, first.offsetHeight - sized.sumH * K) : 60;
+    const cellW = (k) => Math.max(190, sized.maxW * k + CELL_EXTRA_W), cellH = (k) => sized.sumH * k + over;
+    let fit = 1;
+    for (let k = CAP; k > 1; k--) {
+      if (cellW(k) > availW) continue;
+      const cols = Math.floor((availW + GAP) / (cellW(k) + GAP)), rows = Math.ceil(sized.n / cols);
+      if (rows * cellH(k) + (rows - 1) * GAP <= availH) { fit = k; break; }
+    }
+    let floor = Math.max(1, Math.floor(Math.min(window.innerWidth / 520, window.innerHeight / 390)));
+    while (floor > 1 && cellW(floor) > availW) floor--;
+    return Math.min(CAP, Math.max(fit, floor));
+  };
+  const layout = () => {
+    if (!sized) return;
+    const k = manual || autoK();
+    if (k !== K || !layout.done) {
+      K = k; layout.done = true;
+      grid.style.setProperty('--k', k);
+      grid.style.setProperty('--cw', (sized.maxW * k + CELL_EXTRA_W) + 'px');
+    }
+    zN.textContent = K + '\u00d7';
+    document.getElementById('zAuto').classList.toggle('on', !manual);
+    document.getElementById('zAuto').setAttribute('aria-pressed', String(!manual));
+    document.getElementById('zOut').disabled = K <= 1;
+    document.getElementById('zIn').disabled = K >= CAP;
+  };
+  const sizing = (n, frames) => {
+    if (!frames.length) return;                     // no art to draw: nothing to size
+    sized = { n, maxW: Math.max.apply(null, frames.map((f) => f.w | 0)), sumH: frames.reduce((a, f) => a + (f.h | 0), 0) };
+    document.getElementById('zoom').hidden = false;
+    layout();
+    // the first answer was worked out before the cells had their real height; once more now that they do
+    requestAnimationFrame(layout);
+  };
+  const step = (d) => { manual = Math.max(1, Math.min(CAP, K + d)); layout(); };
+  document.getElementById('zIn').onclick = () => step(1);
+  document.getElementById('zOut').onclick = () => step(-1);
+  document.getElementById('zAuto').onclick = () => { manual = 0; layout(); };
+  addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || !sized) return;       // ctrl +/- is still the browser's
+    if (e.key === '+' || e.key === '=') step(1); else if (e.key === '-' || e.key === '_') step(-1); else if (e.key === '0') { manual = 0; layout(); }
+  });
+  let pending = false;
+  addEventListener('resize', () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; layout(); }); });
+
+  (async () => {
+    if (!char) { facts.textContent = 'No character was passed to this window.'; return; }
+    let pals, stand, acts;
+    try {
+      [pals, stand, acts] = await Promise.all([
+        get('/api/char-palettes?char=' + encodeURIComponent(char)),
+        get('/api/char-anim?char=' + encodeURIComponent(char) + '&action=0').catch(() => null),
+        get('/api/char-actions?char=' + encodeURIComponent(char)).catch(() => null),
+      ]);
+    } catch (e) { facts.textContent = 'Could not read this character: ' + e.message; return; }
+    const list = pals.palettes || [];
+    if (!list.length) { facts.textContent = 'No selectable palettes declared.'; return; }
+    let stance = firstFrame(stand);
+    // A BLANK STAND ACTION (modlib charBodyAction): action 0 exists and draws
+    // nothing, and the action list names the action the body is drawn with -
+    // the same one the Studio's player opens on. Its first drawn frame is the
+    // stance here.
+    let bodyNo = null;
+    if (!stance && acts && acts.body && Number.isFinite(Number(acts.body.action))) {
+      let anim = null;
+      try { anim = await get('/api/char-anim?char=' + encodeURIComponent(char) + '&action=' + Number(acts.body.action)); } catch (e) { anim = null; }
+      stance = firstFrame(anim);
+      if (stance) bodyNo = Number(acts.body.action);
+    }
+    const standBlank = !!(stand && stand.frames && stand.frames.length);
+
+    // A receiver's pair art: up to three registry actions, one per family,
+    // each as its first drawn frame. Which of them follow the body palette
+    // is what the grid is for.
+    const scenes = [];
+    if (pairArt && acts && acts.actions) {
+      const seen = new Set();
+      // A BUDGET, NOT A SCAN. Each probe is one .air parse on the server;
+      // a receiver can ship eighty registry actions, and a family whose
+      // first actions open on a blank hold would otherwise be probed
+      // through all of them. Eight probes, then whatever was found.
+      let probes = 0;
+      for (const a of acts.actions) {
+        if (!a.registry || seen.has(a.registry)) continue;
+        if (probes++ >= 8) break;
+        let anim = null;
+        try { anim = await get('/api/char-anim?char=' + encodeURIComponent(char) + '&action=' + a.action); } catch (e) { anim = null; }
+        const f = firstFrame(anim);
+        if (!f) continue;
+        seen.add(a.registry);
+        // Two families often open on the SAME sprite (Kula's 19230 and her
+        // 1802060 both start at 19230,0): one image, both numbers on it.
+        const dup = scenes.find((s) => s.frame.group === f.group && s.frame.index === f.index);
+        if (dup) { dup.also.push({ action: a.action, family: a.registry }); continue; }
+        scenes.push({ action: a.action, family: a.registry, frame: f, also: [] });
+        if (scenes.length >= 3) break;
+      }
+    }
+    const following = scenes.filter((s) => s.frame.follows), fixed = scenes.filter((s) => !s.frame.follows);
+
+    facts.innerHTML = '<b>' + list.length + ' selectable</b>'
+      + (pals.distinct && pals.distinct !== list.length ? ', ' + pals.distinct + ' distinct' : '')
+      + (pals.totalSffPalettes ? ' · ' + pals.totalSffPalettes + ' in the .sff' : '')
+      + (pals.defaults && pals.defaults.length ? ' · pal.defaults ' + esc(pals.defaults.join(', ')) : '')
+      + '.<br>'
+      + (stance ? 'Stance: sprite ' + stance.group + ',' + stance.index
+          + (bodyNo !== null ? ' (action ' + bodyNo + '; action 0 draws nothing)' : '')
+          + (stance.follows ? ', follows the palette pick.' : ', <b>does not follow the palette pick</b> - selection is dead for this character, every cell shows the same colors.')
+        : standBlank ? 'Action 0 draws no sprite, so there is no stance to draw.'
+        : 'No action 0 to draw a stance from.')
+      + (scenes.length ? '<br>Pair art: ' + scenes.map((s) => 'action ' + s.action + ' (' + esc(s.family) + (s.also.length ? ', same first sprite as ' + s.also.map((o) => o.action + ' ' + esc(o.family)).join(' and ') : '') + ', sprite ' + s.frame.group + ',' + s.frame.index + (s.frame.follows ? ', <b>shares the body palette</b>' : ', own palette') + ')').join('; ') + '.'
+        // NOTHING WHERE THERE IS NOTHING (2026-09-20). The empty case used to
+        // explain itself, naming the role the character had not been detected
+        // as - to every ordinary character that opened this window. That is
+        // the one subject the Studio keeps quiet about until a character in
+        // the roster raises it (GRAIL 3.1), and a palette window is no place
+        // to raise it.
+        : '');
+
+    // `same` names a slot in the files; the cells are numbered as the build ships them.
+    const numOf = new Map(list.map((p) => [p.slot, p.pos || p.slot]));
+    const cells = list.map((p) => {
+      const sw = (p.colors || []).map((c) => '<i style="background:' + esc(c) + '"></i>').join('');
+      const twin = p.same !== undefined ? (numOf.get(p.same) || p.same) : null;
+      const tag = p.missing ? 'missing on disk' : (twin !== null ? 'as pal' + twin : (p.source || ''));
+      // The header is the palette's name, as on the Studio's Palettes rows; the
+      // tooltip carries its number (pos: as the build ships it; slot: in the files).
+      const num = 'pal' + (p.pos || p.slot) + (p.pos && p.pos !== p.slot ? ' (was pal' + p.slot + ')' : '');
+      const about = p.missing ? 'declared as ' + (p.file || '?') + ' but not found on disk'
+        : twin !== null ? 'identical colors to pal' + twin
+        : (p.source !== 'studio' && p.file && p.file !== p.label ? p.file : '');
+      const title = num + (about ? ' \u00b7 ' + about : '');
+      let h = '<div class="cell' + (p.missing ? ' gone' : '') + '" title="' + esc(title) + '"><div class="hd"><span class="no">' + esc(p.pos || p.slot) + '</span><span class="nm">' + esc(p.label || num) + '</span><span class="tag">' + esc(tag) + '</span></div><div class="sw">' + sw + '</div>';
+      const size = (f) => ' style="--w:' + (f.w | 0) + ';--h:' + (f.h | 0) + '"';
+      if (stance) h += '<div class="art bk-plate"><img src="' + spr([stance.group, stance.index], p.slot) + '" alt="" loading="lazy"' + size(stance) + '></div>';
+      for (const s of following) h += '<div class="art bk-plate"><img src="' + spr([s.frame.group, s.frame.index], p.slot) + '" alt="" loading="lazy"' + size(s.frame) + '></div><div class="lab">pair art · action ' + s.action + '</div>';
+      return h + '</div>';
+    });
+    grid.innerHTML = cells.join('');
+    for (const im of grid.querySelectorAll('img')) im.onerror = () => { im.style.visibility = 'hidden'; };
+    sizing(list.length, [stance].concat(following.map((s) => s.frame)).filter(Boolean));
+
+    let n = 'Every cell asks the same sprite in a different selectable palette, the way the select screen would draw it. ';
+    if (following.length) n += 'The pair art shown under the stance shares the body palette, so it is recolored with every pick: where a slot turns it to noise, that is what the match shows on that color (GRAIL 4.5). ';
+    if (fixed.length) n += 'Pair art at action ' + fixed.map((s) => s.action).join(', ') + ' is on its own palette: no pick changes it, so it is not repeated here. ';
+    n += 'Preview only: nothing here is written to the roster or carried into an export.';
+    note.textContent = n;
+    layout();
+  })();
+</script>
+</body>
+</html>

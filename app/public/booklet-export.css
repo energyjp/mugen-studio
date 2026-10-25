@@ -1,0 +1,230 @@
+/* MUGEN STUDIO - THE BOOKLET: the export result as the BACK of the booklet
+   (rd-export, 2026-10-18; reworked after the owner's second review the same
+   day). studio.html showExportCard fills it; the markup is the
+   <dialog id="exportDlg"> just above that script.
+
+   The band says what the page is ("Export complete" / "Export failed"). One
+   spread, the cover first and wider:
+   - left, the back cover (60% by default): "Your desktop build is ready" /
+     "Your website is ready", the build's title, the speed cut, a marquee of
+     the build's select faces bled off the trim, the contents line, then the
+     card itself (#exportOut): Play this export and Open folder first and
+     largest, the line saying what Play does, where it was written, the
+     yellow lines, the zip, the small print; the erratum slip when an export
+     failed; the colophon.
+   - the fold is a DIVIDER (#exportSplit, role=separator): dragged, or moved
+     with the arrow keys; the cover's share is --xsplit on the spread, kept per
+     computer (studio.html, localStorage studio.exportSplit).
+   - right, the audit log, printed like a terminal: monospace on the sunk
+     ground, every line whole (wrapping, never cut), each kind in its own ink
+     (BREAK --bad, FIXED --good, the export's action --mark, NOTE --ink2),
+     scrolling inside its pane; WB signs it at the bottom.
+
+   It is a PAGE of the booklet, not a modal: the running head, the thumb-tab
+   rail and the running foot stay live around it (a non-modal dialog fixed
+   over the page area; what is under it is inert while it is open). Any thumb
+   tab or the imprint turns back to that section.
+
+   Motion: the faces marquee is the one thing that moves (the owner asked for
+   it, 2026-10-18): it stops under the pointer or a focus inside it, and is a
+   still row under prefers-reduced-motion.
+
+   Tokens and booklet components only (STUDIO-BOOKLET.md); everything is
+   scoped under #exportDlg so it outranks studio.html's older global button
+   and heading rules, the way the chrome restates .bk-btn under #topbar. */
+
+#exportDlg.xback {
+  position: fixed; inset: auto; top: var(--topbar-h, var(--head-h)); left: 0; right: var(--thumbs-w); bottom: var(--foot-h);
+  width: auto; height: auto; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; box-shadow: none;
+  background: var(--paper); color: var(--ink); z-index: 34; overflow: hidden; box-sizing: border-box;
+  font: 400 var(--t-13)/1.45 var(--f-body); user-select: text; cursor: auto;
+}
+#exportDlg.xback[open] { display: flex; flex-direction: column; }
+#exportDlg.xback:not([open]) { display: none; }
+#exportDlg * { box-sizing: border-box; }
+#exportDlg:focus { outline: none; }   /* the page itself takes focus when it opens (Esc closes it) */
+/* the toast still speaks over the page (it sits under the chrome's layers otherwise) */
+body.xback-open #toast { z-index: 37; }
+/* the export result belongs to no section: no thumb tab is the active one */
+body.xback-open #main > nav.tabs > .tab.bk-thumb[aria-selected="true"] { background: var(--tab); color: var(--ontab); margin-left: 6px; box-shadow: inset 0 0 0 2px var(--tab-edge); }
+body.xback-open #main > nav.tabs > .tab.bk-thumb[aria-selected="true"]:hover { background: var(--tab-hover); }
+body.xback-open #main > nav.tabs > .tab.bk-thumb[aria-selected="true"]:focus-visible { outline-color: var(--focus); }
+
+/* ---- the section band (component; restated where studio.html's old rules reach) */
+#exportDlg .bk-secband-t { margin-top: 0; margin-bottom: 0; border: 0; }
+#exportDlg .bk-secband-meta .xnoted b { font: 700 var(--t-13)/1 var(--f-disp); color: var(--ink); }
+
+/* ---- buttons: the booklet's, restated over studio.html's global button rules */
+#exportDlg .bk-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 30px; padding: 0 12px; margin: 0;
+  border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; white-space: nowrap; transform: none; transition: none;
+  font: 700 var(--t-13)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .005em; text-transform: none; box-shadow: none; }
+#exportDlg .bk-btn::before, #exportDlg .bk-btn::after { display: none; }
+#exportDlg .bk-btn:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#exportDlg .bk-btn:active { background: var(--ink); color: var(--paper); }
+#exportDlg .bk-btn.primary { background: var(--band); color: var(--onband); border-color: var(--band); }
+#exportDlg .bk-btn.primary:hover { background: var(--band2); border-color: var(--band2); color: var(--onband2); }
+#exportDlg .bk-btn.sm { height: 24px; padding: 0 8px; font-size: var(--t-12); border-width: 1.5px; }
+/* Play and Open folder: the two largest controls on the page */
+#exportDlg .bk-btn.lg { height: 50px; padding: 0 24px; font-size: var(--t-20); font-weight: 800; border-width: 3px; letter-spacing: .01em; }
+#exportDlg .bk-btn[disabled], #exportDlg .bk-btn[disabled]:hover { border-color: var(--line); color: var(--ink2); background: var(--paper); cursor: default; }
+#exportDlg .bk-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---- the spread: cover | divider | audit log */
+#exportDlg .xspread { flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, var(--xsplit, 60%)) var(--fold) minmax(0, 1fr); }
+#exportDlg .bk-pg { overscroll-behavior: contain; }
+
+/* the divider: the fold, made to be taken hold of */
+#exportDlg .xdivider { cursor: col-resize; touch-action: none; outline-offset: -6px; }
+#exportDlg .xdivider::after { top: 0; bottom: 0; }
+#exportDlg .xdivider:hover::after, #exportDlg .xdivider.drag::after, #exportDlg .xdivider:focus-visible::after { width: 4px; margin-left: -2px; background: var(--ink); }
+#exportDlg .xdivider > i { position: absolute; left: 50%; top: 50%; width: 16px; height: 54px; margin: -27px 0 0 -8px; z-index: 1;
+  background: var(--paper); border: 2px solid var(--line); }
+#exportDlg .xdivider > i::before, #exportDlg .xdivider > i::after { content: ''; position: absolute; top: 12px; bottom: 12px; width: 2px; background: var(--line); }
+#exportDlg .xdivider > i::before { left: 3px; }
+#exportDlg .xdivider > i::after { right: 3px; }
+#exportDlg .xdivider:hover > i, #exportDlg .xdivider.drag > i, #exportDlg .xdivider:focus-visible > i { border-color: var(--ink); }
+#exportDlg .xdivider:hover > i::before, #exportDlg .xdivider:hover > i::after,
+#exportDlg .xdivider.drag > i::before, #exportDlg .xdivider.drag > i::after,
+#exportDlg .xdivider:focus-visible > i::before, #exportDlg .xdivider:focus-visible > i::after { background: var(--ink); }
+#exportDlg .xdivider:focus-visible { outline: 3px solid var(--focus); }
+
+/* ---- left page: the back cover */
+#exportDlg .xcover { display: flex; flex-direction: column; overflow-x: hidden; padding-top: 22px; }
+#exportDlg .xtitle { margin: 0; padding: 0; border: 0; color: var(--ink); text-wrap: balance;
+  font: italic 900 var(--t-40)/.98 var(--f-disp); font-stretch: 112%; letter-spacing: -.005em; text-transform: uppercase; }
+#exportDlg.failed .xtitle { color: var(--bad); }
+#exportDlg .xbuild { margin: 10px 0 0; font: italic 800 var(--t-26)/1.05 var(--f-disp); font-stretch: 112%; color: var(--ink); overflow-wrap: anywhere; }
+#exportDlg .xbuild span + span { color: var(--mark); }
+#exportDlg .xcut { position: relative; flex: none; height: 10px; margin: 16px 0 0 calc(-1 * var(--m)); }
+#exportDlg .xcut::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 6px; background: var(--band); }
+#exportDlg .xcut::after { content: ''; position: absolute; left: 62%; width: 70px; top: 0; height: 6px; background: var(--band2);
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+
+/* the faces marquee: the build's select faces at a whole multiple, bled off
+   the left trim, running right to left; two identical sets, so -50% is a
+   seamless loop (studio.html startMarquee sets --xmarq-dur and --xface) */
+#exportDlg .xlineup { flex: none; position: relative; margin: 14px 0 0 calc(-1 * var(--m)); overflow: hidden; height: var(--xface, 75px); }
+#exportDlg .xmarq { display: flex; width: max-content; animation: xmarq var(--xmarq-dur, 40s) linear infinite; will-change: transform; }
+#exportDlg .xmarq-set { display: flex; gap: 2px; padding-right: 2px; }
+#exportDlg .xlineup:hover .xmarq, #exportDlg .xlineup:focus-within .xmarq { animation-play-state: paused; }
+#exportDlg .xlineup.still .xmarq { animation: none; }
+#exportDlg .xlf { width: var(--xface, 75px); height: var(--xface, 75px); flex: none; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--plate); }
+#exportDlg .xlf img { flex: none; display: block; image-rendering: pixelated; }
+@keyframes xmarq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  #exportDlg .xmarq { animation: none; }
+  #exportDlg .xmarq-set[aria-hidden="true"] { display: none; }
+}
+
+#exportDlg .xcontents { margin: 12px 0 0; font: 700 var(--t-16)/1.35 var(--f-body); color: var(--ink); }
+#exportDlg .xcontents .sep { color: var(--ink2); font-weight: 400; margin: 0 6px; }
+#exportDlg .xinfo { padding-top: 4px; }
+
+/* the card itself (#exportOut: every line studio.html writes into it) */
+#exportDlg #exportOut p { margin: 0 0 6px; font-size: var(--t-13); line-height: 1.45; max-width: 64ch; }
+#exportDlg #exportOut p b { font-weight: 700; }
+#exportDlg #exportOut .meta { color: var(--ink2); font-size: var(--t-12); }
+#exportDlg .acts { display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0 8px; }
+#exportDlg #exportOut .xplaysays { color: var(--ink2); font-size: var(--t-12); margin-bottom: 12px; }
+#exportDlg #exportOut .xplaysays b { color: var(--ink); }
+#exportDlg .xfolder { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; margin: 0 0 10px; padding-top: 10px; border-top: 2px solid var(--ink); }
+#exportDlg .xfolder dt { font: 700 var(--t-11)/1.7 var(--f-disp); color: var(--ink2); text-transform: uppercase; letter-spacing: .03em; }
+#exportDlg .xfolder dd { margin: 0; min-width: 0; }
+#exportDlg .xfolder code { display: block; font: 400 var(--t-13)/1.45 var(--f-data); color: var(--ink); overflow-wrap: anywhere; user-select: text; cursor: text; background: none; border: 0; padding: 0; }
+#exportDlg #exportOut p.warn { color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); padding-left: 10px; }
+#exportDlg #exportOut .bad { color: var(--bad); }
+#exportDlg .xziprow { display: flex; align-items: center; gap: 10px; margin: 10px 0 6px; }
+#exportDlg .xzipsays { font-size: var(--t-12); color: var(--ink2); }
+#exportDlg .zipout { font-size: var(--t-12); line-height: 1.45; margin: 0 0 4px; overflow-wrap: anywhere; color: var(--ink); }
+#exportDlg .zipout:empty { display: none; }
+#exportDlg .zipout .bk-btn { margin-left: 6px; vertical-align: middle; }
+/* the small print */
+#exportDlg .xfine { margin-top: 12px; padding-top: 8px; border-top: 2px solid var(--rule); }
+#exportDlg .xfine p, #exportDlg .xfine li { font-size: var(--t-12) !important; color: var(--ink2); }
+#exportDlg .xfine p b, #exportDlg .xfine li b { color: var(--ink); }
+#exportDlg .how h4 { margin: 8px 0 4px; font: 800 var(--t-12)/1.2 var(--f-disp); font-stretch: 104%; color: var(--ink); }
+#exportDlg .how ul { margin: 0; padding-left: 16px; line-height: 1.45; max-width: 64ch; }
+#exportDlg .how li { margin: 0 0 3px; }
+
+/* the erratum slip: a failed export, printed as a correction slip tucked into the back */
+#exportDlg .xerratum { margin-top: 18px; border: 2px solid var(--ink); background: var(--paper); max-width: 560px; }
+#exportDlg .xerratum[hidden] { display: none; }
+#exportDlg .xerratum-h { display: flex; align-items: center; gap: 10px; height: 26px; padding: 0 10px; background: var(--flag); color: var(--onflag); }
+#exportDlg .xerratum-h b { font: italic 900 var(--t-13)/1 var(--f-disp); font-stretch: 112%; text-transform: uppercase; letter-spacing: .03em; }
+#exportDlg .xerratum-h span { font: 700 var(--t-11)/1 var(--f-jp); }
+#exportDlg .xerratum-b { margin: 0; padding: 10px 12px 12px; display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; row-gap: 6px; }
+#exportDlg .xerratum-b dt { font: 700 var(--t-11)/1.6 var(--f-disp); color: var(--ink2); text-transform: uppercase; letter-spacing: .03em; }
+#exportDlg .xerratum-b dd { margin: 0; font-size: var(--t-12); line-height: 1.45; min-width: 0; }
+#exportDlg .xerratum-b .readout { font: 700 var(--t-13)/1.3 var(--f-body); color: var(--bad); }
+#exportDlg .xerratum-b .bk-mono { overflow-wrap: anywhere; user-select: text; }
+#exportDlg.failed #exportOut { display: none; }
+
+/* the colophon: the publisher's plate, the booklet, the printing */
+#exportDlg .xcolophon { flex: none; margin-top: auto; padding-top: 20px; }
+#exportDlg .xcolophon-row { display: flex; align-items: stretch; height: 34px; margin-left: calc(-1 * var(--m)); border-top: 2px solid var(--ink); }
+#exportDlg .xcolophon-row .bk-imprint { cursor: default; padding-left: var(--m); font-size: var(--t-16); }
+#exportDlg .xcolophon-row .xline2 { display: flex; align-items: center; min-width: 0; padding-left: 26px; color: var(--ink2); font-size: var(--t-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#exportDlg .xcolophon-row .xline2 b { color: var(--ink); font: 700 var(--t-12)/1 var(--f-disp); margin-right: 6px; }
+
+/* ---- right page: the audit log, printed like a terminal */
+#exportDlg .xnotes { display: flex; flex-direction: column; overflow: hidden; padding-top: 22px; padding-bottom: 18px; }
+#exportDlg .xterm-head { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; }
+#exportDlg .xterm-head > b { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; background: var(--ink); color: var(--paper);
+  font: italic 900 var(--t-13)/1 var(--f-disp); font-stretch: 112%; text-transform: uppercase; letter-spacing: .03em; }
+#exportDlg .xterm-head > .bk-jp { font-size: var(--t-11); color: var(--ink2); }
+#exportDlg .xterm-sub { flex: 1 1 100%; margin: 4px 0 8px; font-size: var(--t-12); color: var(--ink2); line-height: 1.4; }
+#exportDlg .xterm { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 0;
+  background: var(--sunk); border: 2px solid var(--ink); color: var(--ink);
+  font: 400 var(--t-13)/1.55 var(--f-data); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#exportDlg .xterm:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#exportDlg .xent { padding: 5px 12px; }
+#exportDlg .xent:nth-child(even) { background: var(--plate); }
+#exportDlg .xl { display: grid; grid-template-columns: 7ch minmax(0, 1fr); column-gap: 1ch; }
+#exportDlg .xl-tag { font-weight: 700; white-space: nowrap; }
+#exportDlg .xl-txt { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* BREAK in reverse (the flag's fill), so it never reads as the export's own line, whose ink is
+   the same red on Energy and DJ-AR (--mark = --bad there) */
+#exportDlg .xl[data-kind="break"] .xl-tag { justify-self: start; align-self: start; padding: 0 .45ch; background: var(--flag); color: var(--onflag); }
+#exportDlg .xl[data-kind="fixed"] .xl-tag { color: var(--good); }
+#exportDlg .xl[data-kind="where"] .xl-tag, #exportDlg .xl[data-kind="where"] .xl-txt { color: var(--ink2); }
+#exportDlg .xl[data-kind="did"] .xl-tag, #exportDlg .xl[data-kind="did"] .xl-txt { color: var(--mark); }
+#exportDlg .xl[data-kind="note"] .xl-tag { color: var(--ink2); }
+#exportDlg .xl[data-kind="cmd"] .xl-tag { color: var(--mark); }
+#exportDlg .xl[data-kind="cmd"] .xl-txt { font-weight: 700; }
+#exportDlg .xwho { font-weight: 700; }
+/* the faces that open an entry's first line (the owner kept the icons on the
+   log): select faces at a whole multiple in 24px plates, "+N" past ten */
+#exportDlg .xfaces { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; vertical-align: middle; margin: 0 1ch 3px 0; }
+#exportDlg .xface { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; overflow: hidden; background: var(--plate); }
+#exportDlg .xface img { display: block; image-rendering: pixelated; }
+#exportDlg .xmore { font-weight: 700; color: var(--ink2); padding-left: 2px; }
+#exportDlg .xl .bk-btn { vertical-align: middle; margin: 2px 0; font-family: var(--f-disp); }
+#exportDlg .xcursor { display: inline-block; width: .6em; height: 1.1em; vertical-align: -.2em; background: var(--ink); }
+/* WB signs the log: his pixel art in the tag column, his name on his hue */
+#exportDlg .xl[data-kind="sign"] { grid-template-columns: max-content minmax(0, 1fr); align-items: end; font-family: var(--f-body); }
+#exportDlg .xl[data-kind="sign"] .xl-tag { align-self: end; }
+#exportDlg .xsign .name { display: inline-flex; align-items: center; vertical-align: 1px; height: 20px; padding: 0 8px; margin-right: 10px;
+  background: var(--wb); color: var(--onmember); font: italic 900 var(--t-12)/1 var(--f-disp); font-stretch: 112%; letter-spacing: .02em; }
+
+/* ---- the tight sheet (1024x700 and the like) */
+@media (max-width: 1100px), (max-height: 760px) {
+  #exportDlg .xcover, #exportDlg .xnotes { padding-top: 14px; }
+  #exportDlg .xbuild { margin-top: 6px; }
+  #exportDlg .xcut { margin-top: 10px; }
+  #exportDlg .xlineup { margin-top: 10px; }
+  #exportDlg .xcontents { font-size: var(--t-13); margin-top: 8px; }
+  #exportDlg .acts { margin: 12px 0 6px; gap: 10px; }
+  #exportDlg .bk-btn.lg { height: 42px; padding: 0 16px; font-size: var(--t-16); }
+  #exportDlg .xcolophon-row .long { display: none; }
+  #exportDlg .xterm { font-size: var(--t-12); }
+}
+
+/* ---- a narrow window: one page under the other, the cover (with the buttons) first */
+@media (max-width: 900px) {
+  #exportDlg .xspread { display: flex; flex-direction: column; overflow: auto; }
+  #exportDlg .xspread > .bk-pg { flex: none; overflow: visible; padding-left: var(--m); padding-right: var(--m); }
+  #exportDlg .xspread > .bk-fold { display: none; }
+  #exportDlg .xspread > .xcover { border-bottom: 2px solid var(--ink); }
+  #exportDlg .xcut, #exportDlg .xlineup, #exportDlg .xcolophon-row { margin-left: calc(-1 * var(--m)); margin-right: calc(-1 * var(--m)); }
+  #exportDlg .xterm { flex: none; overflow: visible; }
+}

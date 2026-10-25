@@ -1,0 +1,87 @@
+Mugen Studio
+============
+
+Double-click MugenStudio.exe.
+
+It opens the Studio in a window. Nothing to install, nothing else to find.
+
+What is in here
+---------------
+  app\                the program. Leave it alone: a new version replaces it.
+  Content\default\    your characters\, stages\, music\, themes\ and
+                      roster.json, which says what is in the build. Add to
+                      it from inside the Studio by dropping files on it.
+                      It is made the first time you start Mugen Studio,
+                      from the starter in app\starter\.
+                      Another set of content can sit beside "default" as
+                      its own folder; Options > Content > Bundles... in the
+                      Studio picks which one opens.
+  Settings\           your own settings and keys (see below). Made the
+                      first time you start Mugen Studio.
+  Desktop Export\     empty until you run a Desktop export. It lands here.
+  Website Export\     empty until you run a Website export. It lands here.
+                      "Export to folder..." in the Studio picks somewhere
+                      else instead.
+  LICENSE.txt         Mugen Studio's license (MIT).
+  THIRD-PARTY-NOTICES.txt
+                      what it ships from others, and their terms.
+
+If the window will not come up, run app\studio-server.exe: it serves the
+same Studio to your browser and prints what is wrong on the way.
+
+Windows may warn the first time you run it. The .exe is unsigned, which is
+what SmartScreen is reporting - "More info" then "Run anyway".
+
+Your Settings folder
+--------------------
+Everything that is yours and is not content is kept in Settings\:
+
+  local-config.json     your online settings and KEYS: the lobby relay and
+                        TURN addresses, the Cloudflare token and admin key
+                        that "Set up my servers" saved, and any admin key
+                        you gave the Players panel.
+  studio-settings.json  which content bundle opens, and where downloads go.
+  logs\                 what the Studio's server printed, for when
+                        something goes wrong.
+
+Don't share your Settings folder: it has your keys. Nothing you export and
+no copy of Mugen Studio includes it. The Studio cannot show you the admin
+key again, so keep this folder when you move to a new version or a new
+computer.
+
+Updating to a new version
+-------------------------
+Close Mugen Studio first. Then either:
+
+  - Right-click the new zip, choose Extract All, and choose the folder that
+    CONTAINS your Mugen Studio folder - not the folder itself. Answer
+    "Replace the files in the destination" when Windows asks. The zip holds
+    one folder, "Mugen Studio", with only the program in it, so your
+    Content\ and Settings\ folders are not touched. If your folder has
+    another name (older copies were called Mugen Manager), rename it to
+    Mugen Studio first.
+
+  - Or extract it somewhere new, and copy your Settings\ and Content\
+    folders from this one into it BEFORE you start it (if you started it
+    first, answer "Replace the files in the destination" when you copy).
+    Copy Desktop Export\ too if you play from it: its save\ folder keeps
+    the game's own settings. The Studio's look and layout preferences
+    start fresh in a new folder.
+
+Your characters, your build, your bundles, your settings and your keys come
+with you either way.
+
+If your copy has no Settings folder, it is an older one that kept these
+settings in app\. Use the first way, or copy app\local-config.json and
+app\studio-layout.json from the old app\ folder into the new app\ folder
+before you start it. The new version moves them into Settings\ the first
+time it starts, and says so.
+
+About this copy
+---------------
+It starts with Kung Fu Man and the training stage so there is something to
+press Play on; everything else is yours to add. The online settings are
+blank: room codes fall back to the manual copy-and-paste connect, and
+ranked, casual, player names and the leaderboard stay off until you point
+them at servers of your own in Settings > Online (the setup guide there
+says what each one needs).

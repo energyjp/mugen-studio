@@ -1,0 +1,210 @@
+/* THE STUDIO'S PRINTINGS - every Studio window reads this file. theme.js sets
+   <html data-look="..." data-paper="day|night"> from the viewer's choice in
+   Options -> Look before the body paints.
+
+   The Studio is printed like a 2000s fighting-game instruction booklet. A
+   LOOK is a set of inks (Energy, WB, DJ-AR, SHiZUKA, High contrast; no
+   data-look = Energy), and each look has two PRINTINGS: Day (printed on paper
+   stock) and Night (printed on dark stock). Ten printings, one table.
+   Default: Energy, day - the round-1 manual's paper, sumi and shu vermilion.
+   Energy night is near-black stock (#060607) and red.
+
+   SOURCE: tools/printings.js holds every ink. `node tools/printings.js`
+   checks every pair below; `--write` regenerates the block between the
+   PRINTINGS markers. Never edit the block by hand.
+
+   TOKENS (every printing states all of them):
+     the booklet inks
+       --paper      the stock: page ground
+       --plate      a screen of the ink: plates behind art, zebra rows, quiet fills
+       --ink        body text, rules that matter, reversed (selected) fills
+       --ink2       secondary text (captions, file names). 4.5:1 everywhere: TEXT
+       --rule       hairlines and the fold. NEVER text
+       --line       field rules, input borders, panel edges (3:1 non-text)
+       --band / --onband     the section band ink and the type on it; table heads; the active thumb tab; the folio
+       --band2 / --onband2   the second ink: the speed cut; primary-button hover
+       --spot / --onspot     Export (a FILL only; never text on paper)
+       --mark / --onmark     the band ink as TEXT on paper (slot numbers, links, the energy.jp mark), and a fill with --onmark
+                             (the round-2 mockup called it --key; the Studio's --key is the keyline, so it is --mark here)
+       --flag / --onflag     audit flags (error fill)
+       --warn / --onwarn     audit warnings: a fill with --onwarn, AND warning text on paper (both clear 4.5:1)
+       --focus      the focus ring (also on an inactive thumb tab; the active tab's ring is --onband)
+       --tab / --ontab       the thumb-tab rail's inactive tabs: a plate in the printing's own inks and the ink on it
+                             (day: between the 6% and 30% screens; night: the line ink 30% into the plate)
+       --tab-hover           an inactive tab under the pointer (ontab on it clears 4.5:1 too)
+       --tab-edge            the tab's keyline: the tab itself (no edge) except High contrast (ink)
+       --wb-tint --ar-tint --sz-tint   hint-box grounds (the member's hue mixed into the paper: 14% day, 20% night)
+     the Studio's older tokens, restated from the inks (so every page and every
+     Phase-B tab follows with no CSS of its own)
+       --bg = --panel = --ground = paper; --panel2 = --face = plate; --sunk = --well (inputs) a step past the paper;
+       --text = --ink = --hi = ink; --dim = --mute = ink2; --line2 = --key-lv = ink2; --key = line;
+       --accent = --act = --act-ink = mark, --accent-ink = onmark; --glow = mark's r,g,b;
+       --good, --bad, --warn = status TEXT, fitted to 4.5:1 on paper and plate;
+       --toast-bg / --toast-ink = the toast, printed in reverse on day stock.
+       --ok = the same fitted green as --good (moves.html prints frame advantage in it; booklet tier marks);
+       --launch / --launch-ink = E-Select's Launch button, one green that carries white type everywhere.
+     constant in every printing (booklet.css): --wb #4A9EFF, --ar #FF5533, --sz #AA66FF (black type on them),
+       --tmpl #E0A000 (non-text marks), --clsn1 #E8251C, --clsn2 #2457F0 (content colors).
+
+   CONTRAST (WCAG 2.x, measured by tools/printings.js, 2026-10-18; text >= 4.5, line >= 3):
+   | printing | ink/paper | ink2/paper | ink2/plate | mark/paper | mark/plate | onband/band | onband2/band2 | onspot/spot | onflag/flag | onwarn/warn | good/plate | warn/plate | bad/plate | ontab/tab | ontab/tab-hover | line/paper (3:1) | worst on a hint tint |
+   | energy-day | 15.50 | 5.74 | 5.05 | 5.81 | 5.11 | 5.39 | 17.74 | 5.39 | 6.65 | 5.93 | 4.82 | 4.55 | 5.11 | 10.66 | 8.05 | 3.60 | 4.91 |
+   | energy-night | 17.69 | 9.83 | 9.02 | 7.53 | 6.90 | 5.39 | 15.50 | 5.39 | 7.53 | 12.98 | 10.51 | 12.98 | 6.90 | 12.35 | 9.19 | 3.38 | 7.60 |
+   | wb-day | 15.72 | 7.72 | 6.72 | 7.44 | 6.47 | 7.48 | 13.00 | 7.93 | 5.45 | 5.93 | 5.04 | 4.76 | 4.51 | 11.06 | 8.71 | 3.99 | 6.57 |
+   | wb-night | 16.03 | 10.04 | 8.62 | 8.86 | 7.60 | 6.39 | 6.86 | 7.93 | 6.56 | 12.98 | 8.67 | 10.70 | 4.95 | 9.44 | 6.70 | 4.31 | 7.25 |
+   | ar-day | 16.96 | 8.65 | 7.34 | 7.28 | 6.17 | 6.30 | 8.13 | 8.13 | 7.47 | 5.93 | 4.94 | 4.67 | 5.88 | 11.84 | 9.59 | 4.17 | 7.41 |
+   | ar-night | 17.83 | 13.18 | 11.38 | 11.24 | 9.70 | 5.88 | 8.13 | 8.13 | 6.98 | 12.98 | 9.33 | 11.52 | 5.67 | 11.21 | 8.19 | 3.77 | 10.00 |
+   | sz-day | 17.52 | 8.46 | 7.37 | 7.45 | 6.50 | 10.21 | 6.65 | 10.09 | 6.01 | 5.93 | 4.84 | 4.57 | 4.64 | 12.23 | 9.52 | 3.98 | 7.24 |
+   | sz-night | 17.50 | 12.52 | 11.42 | 9.03 | 8.24 | 6.65 | 10.09 | 10.09 | 6.56 | 8.97 | 10.39 | 8.53 | 5.93 | 12.62 | 9.68 | 3.03 | 9.59 |
+   | contrast-day | 21.00 | 15.13 | 12.69 | 21.00 | 17.62 | 21.00 | 10.51 | 10.51 | 6.04 | 7.20 | 5.61 | 6.04 | 5.07 | 17.62 | 12.55 | 21.00 | 12.81 |
+   | contrast-night | 21.00 | 18.76 | 16.16 | 21.00 | 18.10 | 21.00 | 10.51 | 10.51 | 6.79 | 14.67 | 14.43 | 12.64 | 5.85 | 18.10 | 12.63 | 6.25 | 14.72 |
+   Black type on the band's hues: WB 7.63, DJ AR 6.60, SHiZUKA 6.05, in every printing.
+
+   SPECIFICITY: every printing's selector is (0,3,0) - `:root` + the look +
+   the stock - so it outranks a page's own plain `:root` wherever this file
+   is linked, and Day is also the printing when data-paper is missing.
+
+   RETIRED (2026-10-18): the moving sky (#lookSky, html.sky), the gradient
+   skies (--look-grad, --sky-*), the frosted top bar and every see-through
+   surface. Color is printed on the page now. A saved `studio.lookMotion`
+   is simply ignored. */
+
+/* PRINTINGS:BEGIN */
+/* Energy, day */
+:root:not([data-look]):not([data-paper="night"]) {
+  color-scheme: light;
+  --paper: #EFF0EC; --plate: #E1E2DE; --ink: #17181C; --ink2: #5C5D62; --rule: #AEAFAC; --line: #7C7D80;
+  --band: #C8301A; --onband: #FFFFFF; --band2: #17181C; --onband2: #FFFFFF; --spot: #C8301A; --onspot: #FFFFFF;
+  --mark: #B02812; --onmark: #FFFFFF; --flag: #B02812; --onflag: #FFFFFF; --warn: #8A5A00; --onwarn: #FFFFFF;
+  --focus: #C8301A; --tab: #C8C9C5; --ontab: #17181C; --tab-hover: #AEAFAC; --tab-edge: #C8C9C5;
+  --wb-tint: #D8E5EF; --ar-tint: #F1DAD2; --sz-tint: #E5DDEF; --bg: #EFF0EC; --panel: #EFF0EC; --panel2: #E1E2DE;
+  --line2: #5C5D62; --sunk: #F8F8F6; --ground: #EFF0EC; --well: #F8F8F6; --text: #17181C; --dim: #5C5D62;
+  --mute: #5C5D62; --hi: #17181C; --accent: #B02812; --accent-ink: #FFFFFF; --glow: 176,40,18; --act: #B02812;
+  --act-ink: #B02812; --face: #E1E2DE; --key: #7C7D80; --key-lv: #5C5D62; --good: #1B6E3E; --bad: #B02812;
+  --ok: #1B6E3E; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #17181C; --toast-ink: #EFF0EC;
+}
+/* Energy, night */
+:root:not([data-look])[data-paper="night"] {
+  color-scheme: dark;
+  --paper: #060607; --plate: #121316; --ink: #EFF0EC; --ink2: #B4B5B2; --rule: #2A2B30; --line: #626368;
+  --band: #C8301A; --onband: #FFFFFF; --band2: #EFF0EC; --onband2: #17181C; --spot: #C8301A; --onspot: #FFFFFF;
+  --mark: #FF7259; --onmark: #060607; --flag: #FF7259; --onflag: #060607; --warn: #FFD400; --onwarn: #1A1200;
+  --focus: #FF7259; --tab: #2A2B2F; --ontab: #EFF0EC; --tab-hover: #3E3F43; --tab-edge: #2A2B2F;
+  --wb-tint: #142439; --ar-tint: #381610; --sz-tint: #271939; --bg: #060607; --panel: #060607; --panel2: #121316;
+  --line2: #B4B5B2; --sunk: #030304; --ground: #060607; --well: #030304; --text: #EFF0EC; --dim: #B4B5B2;
+  --mute: #B4B5B2; --hi: #EFF0EC; --accent: #FF7259; --accent-ink: #060607; --glow: 255,114,89; --act: #FF7259;
+  --act-ink: #FF7259; --face: #121316; --key: #626368; --key-lv: #B4B5B2; --good: #3DDC97; --bad: #FF7259;
+  --ok: #3DDC97; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #121316; --toast-ink: #EFF0EC;
+}
+/* WB, day */
+:root[data-look="wb"]:not([data-paper="night"]) {
+  color-scheme: light;
+  --paper: #F2F6FD; --plate: #DDE7F8; --ink: #0A1A3F; --ink2: #3B4D76; --rule: #A9BADB; --line: #6879A3;
+  --band: #1B48C8; --onband: #FFFFFF; --band2: #0A2A78; --onband2: #FFFFFF; --spot: #FF8800; --onspot: #1A0E00;
+  --mark: #1A44BD; --onmark: #FFFFFF; --flag: #D0192B; --onflag: #FFFFFF; --warn: #8A5A00; --onwarn: #FFFFFF;
+  --focus: #1B48C8; --tab: #C3D1EA; --ontab: #0A1A3F; --tab-hover: #A9BADB; --tab-edge: #C3D1EA;
+  --wb-tint: #DAEAFD; --ar-tint: #F4DFE1; --sz-tint: #E8E2FD; --bg: #F2F6FD; --panel: #F2F6FD; --panel2: #DDE7F8;
+  --line2: #3B4D76; --sunk: #F9FBFE; --ground: #F2F6FD; --well: #F9FBFE; --text: #0A1A3F; --dim: #3B4D76;
+  --mute: #3B4D76; --hi: #0A1A3F; --accent: #1A44BD; --accent-ink: #FFFFFF; --glow: 26,68,189; --act: #1A44BD;
+  --act-ink: #1A44BD; --face: #DDE7F8; --key: #6879A3; --key-lv: #3B4D76; --good: #1B6E3E; --bad: #CC192B;
+  --ok: #1B6E3E; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #0A1A3F; --toast-ink: #F2F6FD;
+}
+/* WB, night */
+:root[data-look="wb"][data-paper="night"] {
+  color-scheme: dark;
+  --paper: #071636; --plate: #0D2253; --ink: #EDF3FF; --ink2: #AEC3EC; --rule: #1F3F8F; --line: #5B7BC4;
+  --band: #1F52DB; --onband: #FFFFFF; --band2: #4A9EFF; --onband2: #03102A; --spot: #FF8800; --onspot: #1A0E00;
+  --mark: #7DBBFF; --onmark: #03102A; --flag: #FF5570; --onflag: #14000A; --warn: #FFD400; --onwarn: #1A1200;
+  --focus: #7DBBFF; --tab: #243D75; --ontab: #EDF3FF; --tab-hover: #385391; --tab-edge: #243D75;
+  --wb-tint: #14315E; --ar-tint: #392335; --sz-tint: #28265E; --bg: #071636; --panel: #071636; --panel2: #0D2253;
+  --line2: #AEC3EC; --sunk: #040C1E; --ground: #071636; --well: #040C1E; --text: #EDF3FF; --dim: #AEC3EC;
+  --mute: #AEC3EC; --hi: #EDF3FF; --accent: #7DBBFF; --accent-ink: #03102A; --glow: 125,187,255; --act: #7DBBFF;
+  --act-ink: #7DBBFF; --face: #0D2253; --key: #5B7BC4; --key-lv: #AEC3EC; --good: #3DDC97; --bad: #FF5570;
+  --ok: #3DDC97; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #0D2253; --toast-ink: #EDF3FF;
+}
+/* DJ-AR, day */
+:root[data-look="ar"]:not([data-paper="night"]) {
+  color-scheme: light;
+  --paper: #FCF5F3; --plate: #F4E0DB; --ink: #2A0A10; --ink2: #6A3840; --rule: #DDB2AA; --line: #9A6A70;
+  --band: #C0101F; --onband: #FFFFFF; --band2: #FF8800; --onband2: #1A0800; --spot: #FF8800; --onspot: #1A0800;
+  --mark: #A50E1B; --onmark: #FFFFFF; --flag: #A3135E; --onflag: #FFFFFF; --warn: #8A5A00; --onwarn: #FFFFFF;
+  --focus: #A50E1B; --tab: #E9C9C3; --ontab: #2A0A10; --tab-hover: #DDB2AA; --tab-edge: #E9C9C3;
+  --wb-tint: #E3E9F5; --ar-tint: #FCDFD8; --sz-tint: #F1E1F5; --bg: #FCF5F3; --panel: #FCF5F3; --panel2: #F4E0DB;
+  --line2: #6A3840; --sunk: #FEFBFA; --ground: #FCF5F3; --well: #FEFBFA; --text: #2A0A10; --dim: #6A3840;
+  --mute: #6A3840; --hi: #2A0A10; --accent: #A50E1B; --accent-ink: #FFFFFF; --glow: 165,14,27; --act: #A50E1B;
+  --act-ink: #A50E1B; --face: #F4E0DB; --key: #9A6A70; --key-lv: #6A3840; --good: #1B6E3E; --bad: #A3135E;
+  --ok: #1B6E3E; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #2A0A10; --toast-ink: #FCF5F3;
+}
+/* DJ-AR, night */
+:root[data-look="ar"][data-paper="night"] {
+  color-scheme: dark;
+  --paper: #22060B; --plate: #3E0D15; --ink: #FFF5F2; --ink2: #F7CDC4; --rule: #5C1420; --line: #B0505A;
+  --band: #C8102E; --onband: #FFFFFF; --band2: #FF8800; --onband2: #1A0800; --spot: #FF8800; --onspot: #1A0800;
+  --mark: #FFB59E; --onmark: #22060B; --flag: #FF5E8A; --onflag: #14000A; --warn: #FFD400; --onwarn: #1A1200;
+  --focus: #FFB59E; --tab: #60212A; --ontab: #FFF5F2; --tab-hover: #7D323B; --tab-edge: #60212A;
+  --wb-tint: #2A243C; --ar-tint: #4E1613; --sz-tint: #3D193C; --bg: #22060B; --panel: #22060B; --panel2: #3E0D15;
+  --line2: #F7CDC4; --sunk: #130306; --ground: #22060B; --well: #130306; --text: #FFF5F2; --dim: #F7CDC4;
+  --mute: #F7CDC4; --hi: #FFF5F2; --accent: #FFB59E; --accent-ink: #22060B; --glow: 255,181,158; --act: #FFB59E;
+  --act-ink: #FFB59E; --face: #3E0D15; --key: #B0505A; --key-lv: #F7CDC4; --good: #3DDC97; --bad: #FF5E8A;
+  --ok: #3DDC97; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #3E0D15; --toast-ink: #FFF5F2;
+}
+/* SHiZUKA, day */
+:root[data-look="sz"]:not([data-paper="night"]) {
+  color-scheme: light;
+  --paper: #EEF2EF; --plate: #DCE4DF; --ink: #070B09; --ink2: #3C4842; --rule: #AAB7AF; --line: #6C7A72;
+  --band: #0D1310; --onband: #E8B92C; --band2: #6A4AA8; --onband2: #FFFFFF; --spot: #E8B92C; --onspot: #1A1200;
+  --mark: #5A3A98; --onmark: #FFFFFF; --flag: #C4123A; --onflag: #FFFFFF; --warn: #8A5A00; --onwarn: #FFFFFF;
+  --focus: #6A4AA8; --tab: #C3CEC7; --ontab: #070B09; --tab-hover: #AAB7AF; --tab-edge: #C3CEC7;
+  --wb-tint: #D7E6F1; --ar-tint: #F0DCD5; --sz-tint: #E4DEF1; --bg: #EEF2EF; --panel: #EEF2EF; --panel2: #DCE4DF;
+  --line2: #3C4842; --sunk: #F7F9F8; --ground: #EEF2EF; --well: #F7F9F8; --text: #070B09; --dim: #3C4842;
+  --mute: #3C4842; --hi: #070B09; --accent: #5A3A98; --accent-ink: #FFFFFF; --glow: 90,58,152; --act: #5A3A98;
+  --act-ink: #5A3A98; --face: #DCE4DF; --key: #6C7A72; --key-lv: #3C4842; --good: #1B6E3E; --bad: #C4123A;
+  --ok: #1B6E3E; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #070B09; --toast-ink: #EEF2EF;
+}
+/* SHiZUKA, night */
+:root[data-look="sz"][data-paper="night"] {
+  color-scheme: dark;
+  --paper: #050806; --plate: #0F1612; --ink: #F3EFE3; --ink2: #D2C6EF; --rule: #1E2A24; --line: #6A4AA8;
+  --band: #6A4AA8; --onband: #FFFFFF; --band2: #E8B92C; --onband2: #1A1200; --spot: #E8B92C; --onspot: #1A1200;
+  --mark: #C29BFF; --onmark: #050806; --flag: #FF5570; --onflag: #14000A; --warn: #F0A020; --onwarn: #1A0A00;
+  --focus: #C29BFF; --tab: #2A263F; --ontab: #F3EFE3; --tab-hover: #413365; --tab-edge: #2A263F;
+  --wb-tint: #132638; --ar-tint: #37170F; --sz-tint: #261B38; --bg: #050806; --panel: #050806; --panel2: #0F1612;
+  --line2: #D2C6EF; --sunk: #030403; --ground: #050806; --well: #030403; --text: #F3EFE3; --dim: #D2C6EF;
+  --mute: #D2C6EF; --hi: #F3EFE3; --accent: #C29BFF; --accent-ink: #050806; --glow: 194,155,255; --act: #C29BFF;
+  --act-ink: #C29BFF; --face: #0F1612; --key: #6A4AA8; --key-lv: #D2C6EF; --good: #3DDC97; --bad: #FF5570;
+  --ok: #3DDC97; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #0F1612; --toast-ink: #F3EFE3;
+}
+/* High contrast, day */
+:root[data-look="contrast"]:not([data-paper="night"]) {
+  color-scheme: light;
+  --paper: #FFFFFF; --plate: #EBEBEB; --ink: #000000; --ink2: #262626; --rule: #000000; --line: #000000;
+  --band: #000000; --onband: #FFFFFF; --band2: #FFA31A; --onband2: #000000; --spot: #FFA31A; --onspot: #000000;
+  --mark: #000000; --onmark: #FFFFFF; --flag: #C8001E; --onflag: #FFFFFF; --warn: #7A4E00; --onwarn: #FFFFFF;
+  --focus: #0040FF; --tab: #EBEBEB; --ontab: #000000; --tab-hover: #C8C8C8; --tab-edge: #000000;
+  --wb-tint: #E6F1FF; --ar-tint: #FFE7E2; --sz-tint: #F3EAFF; --bg: #FFFFFF; --panel: #FFFFFF; --panel2: #EBEBEB;
+  --line2: #262626; --sunk: #FFFFFF; --ground: #FFFFFF; --well: #FFFFFF; --text: #000000; --dim: #262626;
+  --mute: #262626; --hi: #000000; --accent: #000000; --accent-ink: #FFFFFF; --glow: 0,0,0; --act: #000000;
+  --act-ink: #000000; --face: #EBEBEB; --key: #000000; --key-lv: #262626; --good: #006B2E; --bad: #C8001E;
+  --ok: #006B2E; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #000000; --toast-ink: #FFFFFF;
+}
+/* High contrast, night */
+:root[data-look="contrast"][data-paper="night"] {
+  color-scheme: dark;
+  --paper: #000000; --plate: #161616; --ink: #FFFFFF; --ink2: #F2F2F2; --rule: #D6D6D6; --line: #8C8C8C;
+  --band: #FFFFFF; --onband: #000000; --band2: #FFA31A; --onband2: #000000; --spot: #FFA31A; --onspot: #000000;
+  --mark: #FFFFFF; --onmark: #000000; --flag: #FF5570; --onflag: #000000; --warn: #FFD400; --onwarn: #000000;
+  --focus: #00FFFF; --tab: #161616; --ontab: #FFFFFF; --tab-hover: #333333; --tab-edge: #FFFFFF;
+  --wb-tint: #0F2033; --ar-tint: #33110A; --sz-tint: #221433; --bg: #000000; --panel: #000000; --panel2: #161616;
+  --line2: #F2F2F2; --sunk: #000000; --ground: #000000; --well: #000000; --text: #FFFFFF; --dim: #F2F2F2;
+  --mute: #F2F2F2; --hi: #FFFFFF; --accent: #FFFFFF; --accent-ink: #000000; --glow: 255,255,255; --act: #FFFFFF;
+  --act-ink: #FFFFFF; --face: #161616; --key: #8C8C8C; --key-lv: #F2F2F2; --good: #00FFFF; --bad: #FF5570;
+  --ok: #00FFFF; --launch: #1B7040; --launch-ink: #FFFFFF; --toast-bg: #161616; --toast-ink: #FFFFFF;
+}
+/* PRINTINGS:END */
+
+/* A page is printed on its stock: no gradient, no glass. */
+html { background: var(--paper); }
+
+/* Square corners in every window: the pages' art radii (portraits, list faces)
+   are tokens, and they are zero in the booklet. */
+:root:root { --r-art: 0px; --r-thumb: 0px; }

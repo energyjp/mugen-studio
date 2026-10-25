@@ -1,0 +1,1752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/themes.css">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/booklet.css">
+<script src="/booklet.js"></script>
+<title>Animation editor</title>
+<style>
+  /* THE ANIMATION EDITOR (GRAIL 3.11), in its own window like the Moves
+     window and the pop-out player, printed in the booklet's vocabulary
+     ($X/rd-foundation/CONTRACT.md): the section band, side heads, ruled
+     tables, square buttons and fields, every color a printing token from
+     themes.css. Left: the action, its playback and the states that play it.
+     Center: every element as a strip, and the selected element large with
+     its boxes, which drag. Right: the element's fields, its boxes as numbers,
+     and the structural operations, each shown as a plan before anything is
+     written. The behavior is unchanged; only the print changed. */
+  :root {
+    /* The engine's own debug colors, system.go:4000-4007 at 96413d2. The
+       uint32s there are 0xAABBGGRR: Clsn1 HitDef 0xff0000ff, ReversalDef
+       0xff0040c0, Inactive 0xff000080, Clsn2 0xffff0000. Content, never
+       re-inked. */
+    --c1hit: rgb(255,0,0); --c1rev: rgb(192,64,0); --c1not: rgb(128,0,0); --c2: rgb(0,0,255);
+    /* The player in the left column is a column, not the panel's row. */
+    --av-stage: 262px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  /* Nothing selects, nothing drags - the Studio's rule (GRAIL 3.1), restated
+     because a window shares no stylesheet. Inputs keep their text. */
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t-13)/1.45 var(--f-body);
+    display: flex; flex-direction: column; user-select: none; cursor: default; }
+  img { -webkit-user-drag: none; user-drag: none; }
+  input, select { user-select: text; }
+  #band .bk-secband-t .t { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; }
+  #band .an { font: 700 var(--t-13)/1 var(--f-disp); }
+  #band #actno { font: italic 800 var(--t-20)/1 var(--f-disp); font-stretch: 112%; }
+  #band .bk-secband-meta { white-space: normal; text-align: right; line-height: 1.35; }
+  #edited { flex: 0 0 auto; background: var(--plate); border-bottom: 2px solid var(--ink); padding: 6px var(--m); font-size: var(--t-12);
+    display: flex; gap: 10px 12px; align-items: center; flex-wrap: wrap; }
+  /* The display above beats the UA's [hidden], which left an empty band under
+     the header whenever nothing was edited. */
+  #edited[hidden] { display: none; }
+  #edited b { font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .03em; color: var(--warn); }
+  #edited .f { font-family: var(--f-data); font-size: var(--t-12); }
+  #msg { flex: 0 0 auto; padding: 6px var(--m); font-size: var(--t-12); border-bottom: 2px solid var(--ink); }
+  #msg:empty { display: none; }
+  #msg.err { color: var(--bad); } #msg.ok { color: var(--good); }
+
+  main { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 290px minmax(0, 1fr) 430px; }
+  main > section { min-height: 0; overflow: auto; border-right: 2px solid var(--rule); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  main > section:last-child { border-right: 0; }
+  #center { display: flex; flex-direction: column; overflow: hidden; }
+  /* side heads: the manual's square, caps, a run-in rule */
+  .sh { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; background: var(--paper); position: sticky; top: 0; z-index: 3;
+    font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; text-transform: uppercase; letter-spacing: .01em; color: var(--ink); }
+  .sh::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); }
+  .sh::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); min-width: 12px; }
+  .pad { padding: 10px 12px; }
+  .none { padding: 10px 12px; color: var(--ink2); font-size: var(--t-12); }
+
+  /* buttons and fields, square and printed */
+  button, select {
+    height: 26px; background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink);
+    padding: 0 8px; font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%; cursor: pointer; border-radius: 0; box-shadow: none;
+  }
+  select { border-color: var(--line); background: var(--well); font: 400 var(--t-12)/1 var(--f-data); }
+  button:hover { background: var(--plate); }
+  select:hover { border-color: var(--ink); }
+  button:active, button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  button:disabled { border-color: var(--line); color: var(--ink2); background: var(--paper); cursor: default; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+  button.warn { border-color: var(--warn); }
+  button.warn:hover { background: var(--warn); color: var(--onwarn); }
+  button.danger { border-color: var(--flag); }
+  button.danger:hover { background: var(--flag); color: var(--onflag); }
+  input[type=text] { height: 24px; background: var(--well); color: var(--ink); border: 1.5px solid var(--line); padding: 0 5px;
+    font: 400 var(--t-12)/1 var(--f-data); border-radius: 0; }
+  input[type=text]:hover { border-color: var(--ink); }
+  input.bad { border-color: var(--flag); box-shadow: inset 0 -2px 0 var(--flag); }
+  input.busy { opacity: .5; }
+
+  /* left */
+  .apick { display: flex; gap: 4px; align-items: center; }
+  .apick select { flex: 1 1 auto; min-width: 0; }
+  .facts { color: var(--ink2); font-size: var(--t-12); margin-top: 6px; line-height: 1.55; }
+  .facts code, .mono { font-family: var(--f-data); font-size: var(--t-12); color: var(--ink); }
+  .note { font-size: var(--t-12); color: var(--ink2); margin-top: 4px; }
+  .note.warn { color: var(--warn); }
+  #player { margin-top: 2px; padding: 0 12px 10px; }
+  #player .animwrap { flex-direction: column; align-items: stretch; }
+  #player .animstage { width: 100%; }
+  .st { padding: 6px 12px; border-bottom: 1px solid var(--rule); font-size: var(--t-12); }
+  .st .no { font-family: var(--f-data); font-weight: 700; color: var(--ink); margin-right: 6px; }
+  .st .fl { font-family: var(--f-data); font-size: var(--t-11); color: var(--ink2); }
+  .st .fz { font-family: var(--f-data); font-size: var(--t-11); color: var(--ink2); margin-top: 2px; }
+  .st .fz b { color: var(--warn); font-weight: 700; }
+
+  /* center: strip - each element printed as a plate with its caption */
+  .strip { flex: 0 0 auto; display: flex; gap: 6px; overflow-x: auto; padding: 10px 12px; border-bottom: 2px solid var(--ink); background: var(--paper); }
+  .cell { flex: 0 0 auto; width: 112px; background: var(--paper); box-shadow: inset 0 0 0 1.5px var(--rule); cursor: pointer; position: relative; }
+  .cell:hover { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .cell.on { box-shadow: inset 0 0 0 3px var(--ink); }
+  .cell.on .cap { background: var(--ink); color: var(--paper); }
+  .cell.on .cap b { color: var(--paper); }
+  .cell.hiddenel { opacity: .65; }
+  .cell .th { position: relative; height: 92px; overflow: hidden; background: var(--plate); margin: 3px 3px 0; }
+  .cell .cap { padding: 3px 6px 5px; font: 400 var(--t-11)/1.35 var(--f-data); color: var(--ink2); }
+  .cell .cap b { color: var(--ink); font-weight: 700; }
+  .cell .loop { position: absolute; left: -5px; top: 2px; bottom: 2px; width: 3px; background: var(--ok); }
+  .badges { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px; }
+  .badge { display: inline-flex; align-items: center; height: 15px; padding: 0 4px; font: 700 var(--t-11)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .02em;
+    box-shadow: inset 0 0 0 1.5px var(--line); color: var(--ink); background: var(--paper); }
+  .badge.c1 { box-shadow: inset 0 0 0 1.5px var(--clsn1); }
+  .badge.c2 { box-shadow: inset 0 0 0 1.5px var(--clsn2); }
+  .badge.fires { background: var(--warn); color: var(--onwarn); box-shadow: none; }
+  .badge.dim { color: var(--ink2); }
+  .badge.loopb { box-shadow: inset 0 0 0 1.5px var(--ok); }
+
+  /* center: the big stage */
+  .tools { flex: 0 0 auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 12px; border-bottom: 1px solid var(--rule); font-size: var(--t-12); color: var(--ink2); }
+  .tools .sp { flex: 1 1 auto; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 12px; height: 10px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid; }
+  #stagewrap { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--plate); display: flex; outline: none; }
+  #stagewrap:focus-visible { box-shadow: inset 0 0 0 3px var(--focus); }
+  .canvas { position: relative; margin: auto; flex: 0 0 auto; }
+  .canvas img, .th img { position: absolute; transform-origin: 0 0; image-rendering: pixelated; }
+  .box { position: absolute; border: 1px solid; }
+  .th .box { pointer-events: none; }
+  .box.c2 { border-color: var(--c2); background: rgba(0,0,255,.12); }
+  .box.c1hit { border-color: var(--c1hit); background: rgba(255,0,0,.14); }
+  .box.c1rev { border-color: var(--c1rev); background: rgba(192,64,0,.16); }
+  .box.c1not { border-color: var(--c1not); background: rgba(128,0,0,.2); }
+  .canvas .box { cursor: move; }
+  .canvas .box.def { border-style: dashed; }
+  .canvas .box.sel { outline: 2px dashed var(--ink); outline-offset: 2px; z-index: 4; }
+  .canvas .box.pend { box-shadow: 0 0 0 2px var(--warn); }
+  .hd { position: absolute; width: 8px; height: 8px; background: var(--paper); border: 2px solid var(--ink); z-index: 5; }
+  .hd.nw, .hd.se { cursor: nwse-resize; } .hd.ne, .hd.sw { cursor: nesw-resize; }
+  .hd.n, .hd.s { cursor: ns-resize; } .hd.e, .hd.w { cursor: ew-resize; }
+  .ax { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 3; }
+  .ax i { position: absolute; background: var(--mark); opacity: .55; }
+  .ax i.h { left: -9999px; width: 19998px; top: 0; height: 1px; }
+  .ax i.v { top: -9999px; height: 19998px; left: 0; width: 1px; }
+  .th .ax i.h { left: -6px; width: 13px; } .th .ax i.v { top: -6px; height: 13px; }
+  .readout { flex: 0 0 auto; padding: 6px 12px; font: 400 var(--t-12)/1.3 var(--f-data); color: var(--ink2); border-top: 2px solid var(--ink); background: var(--paper); }
+
+  /* right */
+  .blockh { display: flex; align-items: center; gap: 8px; margin: 18px 0 6px; font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; text-transform: uppercase; letter-spacing: .01em; color: var(--ink); }
+  .blockh::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); }
+  .blockh::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); min-width: 12px; }
+  .blockh:first-child { margin-top: 0; }
+  table.fields { width: 100%; border-collapse: collapse; }
+  table.fields td { border-top: 1px solid var(--rule); padding: 4px 4px; vertical-align: top; }
+  table.fields td.nm { font: 700 var(--t-12)/1.3 var(--f-data); width: 70px; color: var(--ink); padding-top: 7px; }
+  table.fields input[type=text] { width: 92px; }
+  .fh { font-size: var(--t-11); color: var(--ink2); margin-top: 2px; }
+  .err { color: var(--bad); font-size: var(--t-12); margin-top: 2px; }
+  .warnl { color: var(--warn); font-size: var(--t-12); margin-top: 2px; }
+  .hit { margin-top: 4px; font-size: var(--t-12); }
+  .hit.nohit { color: var(--warn); }
+  .hit.ok { color: var(--ink2); }
+  .hit input[type=text] { width: 48px; }
+  .hit button { margin: 3px 4px 0 0; }
+  .panel { margin-top: 8px; padding: 8px 10px; box-shadow: inset 0 0 0 2px var(--ink); background: var(--paper); font-size: var(--t-12); }
+  .panel.timing { box-shadow: inset 0 0 0 2px var(--warn); }
+  .panel.confirm { box-shadow: inset 0 0 0 2px var(--flag); }
+  .panel .t { font: 800 var(--t-12)/1.2 var(--f-disp); text-transform: uppercase; letter-spacing: .03em; color: var(--ink); margin-bottom: 6px; }
+  .panel ul { margin: 2px 0; padding-left: 16px; }
+  .panel li { margin: 2px 0; }
+  .panel .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+  .panel code { font-family: var(--f-data); font-size: var(--t-12); color: var(--ink); word-break: break-word; }
+  .boxrow { display: flex; gap: 4px; align-items: center; padding: 2px 0; }
+  .boxrow.on { background: var(--plate); box-shadow: inset 3px 0 0 var(--ink); }
+  .boxrow .k { font: 400 var(--t-12)/1 var(--f-data); width: 26px; padding-left: 4px; color: var(--ink2); cursor: pointer; }
+  .boxrow input[type=text] { width: 54px; }
+  .src { font-size: var(--t-12); color: var(--ink2); margin: 2px 0 4px; }
+  .src.def { color: var(--warn); }
+  .ops { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .ops label { font-size: var(--t-12); color: var(--ink2); }
+  @media (max-width: 1180px) { main { grid-template-columns: 250px minmax(0, 1fr) 360px; } }
+</style>
+</head>
+<body>
+  <header class="bk-secband" id="band">
+    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who">&hellip;</span><span class="an">Action <span id="actno"></span></span><span class="k" lang="ja">アニメ</span></h1>
+    <div class="bk-secband-meta">Edits write the character's .air; the original is kept for Revert. Drag boxes; [ and ] step elements.</div>
+  </header>
+  <div id="edited" hidden></div>
+  <div id="msg"></div>
+  <main>
+    <section id="left"><div class="sh">Action</div><div class="pad" id="action"></div><div id="player"></div><div id="states"></div></section>
+    <section id="center"><div class="strip" id="strip"></div><div class="tools" id="tools"></div><div id="stagewrap" tabindex="0"></div><div class="readout" id="readout"></div></section>
+    <section id="right"><div class="pad" id="side"><div class="none">Reading&hellip;</div></div></section>
+  </main>
+<script src="./ikemen/animview-core.js"></script>
+<script>
+  // HOW THIS PAGE EDITS AN .AIR (§9). Everything shown comes from
+  // GET /api/char-air - airedit's parse of the action with a byte span for
+  // every field and box, each element's EFFECTIVE Clsn1/Clsn2 and where it
+  // comes from (its own block, a Default block, or none), and the states that
+  // play the action with their triggers. Every change is one POST to
+  // /api/char-air-edit carrying the .air's sha1 as read; the server plans it
+  // with airedit, re-parses the result (validateAir) and writes through
+  // charedit, or refuses. This page never builds file text itself.
+  const q = new URLSearchParams(location.search);
+  const char = q.get('char') || '';
+  const name = q.get('name') || char;
+  const pal = q.get('pal');
+  const $ = (id) => document.getElementById(id);
+  $('who').textContent = name || 'no character';
+  document.title = (name || 'Animation') + ' — animation editor';
+
+  // All user and character text goes in through textContent.
+  function el(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === 'text') e.textContent = String(v);
+      else if (k === 'class') e.className = v;
+      else if (k.startsWith('on')) e[k] = v;
+      else if (k === 'style') e.style.cssText = v;
+      else if (k === 'value') { e.value = String(v); e.setAttribute('value', String(v)); }
+      else e.setAttribute(k, v === true ? '' : String(v));
+    }
+    for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+    return e;
+  }
+  let msgTimer = null;
+  function say(text, kind) {
+    const m = $('msg');
+    m.textContent = text || '';
+    m.className = kind || '';
+    clearTimeout(msgTimer);
+    if (text && kind !== 'err') msgTimer = setTimeout(() => { m.textContent = ''; }, 7000);
+  }
+  async function getJson(u) {
+    const r = await fetch(u, { cache: 'no-store' });
+    let j = null;
+    try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok || !j || j.error) { const e = new Error((j && j.error) || r.statusText); e.code = j && j.code; e.body = j; throw e; }
+    return j;
+  }
+  async function postJson(u, body) {
+    const r = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    let j = null;
+    try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok || !j || j.error) { const e = new Error((j && j.error) || r.statusText); e.code = j && j.code; e.body = j; throw e; }
+    return j;
+  }
+  const spriteSrc = (g, n) => '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + g + '&index=' + n
+    + (pal !== null && pal !== '' ? '&pal=' + encodeURIComponent(pal) : '');
+
+  // ---- state ------------------------------------------------------------------------------
+  let view = null;                 // GET /api/char-air
+  let actionNo = parseInt(q.get('action'), 10);
+  if (!Number.isInteger(actionNo)) actionNo = 0;
+  const sel = { elem: 1, which: null, box: null };
+  let userZoom = 1;                // whole-number steps on top of the fit
+  let timing = null;               // { elem, value, plan, timing } - a time change not yet saved
+  let defConfirm = null;           // { which, box, rect, affects, header, line } - a Default box edit awaiting its confirm
+  let plan = null;                 // { req, res, ack } - a structural dry run awaiting Apply
+  const fieldErr = {};             // field -> message (validation text from airedit)
+  let boxErr = '';
+  const added = new Set();         // fields 8-10 the user asked to see on this element
+  let drag = null;                 // a box being dragged
+  let nudge = null;                // a box being moved with the arrow keys, not yet written
+  let player = null;
+
+  // ONE WRITE AT A TIME. Each POST carries the sha1 of the .air, and each
+  // successful write hands back the new view (and so the new sha1). Two
+  // writes racing would send the same sha1 twice and the second would be
+  // refused as stale - so they queue.
+  let queue = Promise.resolve();
+  const serial = (fn) => { queue = queue.then(fn, fn); return queue; };
+
+  // AN EDIT IS MADE ON ONE VIEW, AND IS SENT ONLY WHILE WHAT IT WAS MADE ON
+  // STILL HOLDS. A queued edit's turn can come after other writes landed or
+  // after another action was picked, so nothing it sends is read at its turn:
+  // snapOf() takes, when the edit is made, the action, the .air's sha1, every
+  // element's .air line and the value the edit builds on (a box's rect, a
+  // field's text); sendable() at its turn lets it go out only if the action is
+  // still the one on screen and none of that moved. An element number is a
+  // position - element N is the Nth frame line (anim.go:330-342) and AnimElem
+  // reads frames[N-1] (anim.go:507-520) - so an edit made before an insert,
+  // delete or move lands on no frame at all rather than on the one that took
+  // its number. LINE NUMBERS ARE NOT IDENTITY: a move of a frame past a
+  // neighbor with as many Clsn lines swaps the lines' contents and keeps
+  // every number, so the page counts its own element-renumbering writes
+  // (`structure`) and an edit made before one lands is dropped whatever the
+  // lines read. The page's own earlier writes that keep the lines and the
+  // value (a nudge written just before a drag of the same box, which starts
+  // from the nudged rect) let it through against the newer sha1; anything
+  // else is dropped with a message, and a refused (stale) write reloads.
+  // pinned: the edit names its action itself (a box commit) and may still go
+  // out on the same bytes while another action is on screen.
+  // dep: the page's own queued write of the same box or field this edit was
+  // built on (pendingOf); at its turn the edit expects what that write left,
+  // and goes nowhere when that write did not land.
+  let epoch = 0;       // bumped when the view is re-read after a refused write or a Revert
+  let structure = 0;   // bumped when an insert, delete or move this page sent lands
+  const linesOf = (a) => (a ? a.elements.map((e) => e.line).join(',') : '');
+  function snapOf(reader, expected, dep) {
+    const a = act();
+    return { action: a ? a.no : actionNo, sha1: view ? view.sha1 : null, lines: linesOf(a), epoch, structure, reader: reader || null,
+      expected: reader ? JSON.stringify(expected !== undefined ? expected : reader(a)) : null, dep: dep || null };
+  }
+  function sendable(snap, label, pinned) {
+    const a = act();
+    const drop = (why) => { say(label + ' was not saved: ' + why + '.', 'err'); return null; };
+    if (!view || !snap.sha1) return drop('nothing was read');
+    if (snap.epoch !== epoch) return drop('the .air was read again since it was made');
+    // The write it built on was not saved: that one already said why.
+    if (snap.dep && snap.dep.lost) { if ($('msg').className !== 'err') drop('the change it built on was not saved'); return null; }
+    if (!a || a.no !== snap.action) {
+      if (pinned && view.sha1 === snap.sha1) return view.sha1;
+      return drop('action ' + snap.action + ' is no longer on screen');
+    }
+    if (snap.structure !== structure) return drop('the elements were renumbered under it (an insert, delete or move was written first)');
+    if (view.sha1 === snap.sha1) return view.sha1;
+    if (linesOf(a) !== snap.lines) return drop('the elements moved under it (an insert, delete or move was written first)');
+    if (snap.reader) {
+      const want = snap.dep ? snap.dep.left : snap.expected;
+      if (want === undefined || JSON.stringify(snap.reader(a)) !== want) return drop('what it changes was written again before its turn');
+    }
+    return view.sha1;
+  }
+
+  // THE PAGE'S OWN QUEUED WRITES. A write still waiting (or in flight) is what
+  // its box or field will read once it lands, so a second edit of the same
+  // target made meanwhile - the next box input tabbed to, a retyped field, a
+  // second drag, a nudge after the pause - builds on it and is drawn from it,
+  // and at its turn expects what that write left (`left`, read from the view
+  // it came back with). A write that did not land is `lost`, and the edits
+  // built on it go with it.
+  const pending = new Map();   // target -> the newest queued write of it
+  const keyOf = (action, elem, what) => action + '|' + elem + '|' + what;
+  function pendingOf(key) {
+    const w = pending.get(key);
+    return w && !w.lost && w.left === undefined && w.epoch === epoch && w.structure === structure ? w : null;
+  }
+  function track(key, value, dep) {
+    const w = { key, value, dep: dep || null, epoch, structure, lost: false, left: undefined };
+    pending.set(key, w);
+    return w;
+  }
+  // a: the action as the write left it (its response's view), or null when it
+  // did not land.
+  function finish(w, reader, a) {
+    if (a && reader) w.left = JSON.stringify(reader(a)); else w.lost = true;
+    if (pending.get(w.key) === w) pending.delete(w.key);
+  }
+
+  const act = () => (view ? view.action : null);
+  // `Copy Action N` with a number that does not parse is -1 (anim.go:309-318),
+  // the "no copy" default (anim.go:287, 1267): the action keeps the frames it
+  // has, and one with none plays the next action like any empty one
+  // (anim.go:1210-1222). Only a real target makes this action a copy.
+  const copies = (a) => !!(a && a.copy && a.copy.target >= 0);
+  const editable = () => { const a = act(); return !!(a && a.elements.length && !copies(a)); };
+  const curEl = () => { const a = act(); return a && a.elements.length ? a.elements[Math.min(Math.max(sel.elem, 1), a.elements.length) - 1] : null; };
+
+  async function loadAction(n, keep) {
+    // Leaving the action: a pending nudge is written to the action it was
+    // made on, first.
+    if (nudge && Number(n) !== nudge.action) flushNudge(true);
+    let v;
+    try {
+      v = await getJson('/api/char-air?char=' + encodeURIComponent(char) + '&action=' + encodeURIComponent(n));
+    } catch (e) {
+      if (!view) { $('side').textContent = ''; $('side').append(el('div', { class: 'none', text: 'Could not read action ' + n + ': ' + e.message })); renderAction(null, n, e.message); }
+      else say('Action ' + n + ': ' + e.message, 'err');
+      return false;
+    }
+    const changedAction = !view || view.action.no !== v.action.no;
+    keepNudge(v);
+    view = v;
+    actionNo = v.action.no;
+    if (changedAction || !keep) { sel.elem = 1; sel.which = null; sel.box = null; userZoom = 1; added.clear(); }
+    timing = null; defConfirm = null; plan = null; boxErr = '';
+    for (const k of Object.keys(fieldErr)) delete fieldErr[k];
+    try { if (typeof history !== 'undefined' && history.replaceState) history.replaceState(null, '', '?' + new URLSearchParams(Object.assign({ char, action: String(actionNo) }, name !== char ? { name } : {}, pal ? { pal } : {})).toString()); } catch (e) { /* a sandboxed window may refuse */ }
+    renderAll();
+    syncPlayer(changedAction ? 'switch' : 'refresh');
+    return true;
+  }
+
+  // A write came back with the fresh view: take it, keep the selection where
+  // it still makes sense, and replay the action so playback shows the change.
+  function adopt(air, nextSel) {
+    keepNudge(air);
+    const keepConfirm = confirmHolds(air);
+    view = air;
+    if (nextSel) Object.assign(sel, nextSel);
+    const a = act();
+    if (a && sel.elem > a.elements.length) sel.elem = Math.max(1, a.elements.length);
+    const e = curEl();
+    if (e && sel.which && sel.box !== null && sel.box >= e['clsn' + sel.which].rects.length) { sel.which = null; sel.box = null; }
+    timing = null; plan = null; boxErr = '';
+    if (!keepConfirm) defConfirm = null;
+    for (const k of Object.keys(fieldErr)) delete fieldErr[k];
+    renderAll();
+    syncPlayer('refresh');
+  }
+  // A shared-box confirm not yet sent survives a view that still reads the
+  // box it was made on: made on a confirm of the same box that was in flight,
+  // it is still to be answered when that one lands.
+  function confirmHolds(air) {
+    const d = defConfirm;
+    if (!d || d.sending || d.epoch !== epoch || d.structure !== structure || !d.base || !air || air.action.no !== d.action) return false;
+    const e2 = air.action.elements[d.elem - 1];
+    const c2 = e2 && e2['clsn' + d.which];
+    return !!(c2 && c2.source === 'default' && c2.rects[d.box] && normRect(c2.rects[d.box]).join() === normRect(d.base).join());
+  }
+
+  function renderAll() {
+    renderEdited();
+    renderAction(view);
+    renderStates();
+    renderStrip();
+    renderStage();
+    renderSide();
+  }
+
+  // ---- "Edited · Revert" ----------------------------------------------------------------------
+  // Revert puts the pristine backup back byte for byte; it asks twice because
+  // it discards every edit to that file - including trigger renumbers a
+  // structural edit wrote into a state file.
+  // ONE STRUCTURAL WRITE IS TWO FILES. An insert, delete or move writes the
+  // .air and the AnimElem renumbers in the state files together
+  // (writeAllOrNothing); reverting one of them alone leaves `AnimElem = 4`
+  // counting elements the .air no longer has, and AnimElem = N is
+  // AnimElemTime(N) = 0 over the frames as they are (compiler.go:3999-4019,
+  // anim.go:507-520) - the hit moves to another frame and tick. The armed
+  // button names the other file: the ones this page wrote with it, or, when
+  // it cannot know (a reload), the .air and the state files edited beside it.
+  const together = [];   // [{ files, label }] - the files one structural write of this page changed
+  function partnersOf(file, listed) {
+    const sure = [...new Set(together.filter((g) => g.files.includes(file)).flatMap((g) => g.files))].filter((x) => x !== file && listed.includes(x));
+    if (sure.length) return { files: sure, label: together.filter((g) => g.files.includes(file)).map((g) => g.label).pop(), sure: true };
+    // Only the .air and state files are ever edited here (charedit backups).
+    const airFile = view && view.file;
+    if (!airFile || !listed.includes(airFile)) return null;
+    const others = file === airFile ? listed.filter((x) => x !== airFile) : [airFile];
+    return others.length ? { files: others, sure: false } : null;
+  }
+  function revertNote(file, p) {
+    const names = p.files.join(', '), many = p.files.length > 1;
+    const isAir = file === (view && view.file);
+    if (p.sure) {
+      return names + (many ? ' were' : ' was') + ' written with it (' + p.label + '): '
+        + (isAir ? 'the AnimElem triggers renumbered there count these elements - revert ' + (many ? 'them' : 'it') + ' too' : 'the AnimElem triggers renumbered here count its elements - revert both')
+        + ', or they fire on other frames';
+    }
+    return isAir
+      ? names + (many ? ' are' : ' is') + ' also edited: if an insert, delete or move renumbered AnimElem triggers there, revert ' + (many ? 'them' : 'it') + ' too, or they fire on other frames'
+      : names + ' is also edited: if an insert, delete or move renumbered AnimElem triggers here to match its elements, revert both, or they fire on other frames';
+  }
+  function renderEdited() {
+    const box = $('edited');
+    box.textContent = '';
+    const ed = (view && view.edited) || [];
+    box.hidden = !ed.length;
+    if (!ed.length) return;
+    box.append(el('b', { text: 'Edited' }));
+    const listed = ed.map((x) => x.file);
+    for (const f of ed) {
+      const btn = el('button', { class: 'warn', text: 'Revert', title: 'Put back the original ' + f.file + ' (every edit to it is discarded)' });
+      let armed = null;
+      btn.onclick = () => {
+        if (!armed) {
+          const p = partnersOf(f.file, listed);
+          btn.textContent = 'Revert ' + f.file + '? ' + (p ? revertNote(f.file, p) + '. Click again' : 'click again');
+          armed = setTimeout(() => { armed = null; btn.textContent = 'Revert'; }, p ? 9000 : 4000);
+          return;
+        }
+        clearTimeout(armed); armed = null;
+        btn.disabled = true;
+        // Revert discards every edit to the file: a nudge still waiting to be
+        // written, and anything queued before the click, must not land on the
+        // original afterwards.
+        if (nudge) { clearTimeout(nudge.timer); nudge = null; }
+        epoch++;
+        return serial(async () => {
+          try {
+            const p = partnersOf(f.file, listed);
+            const r = await postJson('/api/char-edit-revert', { char, file: f.file });
+            const still = p && Array.isArray(r.edited) ? p.files.filter((x) => r.edited.some((y) => y.file === x)) : [];
+            say(f.file + ' is back to the original.' + (still.length ? ' ' + still.join(', ') + (still.length === 1 ? ' is' : ' are') + ' still edited: revert ' + (still.length === 1 ? 'it' : 'them') + ' too if its AnimElem triggers were renumbered with ' + f.file + '.' : ''), still.length ? 'err' : 'ok');
+          } catch (e) { say('Revert failed: ' + e.message, 'err'); }
+          await loadAction(actionNo, true);
+        });
+      };
+      box.append(el('span', { class: 'f', text: f.file + (f.exists === false ? ' (missing)' : '') }), btn);
+    }
+  }
+
+  // ---- left: the action ---------------------------------------------------------------------------
+  function renderAction(v, n, error) {
+    const host = $('action');
+    host.textContent = '';
+    $('actno').textContent = String(v ? v.action.no : n);
+    const list = v ? v.actions : [];
+    const pick = el('select', { title: 'Every action this .air defines (the first definition of each number)' });
+    for (const no of list) pick.append(el('option', { value: no, text: 'action ' + no }));
+    if (v) pick.value = String(v.action.no);
+    pick.onchange = () => serial(() => loadAction(Number(pick.value)));
+    const at = list.indexOf(v ? v.action.no : n);
+    const prev = el('button', { text: '‹', title: 'Previous action', disabled: at <= 0 });
+    const next = el('button', { text: '›', title: 'Next action', disabled: at < 0 || at >= list.length - 1 });
+    prev.onclick = () => serial(() => loadAction(list[at - 1]));
+    next.onclick = () => serial(() => loadAction(list[at + 1]));
+    host.append(el('div', { class: 'apick' }, prev, pick, next));
+    if (!v) { host.append(el('div', { class: 'note warn', text: error || '' })); return; }
+    const a = v.action;
+    const f = el('div', { class: 'facts' });
+    f.append(el('code', { text: v.file + ':' + a.header.line }), ' · ' + a.elements.length + ' element' + (a.elements.length === 1 ? '' : 's')
+      + ' · ' + (a.totalTicks < 0 ? 'holds on element ' + (a.holdsOn || a.elements.length) : a.totalTicks + ' ticks')
+      + (a.loopstartLines.length && a.loopstart > 0 ? ' · loops from element ' + (a.loopstart + 1) : '')
+      + ' · localcoord ' + v.localcoord.join('x') + (v.localcoordDeclared ? '' : ' (undeclared)')
+      + ' · [Size] ' + v.size.xscale + ' x ' + v.size.yscale);
+    host.append(f);
+    // THE SCALE IS HONEST WITHOUT BEING APPLIED. Sprite pixels and Clsn
+    // coordinates are in the same units; in a match the engine scales both by
+    // [Size] x the localcoord factor (sprite: the draw scale; boxes:
+    // clsnScale = size.xscale x animlocalscl, char.go:7854-7875). Drawing both
+    // unscaled keeps their relation exact, which is what an edit needs.
+    host.append(el('div', { class: 'note', text: 'Drawn in .air units: one sprite pixel = one box unit. In a match both scale together by [Size] and localcoord (char.go:7854-7875).' }));
+    if (copies(a)) host.append(el('div', { class: 'note warn', text: 'Copy Action ' + a.copy.target + ': this action has no frames of its own. Edit action ' + a.copy.target + ' instead.' }));
+    else if (!a.elements.length) host.append(el('div', { class: 'note warn', text: 'No frames: the engine plays action ' + (a.table && a.table.emptyCopyOf) + ' in its place (anim.go:1210-1222).' }));
+    if (a.copy && !copies(a)) host.append(el('div', { class: 'note', text: 'Line ' + a.copy.line + ' "' + a.copy.raw + '" names no action number: the engine ignores it (anim.go:309-318).' }));
+    if (a.table && a.table.unresolved) host.append(el('div', { class: 'note warn', text: 'Its Copy Action chain does not resolve: the engine deletes this action.' }));
+    for (const d of (a.duplicates || [])) host.append(el('div', { class: 'note warn', text: 'A second [Begin Action ' + d.no + '] at line ' + d.line + ' is ignored: the first definition wins (anim.go:1202-1208).' }));
+    if (a.aliases && a.aliases.length) host.append(el('div', { class: 'note warn', text: 'Actions ' + a.aliases.join(', ') + ' play these frames (an empty action or Copy Action) and change with it.' }));
+    for (const b of (a.badFrames || [])) host.append(el('div', { class: 'note warn', text: 'Line ' + b.line + ' is not read as a frame: ' + b.why }));
+    for (const it of (a.interpolate || [])) host.append(el('div', { class: 'note', text: 'Interpolate ' + it.kind + ' before element ' + (it.at + 1) + ' (line ' + it.line + ')' }));
+  }
+
+  // PLAYBACK IS THE PLAYER, not a second one (animview-core.js). It reads the
+  // .air afresh on every load (/api/char-anim), so replaying the action after a
+  // write shows the edited file.
+  function mountPlayer() {
+    if (typeof mountAnimView !== 'function' || !char) return;
+    player = mountAnimView($('player'), {
+      char,
+      spriteUrl: (c, gi) => spriteSrc(gi[0], gi[1]),
+      palOf: () => (pal !== null && pal !== '' ? pal : undefined),
+      toast: (m, kind) => say(m, kind),
+      onReady: (info) => {
+        const has = [...info.pick.options].some((o) => o.value === String(actionNo));
+        if (has) info.pick.value = String(actionNo);
+        // The player's own picker moves the editor too, so the two never
+        // disagree about which action is on screen.
+        info.pick.addEventListener('change', () => {
+          const n = parseInt(String(info.pick.value).split(':')[0], 10);
+          if (Number.isInteger(n) && n !== actionNo) serial(() => loadAction(n));
+        });
+      },
+    });
+  }
+  function syncPlayer(why) {
+    if (!player || !player.pick || !player.load) return;
+    const want = String(actionNo);
+    const cur = String(player.pick.value || '');
+    const has = [...player.pick.options].some((o) => o.value === want);
+    if (!has) return;
+    if (why === 'switch' && cur.split(':')[0] === want) return;
+    // After a write, replay what the picker shows (the loop entry stays a
+    // loop entry); after a switch, show the action.
+    player.load(why === 'refresh' && cur.split(':')[0] === want ? cur : want);
+  }
+
+  // ---- left: the states that play it --------------------------------------------------------------
+  // Where each attack block fires on this action, from the element start
+  // ticks: AnimElem = N fires at element N's start tick, AnimElemTime(N) = T
+  // T ticks later (anim.go:507-520, compiler.go:3999-4019).
+  function firingText(f) {
+    const a = act();
+    if (f.kind === 'animelem' || f.kind === 'animelemtime' || (f.kind === 'conditional' && f.elem)) {
+      const e = a && a.elements[f.elem - 1];
+      if (!e) return 'element ' + f.elem + ' - past the end of this action: never fires';
+      const t = e.startTick + (f.kind === 'animelemtime' ? (Number(f.offset) || 0) : 0);
+      return (f.kind === 'conditional' ? 'conditional, reads element ' : 'element ') + f.elem + (f.kind === 'animelemtime' ? ' + ' + f.offset : '') + ' → tick ' + t;
+    }
+    if (f.kind === 'time') return 'state tick ' + f.tick;
+    return 'conditional';
+  }
+  function renderStates() {
+    const host = $('states');
+    host.textContent = '';
+    if (!view) return;
+    host.append(el('div', { class: 'sh', text: 'States that play it' }));
+    const hits = view.hits || { states: [], boxes: [] };
+    const hitOf = (no) => hits.states.find((h) => h.no === no && !h.engine) || null;
+    const engine = hits.states.filter((h) => h.engine);
+    if (!view.states.length && !engine.length) {
+      host.append(el('div', { class: 'none', text: 'No state of this character names this action in anim or a ChangeAnim with a literal value.' }));
+      if (hits.boxes.length) host.append(el('div', { class: 'none', text: 'So the Studio cannot tell whether its attack boxes ever hit.' }));
+      return;
+    }
+    for (const h of engine) {
+      const row = el('div', { class: 'st' }, el('span', { class: 'no', text: h.no }), el('span', { class: 'fl', text: 'the engine\'s common state' + (h.name ? ' (' + h.name + ')' : '') + ' · not in this character\'s files' }));
+      row.append(hitLine(h));
+      host.append(row);
+    }
+    for (const s of view.states) {
+      const row = el('div', { class: 'st' }, el('span', { class: 'no', text: s.no }), el('span', { class: 'fl', text: s.file + ':' + s.line + (s.movetype ? ' · movetype ' + s.movetype.toUpperCase() : '') }));
+      if (s.anim && !s.anim.literal) row.append(el('div', { class: 'fz' }, 'anim = ', el('code', { text: s.anim.raw })));
+      for (const b of s.blocks) {
+        for (const f of (b.firing || [])) {
+          row.append(el('div', { class: 'fz', title: f.text }, el('b', { text: b.type }), ' line ' + b.line + ': ', el('code', { text: f.text }), ' · ' + firingText(f)));
+        }
+        if (!(b.firing || []).length) row.append(el('div', { class: 'fz' }, el('b', { text: b.type }), ' line ' + b.line + ': no trigger'));
+      }
+      const h = hitOf(s.no);
+      if (h) row.append(hitLine(h));
+      host.append(row);
+    }
+  }
+
+  // ---- can the attack boxes hit? --------------------------------------------------------------------
+  // A Clsn1 box is tested only while the character has a live HitDef and its
+  // movetype is not I (char.go:10854, 12552). The server says, per state that
+  // plays this action, whether one exists (own), was added here (added), comes
+  // from a negative state (negative), or not (none). "Make it hit" writes a
+  // HitDef for that state into the character's [Statedef -3] (hitgen.js); its
+  // damage is then a plain number edited right here.
+  const stateName = (h) => 'state ' + h.no + (h.name ? ' (' + h.name + ')' : '');
+  function hitLine(h) {
+    const hits = view.hits;
+    const box = el('div', { class: 'hit' });
+    if (!hits.boxes.length && h.kind !== 'added') return box;
+    if (h.kind === 'none') {
+      box.className = 'hit nohit';
+      box.append(el('div', { text: 'These attack boxes do nothing here: ' + stateName(h) + ' has no HitDef, so the engine never tests them.' }));
+      if (hits.zss) box.append(el('div', { class: 'fh', text: 'This character\'s states are ZSS, which the Studio does not write.' }));
+      else box.append(makeHitButton(h));
+      return box;
+    }
+    box.className = 'hit ok';
+    const who = h.kind === 'added' ? 'Hits (added here)' : h.kind === 'own' ? 'Hits with its own ' : 'Hits through a negative state: ';
+    for (const b of h.blocks) {
+      const line = el('div', { text: who + (h.kind === 'added' ? '' : b.type + ' line ' + b.line) + ' · damage ' });
+      line.append(damageInput(b));
+      box.append(line);
+    }
+    if (h.kind === 'added') {
+      if (!hits.boxes.length) box.append(el('div', { class: 'warnl', text: 'This action has no attack boxes any more: the hit has nothing to hit with.' }));
+      else if (h.missing.length || h.stale) {
+        box.append(el('div', { class: 'warnl', text: (h.missing.length ? 'Element' + (h.missing.length > 1 ? 's ' : ' ') + h.missing.join(', ') + (h.missing.length > 1 ? ' have' : ' has') + ' boxes the hit does not cover.' : 'The hit still arms on element' + (h.covers.length > 1 ? 's ' : ' ') + h.covers.join(', ') + ', which no longer has boxes.') }));
+        box.append(hitOpButton(h, 'update', 'Update the hit', 'Rewrite the hit for the boxes as they are now (the damage stays)'));
+      }
+      box.append(hitOpButton(h, 'remove', 'Remove the hit', 'Delete the lines the editor added for this state'));
+    }
+    return box;
+  }
+  function makeHitButton(h) {
+    return hitOpButton(h, 'make', 'Make it hit' + (view.hits.states.length > 1 ? ' in state ' + h.no : ''),
+      'Write a HitDef for ' + stateName(h) + ' into this character\'s [Statedef -3]: it arms on the elements with attack boxes, damage 20, editable here after');
+  }
+  function hitOpButton(h, op, text, title) {
+    const b = el('button', { class: op === 'remove' ? 'danger' : 'warn', text, title });
+    let armed = null;
+    b.onclick = () => {
+      if (op === 'remove' && !armed) {
+        b.textContent = 'Remove? click again';
+        armed = setTimeout(() => { armed = null; b.textContent = text; }, 4000);
+        return;
+      }
+      clearTimeout(armed); armed = null;
+      b.disabled = true;
+      hitOp(h.no, op);
+    };
+    return b;
+  }
+  function hitOp(state, op) {
+    const action = actionNo;
+    return serial(async () => {
+      if (!view || view.action.no !== action) { say('The hit for action ' + action + ' was not changed: another action is on screen.', 'err'); return; }
+      try {
+        const r = await postJson('/api/char-hit', { char, action, state, op, sha1: view.sha1, files: view.hits.files });
+        say(op === 'make' ? 'State ' + state + ' now hits with these boxes: wrote ' + r.file + (r.created ? ' (a new [Statedef -3])' : '') + '. Its damage is 20; change it beside the boxes.'
+          : op === 'update' ? 'The hit in state ' + state + ' now covers the boxes as they are.' : 'Removed the hit for state ' + state + ' from ' + r.file + '.', 'ok');
+        if (r.air && r.air.action.no === actionNo) adopt(r.air); else await loadAction(actionNo, true);
+      } catch (err) {
+        failed(err, (m) => { say(m, 'err'); renderStates(); renderSide(); });
+      }
+    });
+  }
+  // The damage of a hit block, through the Moves window's route: a plain
+  // number only, the file's sha1 as this view read it.
+  function damageInput(b) {
+    if (!b.editable) return el('code', { text: b.raw === null ? 'not set' : b.raw, title: b.raw === null ? 'no damage parameter' : 'not a plain number: edit it in Moves' });
+    const inp = el('input', { type: 'text', spellcheck: 'false', value: b.value, title: 'Hit damage (' + b.file + ' line ' + b.line + ')' });
+    inp.onkeydown = (ev) => { if (ev.key === 'Escape') inp.value = b.value; };
+    inp.onchange = () => {
+      const v = inp.value.trim();
+      if (v === b.value) return;
+      if (!/^\d+$/.test(v)) { say('Damage is a whole number, 0 or more.', 'err'); inp.value = b.value; return; }
+      const action = actionNo, sha1 = view.hits.files[b.file];
+      inp.classList.add('busy');
+      serial(async () => {
+        if (!view || view.action.no !== action) return;
+        try {
+          await postJson('/api/char-move-edit', { char, file: b.key.file, state: b.key.state, ordinal: b.key.ordinal, param: 'damage', index: 0, value: v, expect: b.raw, sha1 });
+          say('Damage ' + b.value + ' → ' + v + ' (' + b.file + ' line ' + b.line + ').', 'ok');
+          await loadAction(actionNo, true);
+        } catch (err) {
+          inp.classList.remove('busy');
+          if (err.code === 'stale') { say(err.message + ' - reloaded.', 'err'); await loadAction(actionNo, true); return; }
+          say('Damage not saved: ' + err.message, 'err');
+          inp.value = b.value;
+        }
+      });
+    };
+    return inp;
+  }
+
+  // ---- geometry ---------------------------------------------------------------------------------
+  // Which color the engine gives Clsn1 here (char.go:12836-12843): a state
+  // playing this action with a reversal draws ReversalDef, one with movetype I
+  // draws Inactive, otherwise HitDef. With several states, the attack color
+  // wins unless every state says otherwise.
+  function clsn1Class() {
+    // No state that plays it can hit (the engine's common states included):
+    // the debug display would draw these boxes Inactive.
+    const hits = view && view.hits;
+    if (hits && hits.states.length && hits.states.every((h) => h.kind === 'none')) return { cls: 'c1not', label: 'Inactive' };
+    const st = (view && view.states) || [];
+    const blocks = st.flatMap((s) => s.blocks);
+    if (blocks.length && blocks.every((b) => /reversal/i.test(b.type))) return { cls: 'c1rev', label: 'ReversalDef' };
+    if (st.length && st.every((s) => s.movetype === 'i' || s.movetype === null || s.movetype === undefined)) return { cls: 'c1not', label: 'Inactive' };
+    return { cls: 'c1hit', label: 'HitDef' };
+  }
+  const drawScale = (v) => [v.xscale > 0 ? v.xscale : 1, v.yscale > 0 ? v.yscale : 1];
+  // Where the engine puts the sprite's axis: the offset, negated for an even
+  // count of two or more H (or V) - airedit's xDraw / yDraw (anim.go:93-99,
+  // 950-1024).
+  const axisOf = (v) => [v.xDraw !== undefined ? v.xDraw : v.x, v.yDraw !== undefined ? v.yDraw : v.y];
+  function spriteRect(e) {
+    const s = e.sprite;
+    if (!s || !s.w || !s.h) return null;
+    const v = e.values, [sx, sy] = drawScale(v), [ax, ay] = axisOf(v);
+    const l = ax - (v.h ? (s.w - s.axisX) : s.axisX) * sx;
+    const t = ay - (v.v ? (s.h - s.axisY) : s.axisY) * sy;
+    return [l, t, l + s.w * sx, t + s.h * sy];
+  }
+  function unionOf(rects) {
+    let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+    for (const x of rects) { if (!x) continue; l = Math.min(l, x[0]); t = Math.min(t, x[1]); r = Math.max(r, x[2]); b = Math.max(b, x[3]); }
+    return l === Infinity ? null : { l, t, w: Math.max(1, r - l), h: Math.max(1, b - t) };
+  }
+  // ONE FRAME FOR THE WHOLE ACTION, the way the player and the inspector frame
+  // it: the union of the typical sprites (an outlier over three times the
+  // median area or under an eighth of it is left out) plus the boxes, unless
+  // the boxes would more than triple it (a screen-filling super box). Fixed
+  // per action, so stepping elements never moves the axis on screen.
+  function measure(elements) {
+    const drawn = elements.filter((e) => spriteRect(e));
+    let keep = drawn;
+    if (drawn.length >= 3) {
+      const area = (e) => e.sprite.w * e.sprite.h;
+      const areas = drawn.map(area).sort((x, y) => x - y);
+      const med = areas[areas.length >> 1];
+      keep = drawn.filter((e) => area(e) <= med * 3 && area(e) >= med / 8);
+      if (!keep.length) keep = drawn;
+    }
+    const spr = unionOf(keep.map(spriteRect));
+    const boxes = [];
+    for (const e of elements) for (const r of [...e.clsn1.rects, ...e.clsn2.rects]) boxes.push(r);
+    const all = unionOf([...keep.map(spriteRect), ...boxes, [0, 0, 1, 1]]);
+    if (!spr) return all;
+    if (all.w * all.h <= spr.w * spr.h * 3) return all;
+    return unionOf([[spr.l, spr.t, spr.l + spr.w, spr.t + spr.h], [0, 0, 1, 1]]);
+  }
+
+  // Draws one element into `host` with the character's origin at (ox, oy) and
+  // z screen pixels per unit. The sprite sits at origin + the element's x/y
+  // with its axis on that point and mirrors about the axis (anim.go:64-104).
+  // THE BOXES SIT ON THE ORIGIN, NOT ON THE ELEMENT OFFSET: the engine places
+  // Clsn at the character's position (char.go:12820-12823) from the frame's
+  // own boxes, which neither the flip flags nor fields 8-10 touch
+  // (char.go:10346-10374; the element scale is a draw scale, anim.go:724).
+  function drawElement(host, e, ox, oy, z, opts) {
+    const o = opts || {};
+    const v = e.values;
+    if (e.sprite && e.sprite.w && e.sprite.h) {
+      const s = e.sprite, [sx, sy] = drawScale(v);
+      const img = el('img', { alt: '', src: spriteSrc(v.group, v.number) });
+      img.onerror = () => { img.style.visibility = 'hidden'; };
+      const [vx, vy] = axisOf(v);
+      const axX = ox + vx * z, axY = oy + vy * z;
+      img.style.width = Math.max(1, Math.round(s.w * z)) + 'px';
+      img.style.height = Math.max(1, Math.round(s.h * z)) + 'px';
+      img.style.left = Math.round(axX - s.axisX * z) + 'px';
+      img.style.top = Math.round(axY - s.axisY * z) + 'px';
+      img.style.imageRendering = z >= 1 ? 'pixelated' : 'auto';
+      if (v.h || v.v || sx !== 1 || sy !== 1) {
+        img.style.transformOrigin = (s.axisX * z) + 'px ' + (s.axisY * z) + 'px';
+        img.style.transform = 'scale(' + ((v.h ? -1 : 1) * sx) + ',' + ((v.v ? -1 : 1) * sy) + ')';
+      }
+      host.append(img);
+    }
+    const c1 = clsn1Class();
+    const place = (d, r) => {
+      d.style.left = Math.round(ox + r[0] * z) + 'px';
+      d.style.top = Math.round(oy + r[1] * z) + 'px';
+      d.style.width = Math.max(1, Math.round((r[2] - r[0]) * z)) + 'px';
+      d.style.height = Math.max(1, Math.round((r[3] - r[1]) * z)) + 'px';
+    };
+    const out = [];
+    for (const which of [2, 1]) {
+      const c = e['clsn' + which];
+      c.rects.forEach((r0, k) => {
+        const r = o.rectOf ? o.rectOf(which, k, r0) : r0;
+        const d = el('div', { class: 'box ' + (which === 1 ? c1.cls : 'c2') + (c.source === 'default' ? ' def' : '') });
+        place(d, r);
+        host.append(d);
+        out.push({ which, k, d, r });
+      });
+    }
+    const ax = el('div', { class: 'ax' }, el('i', { class: 'h' }), el('i', { class: 'v' }));
+    ax.style.left = Math.round(ox) + 'px'; ax.style.top = Math.round(oy) + 'px';
+    host.append(ax);
+    return { boxes: out, place, ax };
+  }
+
+  // ---- center: the strip ------------------------------------------------------------------------
+  // Two numbers per element, always (§9): the element number AnimElem counts
+  // (a time-0 element still takes one, anim.go:507-520) and the tick range
+  // AnimElemTime counts.
+  function firingElems() {
+    const m = new Map();
+    for (const s of ((view && view.states) || [])) for (const b of s.blocks) for (const f of (b.firing || [])) {
+      if (f.elem && ['animelem', 'animelemtime', 'conditional'].includes(f.kind)) {
+        if (!m.has(f.elem)) m.set(f.elem, []);
+        m.get(f.elem).push(b.type + ' (state ' + s.no + ')' + (f.kind === 'conditional' ? ', conditional' : ''));
+      }
+    }
+    return m;
+  }
+  function renderStrip() {
+    const host = $('strip');
+    host.textContent = '';
+    const a = act();
+    if (!a || !a.elements.length) return;
+    const fires = firingElems();
+    const box = measure(a.elements);
+    const cw = 110, ch = 92;
+    const raw = Math.min((cw - 6) / box.w, (ch - 6) / box.h);
+    const z = raw >= 1 ? Math.min(32, Math.floor(raw)) : raw;
+    const ox = (cw - box.w * z) / 2 - box.l * z, oy = (ch - box.h * z) / 2 - box.t * z;
+    const loopAt = a.loopstartLines.length && a.loopstart > 0 ? a.loopstart + 1 : 0;
+    for (const e of a.elements) {
+      const th = el('div', { class: 'th' });
+      drawElement(th, e, ox, oy, z);
+      const v = e.values;
+      // The AnimElemTime range (a time of 0 or less takes no ticks of it), and
+      // an open range only on the element the engine holds.
+      const range = e.holdsForever ? 't' + e.startTick + '→' : v.time <= 0 ? 't' + e.startTick + ' (' + v.time + ')' : 't' + e.startTick + '-' + (e.startTick + v.time - 1);
+      const b = el('div', { class: 'badges' },
+        e.clsn1.rects.length ? el('span', { class: 'badge c1', text: 'C1' + (e.clsn1.source === 'default' ? ' def' : ''), title: e.clsn1.rects.length + ' Clsn1 box(es) from ' + (e.clsn1.source === 'default' ? 'a Default block' : 'its own block') }) : null,
+        e.clsn2.rects.length ? el('span', { class: 'badge c2', text: 'C2' + (e.clsn2.source === 'default' ? ' def' : ''), title: e.clsn2.rects.length + ' Clsn2 box(es) from ' + (e.clsn2.source === 'default' ? 'a Default block' : 'its own block') }) : null,
+        fires.has(e.ordinal) ? el('span', { class: 'badge fires', text: 'fires', title: fires.get(e.ordinal).join('; ') }) : null,
+        loopAt === e.ordinal ? el('span', { class: 'badge loopb', text: 'loop', title: 'Loopstart: the action loops back to this element' }) : null,
+        e.neverDisplayed ? el('span', { class: 'badge dim', text: 'never shown', title: 'the engine never draws it - its time, the totals of the action or the loop skip it (anim.go:428-452, 638-721, 802-846) - but it still takes an AnimElem number (anim.go:507-520)' }) : null,
+        !e.sprite ? el('span', { class: 'badge dim', text: v.group === -1 || v.number === -1 ? 'no sprite' : 'missing' }) : null,
+        e.errors.length ? el('span', { class: 'badge fires', text: '!', title: e.errors.join('; ') }) : null);
+      const cell = el('div', { class: 'cell' + (e.ordinal === sel.elem ? ' on' : '') + (e.neverDisplayed ? ' hiddenel' : ''), title: '.air line ' + e.line },
+        loopAt === e.ordinal ? el('div', { class: 'loop' }) : null,
+        th, el('div', { class: 'cap' }, el('b', { text: '#' + e.ordinal }), ' ' + v.group + ',' + v.number + ' · ' + (v.time) + 't', el('div', { text: range }), b));
+      cell.onclick = () => selectElem(e.ordinal);
+      host.append(cell);
+    }
+  }
+  function selectElem(n) {
+    const a = act();
+    if (!a || n < 1 || n > a.elements.length) return;
+    if (n !== sel.elem) {
+      flushNudge(true);
+      const e = a.elements[n - 1];
+      sel.elem = n;
+      if (sel.which && sel.box !== null && sel.box >= e['clsn' + sel.which].rects.length) { sel.which = null; sel.box = null; }
+      timing = null; defConfirm = null; plan = null; boxErr = ''; added.clear();
+      for (const k of Object.keys(fieldErr)) delete fieldErr[k];
+    }
+    renderStrip(); renderStage(); renderSide();
+  }
+
+  // ---- center: the stage ------------------------------------------------------------------------
+  let stageGeo = null;   // { ox, oy, z, boxes }
+  function renderStage() {
+    const tools = $('tools'), wrap = $('stagewrap'), read = $('readout');
+    tools.textContent = ''; wrap.textContent = ''; read.textContent = '';
+    stageGeo = null;
+    const a = act(), e = curEl();
+    if (!a || !e) { wrap.append(el('div', { class: 'none', text: a ? 'This action has no elements to edit.' : '' })); return; }
+    const c1 = clsn1Class();
+    const box = measure(a.elements);
+    const sw = wrap.clientWidth || 560, sh = wrap.clientHeight || 440;
+    const pad = 24;
+    const raw = Math.min((sw - pad * 2) / box.w, (sh - pad * 2) / box.h);
+    // Capped: an action with nothing to draw measures one unit square.
+    const fit = raw >= 1 ? Math.min(32, Math.floor(raw)) : raw;
+    // Whole-number magnification, as the magnifying player does: one sprite
+    // pixel becomes an exact block, and one box unit is an exact step to drag.
+    // A drag keeps the zoom it started with: a scrollbar appearing mid-drag
+    // must not change the scale under the pointer.
+    const z = drag ? drag.z : fit >= 1 ? Math.max(1, Math.round(fit * userZoom)) : fit * userZoom;
+    const zoomOut = el('button', { text: '−', title: 'Zoom out' });
+    const zoomIn = el('button', { text: '+', title: 'Zoom in' });
+    const zoomFit = el('button', { text: 'fit', title: 'Fit the action' });
+    zoomOut.onclick = () => { userZoom = Math.max(0.25, userZoom / 2); renderStage(); };
+    zoomIn.onclick = () => { userZoom = Math.min(16, userZoom * 2); renderStage(); };
+    zoomFit.onclick = () => { userZoom = 1; renderStage(); };
+    tools.append(el('div', { class: 'legend' },
+      el('span', {}, el('i', { style: 'border-color:var(--' + c1.cls + ');background:var(--' + c1.cls + ')' }), 'Clsn1 (' + c1.label + ')'),
+      el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
+      el('span', { text: 'dashed = from a Default block · engine debug colors, system.go:4000-4007' })),
+      el('span', { class: 'sp' }), zoomOut, el('span', { class: 'mono', text: Math.round(z * 100) + '%' }), zoomIn, zoomFit);
+
+    const W = Math.ceil(box.w * z + pad * 2), H = Math.ceil(box.h * z + pad * 2);
+    const canvas = el('div', { class: 'canvas', style: 'width:' + W + 'px;height:' + H + 'px' });
+    const ox = pad - box.l * z, oy = pad - box.t * z;
+    const pendRect = (which, k, r) => {
+      if (drag && drag.which === which && drag.box === k) return normRect(drag.cur);
+      if (nudge && nudge.action === a.no && nudge.elem === e.ordinal && nudge.which === which && nudge.box === k) return normRect(nudge.rect);
+      if (defConfirm && defConfirm.which === which && defConfirm.box === k) return defConfirm.rect;
+      const w = pendingOf(keyOf(a.no, e.ordinal, 'clsn' + which + ':' + k));
+      return w ? w.value : r;
+    };
+    const g = drawElement(canvas, e, ox, oy, z, { rectOf: pendRect });
+    stageGeo = { ox, oy, z, g, canvas, handles: [] };
+    for (const b of g.boxes) {
+      const on = sel.which === b.which && sel.box === b.k;
+      if (on) b.d.className += ' sel';
+      if (defConfirm && defConfirm.which === b.which && defConfirm.box === b.k) b.d.className += ' pend';
+      b.d.title = 'Clsn' + b.which + '[' + b.k + '] ' + b.r.join(', ') + ' - drag to move' + (on ? ', handles resize' : '');
+      if (editable()) b.d.onpointerdown = (ev) => startDrag(ev, b.which, b.k, 'move');
+      if (on && editable()) {
+        for (const h of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
+          const hd = el('div', { class: 'hd ' + h });
+          const r = b.r;
+          const hx = h.includes('w') ? r[0] : h.includes('e') ? r[2] : (r[0] + r[2]) / 2;
+          const hy = h.includes('n') ? r[1] : h.includes('s') ? r[3] : (r[1] + r[3]) / 2;
+          hd.style.left = Math.round(ox + hx * z - 4) + 'px';
+          hd.style.top = Math.round(oy + hy * z - 4) + 'px';
+          hd.onpointerdown = (ev) => startDrag(ev, b.which, b.k, h);
+          stageGeo.handles.push({ h, d: hd });
+          canvas.append(hd);
+        }
+      }
+    }
+    canvas.onpointerdown = (ev) => {
+      // A press on empty canvas drops the box selection.
+      if (ev.target === canvas || (ev.target && ev.target.tagName === 'IMG')) { sel.which = null; sel.box = null; renderStage(); renderSide(); }
+    };
+    wrap.append(canvas);
+    const v = e.values;
+    read.textContent = 'element ' + e.ordinal + '/' + a.elements.length + ' · sprite ' + v.group + ',' + v.number
+      + (e.sprite ? ' ' + e.sprite.w + 'x' + e.sprite.h + ' axis ' + e.sprite.axisX + ',' + e.sprite.axisY : ' (not in the .sff)')
+      + ' · offset ' + v.x + ',' + v.y + ' · ' + v.time + 't from tick ' + e.startTick
+      + (v.angle ? ' · angle ' + v.angle + ' is not drawn here' : '')
+      + (drag ? ' · ' + normRect(drag.cur).join(', ') : '');
+  }
+  const normRect = (r) => [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3])];
+
+  // DRAGGING SNAPS TO WHOLE UNITS. The engine reads box coordinates with Atoi
+  // (anim.go:398-417), so a fraction could never be written; the drag moves in
+  // steps of exactly one unit at the current zoom and commits on release.
+  function startDrag(ev, which, box, mode) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+    if (ev.preventDefault) ev.preventDefault();
+    if (ev.stopPropagation) ev.stopPropagation();
+    const e = curEl();
+    if (!e || !stageGeo) return;
+    // A nudge still waiting is written first, and a drag of that same box
+    // starts where the nudge left it - it is what is on screen. So does a
+    // drag of a box whose earlier write is still queued or in flight.
+    flushNudge(false);
+    const dep = pendingOf(keyOf(actionNo, e.ordinal, 'clsn' + which + ':' + box));
+    const file = e['clsn' + which].rects[box].slice();
+    const r0 = (defConfirm && defConfirm.which === which && defConfirm.box === box) ? defConfirm.rect.slice()
+      : dep ? dep.value.slice() : file;
+    if (defConfirm && !(defConfirm.which === which && defConfirm.box === box)) defConfirm = null;
+    sel.which = which; sel.box = box;
+    // preventDefault above also stops the press from focusing the stage, and
+    // the arrow keys are read there.
+    try { $('stagewrap').focus({ preventScroll: true }); } catch (e2) { /* focus is a convenience */ }
+    drag = { which, box, mode, x0: ev.clientX, y0: ev.clientY, r0, cur: r0.slice(), z: stageGeo.z, moved: false, action: actionNo, elem: e.ordinal,
+      dep, base: dep ? dep.value.slice() : file };
+    renderStage();
+    renderSide();
+  }
+  function onDragMove(ev) {
+    if (!drag) return;
+    const du = Math.round((ev.clientX - drag.x0) / drag.z), dv = Math.round((ev.clientY - drag.y0) / drag.z);
+    const r = drag.r0.slice();
+    if (drag.mode === 'move') { r[0] += du; r[2] += du; r[1] += dv; r[3] += dv; }
+    else {
+      if (drag.mode.includes('w')) r[0] += du;
+      if (drag.mode.includes('e')) r[2] += du;
+      if (drag.mode.includes('n')) r[1] += dv;
+      if (drag.mode.includes('s')) r[3] += dv;
+    }
+    if (r.join() === drag.cur.join()) return;
+    drag.cur = r; drag.moved = true;
+    // Only the dragged box and its handles move; the sprite is not rebuilt.
+    const n = normRect(r);
+    const hit = stageGeo && stageGeo.g.boxes.find((b) => b.which === drag.which && b.k === drag.box);
+    if (hit) {
+      stageGeo.g.place(hit.d, n);
+      for (const { h, d } of stageGeo.handles) {
+        const hx = h.includes('w') ? n[0] : h.includes('e') ? n[2] : (n[0] + n[2]) / 2;
+        const hy = h.includes('n') ? n[1] : h.includes('s') ? n[3] : (n[1] + n[3]) / 2;
+        d.style.left = Math.round(stageGeo.ox + hx * stageGeo.z - 4) + 'px';
+        d.style.top = Math.round(stageGeo.oy + hy * stageGeo.z - 4) + 'px';
+      }
+      $('readout').textContent = 'Clsn' + drag.which + '[' + drag.box + '] ' + n.join(', ');
+    } else renderStage();
+    fillBoxInputs(drag.which, drag.box, n);
+  }
+  function onDragEnd() {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    const rect = normRect(d.cur);
+    if (!d.moved || rect.join() === normRect(d.r0).join()) { renderStage(); return; }
+    commitBox(d.which, d.box, rect, undefined, { action: d.action, elem: d.elem, base: d.base, dep: d.dep });
+  }
+  window.addEventListener('pointermove', onDragMove);
+  window.addEventListener('pointerup', onDragEnd);
+
+  // Arrow keys nudge the selected box one unit (Shift: ten), and [ ] step
+  // through the elements. Nudges gather for a moment and commit as one write.
+  $('stagewrap').addEventListener('keydown', (ev) => {
+    if (ev.key === '[' || ev.key === ']') { ev.preventDefault(); selectElem(sel.elem + (ev.key === ']' ? 1 : -1)); return; }
+    const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (!dirs[ev.key] || !sel.which || sel.box === null || !editable()) return;
+    ev.preventDefault();
+    const e = curEl();
+    const k = ev.shiftKey ? 10 : 1;
+    // A nudge on another box, element or action is finished first: it
+    // commits to the box it was made on.
+    if (nudge && (nudge.which !== sel.which || nudge.box !== sel.box || nudge.elem !== e.ordinal || nudge.action !== actionNo)) flushNudge(true);
+    if (!nudge) {
+      const shared = defConfirm && defConfirm.which === sel.which && defConfirm.box === sel.box;
+      // The box as it will read once the page's own queued write of it lands.
+      const dep = pendingOf(keyOf(actionNo, e.ordinal, 'clsn' + sel.which + ':' + sel.box));
+      const file = dep ? dep.value.slice() : normRect(e['clsn' + sel.which].rects[sel.box]);
+      // The move builds on what is on screen; a Default box's confirm rect is
+      // not in the file yet, so the file's rect (or the queued write's) is what
+      // the write must still find. `structure`: made before an insert, delete or
+      // move lands, it belongs to no frame afterwards.
+      nudge = { which: sel.which, box: sel.box, elem: e.ordinal, action: actionNo, lines: linesOf(act()), sha1: view.sha1, structure, dep,
+        base: file, rect: (shared ? defConfirm.rect : file).slice(), timer: null };
+    }
+    const [dx, dy] = dirs[ev.key];
+    nudge.rect = [nudge.rect[0] + dx * k, nudge.rect[1] + dy * k, nudge.rect[2] + dx * k, nudge.rect[3] + dy * k];
+    defConfirm = null;
+    renderStage();
+    fillBoxInputs(nudge.which, nudge.box, normRect(nudge.rect));
+    const was = nudge;
+    clearTimeout(was.timer);
+    was.timer = setTimeout(() => { if (nudge === was) flushNudge(); }, 450);
+  });
+
+  // A PENDING NUDGE BELONGS TO ITS BOX. It carries the action, element and box
+  // it was made on, and it is written to exactly those: now, when the
+  // selection or the action is about to change, or when its pause ends -
+  // never to whatever happens to be selected by then.
+  // leaving: the selection or the action is changing right now. A box from a
+  // Default block needs its confirm on that element, which is going away, so
+  // that nudge is dropped with a message instead of a confirm nobody sees.
+  // Returns the queued write, or nothing when none was queued.
+  function flushNudge(leaving) {
+    const was = nudge;
+    if (!was) return null;
+    nudge = null;
+    clearTimeout(was.timer);
+    const a = act();
+    const el = a && a.no === was.action ? a.elements[was.elem - 1] : null;
+    if (leaving && el && el['clsn' + was.which] && el['clsn' + was.which].source === 'default') {
+      say('The arrow-key move on element ' + was.elem + ' was not saved: its box comes from a Default block, which needs a confirm on that element.', 'err');
+      return null;
+    }
+    return commitBox(was.which, was.box, normRect(was.rect), undefined, { action: was.action, elem: was.elem, base: was.base, dep: was.dep });
+  }
+  // A new view replaced the one a pending nudge was made on (a write landed,
+  // or a reload). Its element number still names the frame it was made on only
+  // while no insert, delete or move of this page landed since and the action's
+  // element lines are the same, and it may still be written only while its box
+  // reads what the move started from - a structural edit, an outside change or
+  // another write of that box moves one or the other. Otherwise it is dropped
+  // with a message rather than written to another frame or over the newer box.
+  function keepNudge(v) {
+    if (!nudge) return;
+    const a = v && v.action;
+    if (a && a.no !== nudge.action) return;          // another action on screen: the nudge was flushed into the queue already
+    const renumbered = nudge.structure !== structure;
+    if (!renumbered && v && v.sha1 === nudge.sha1) return;
+    const el = a ? a.elements[nudge.elem - 1] : null;
+    const r = el && el['clsn' + nudge.which] ? el['clsn' + nudge.which].rects[nudge.box] : null;
+    if (!renumbered && a && linesOf(a) === nudge.lines && r && normRect(r).join() === nudge.base.join()) { nudge.sha1 = v.sha1; return; }
+    clearTimeout(nudge.timer);
+    nudge = null;
+    say('The arrow-key move was not saved: the elements changed under it.', 'err');
+  }
+
+  // ---- writes ---------------------------------------------------------------------------------------
+  // A refused write reads the file again. `partial`: a multi-file write failed
+  // and could not put every file back - what is on disk is not what the page
+  // shows, so it reloads too (the Edited strip then lists what was left).
+  function failed(e, where) {
+    if (e.code === 'stale' || e.code === 'partial') {
+      epoch++;
+      say(e.message + ' - reloaded.', 'err');
+      return serial(() => loadAction(actionNo, true));
+    }
+    if (where) where(e.message); else say(e.message, 'err');
+    return null;
+  }
+
+  // A BOX FROM A DEFAULT BLOCK IS SHARED. A Clsn1Default / Clsn2Default block
+  // gives its boxes to every later element without its own block, until the
+  // next Default (anim.go:330-342) - so moving one of its boxes on element 1
+  // moves it on every element that inherits it. The page says which, and
+  // writes only after an explicit confirm (the server refuses without
+  // scope: 'default' anyway).
+  // target: { action, elem, base, dep, confirm } - the element a pending
+  // nudge, a drag or a confirm was made on, the rect the change starts from,
+  // the page's own queued write of that box it was built on, and the confirm
+  // panel it answers. Without it, the selected element, its rect as read and
+  // the write of it still queued. The action, the element and what the box
+  // must still read are fixed here, when the edit is made, not when its turn
+  // in the queue comes (snapOf / sendable).
+  function commitBox(which, box, rect, scope, target) {
+    const a = act();
+    if (!a) return;
+    if (target && target.action !== a.no) { say('The box change on action ' + target.action + ' was not saved: another action is on screen.', 'err'); return; }
+    const e = target ? a.elements[target.elem - 1] : curEl();
+    if (!e) return;
+    const c = e['clsn' + which];
+    if (!c) return;
+    const action = a.no, elem = e.ordinal;
+    const key = keyOf(action, elem, 'clsn' + which + ':' + box);
+    const dep = target && target.dep !== undefined ? target.dep : pendingOf(key);
+    const base = dep ? dep.value.slice() : target && target.base && c.source !== 'default' ? normRect(target.base) : (c.rects[box] ? normRect(c.rects[box]) : null);
+    const confirmOf = (o) => Object.assign({ which, box, rect, action, elem, dep, base, epoch, structure }, o);
+    if (c.source === 'default' && scope !== 'default') {
+      if (elem !== sel.elem) { say('The box change on element ' + elem + ' was not saved: its box comes from a Default block, which needs a confirm on that element.', 'err'); return; }
+      const B = a.clsn[c.block];
+      defConfirm = confirmOf({ affects: B ? B.boundTo.slice() : [], header: B ? B.headerRaw : 'Default', line: B ? B.line : null });
+      renderStage(); renderSide();
+      return;
+    }
+    const boxOf = (a2) => { const e2 = a2 && a2.elements[elem - 1]; const r0 = e2 && e2['clsn' + which] && e2['clsn' + which].rects[box]; return r0 ? normRect(r0) : null; };
+    const snap = snapOf(boxOf, base, dep);
+    const w = track(key, normRect(rect), dep);
+    // A confirm panel answered by this write stays on screen, its button off,
+    // until the write lands.
+    if (target && target.confirm) target.confirm.sending = w;
+    const mine = () => defConfirm && defConfirm.sending === w;
+    return serial(async () => {
+      const sha1 = sendable(snap, 'The box change on element ' + elem, true);
+      if (!sha1) { finish(w, null); if (actionNo === action) { if (mine()) defConfirm = null; renderStage(); renderSide(); } return; }
+      try {
+        const r = await postJson('/api/char-air-edit', { char, op: 'clsn', action, elem, which, box, coords: rect, scope, sha1 });
+        finish(w, boxOf, r.air ? r.air.action : null);
+        if (r.changed) say('Clsn' + which + '[' + box + '] of element ' + elem + ': ' + r.plan.before.join(', ') + ' → ' + r.plan.after.join(', ')
+          + (r.plan.scope === 'default' ? ' (Default block, elements ' + r.plan.affects.join(', ') + ')' : ''), 'ok');
+        // The page moved to another action meanwhile: that view's sha1 is
+        // stale now, so it is read again rather than replaced by this one.
+        if (r.air && r.air.action.no !== actionNo) await loadAction(actionNo, true);
+        else if (r.air) adopt(r.air, sel.elem === elem ? { which, box } : null); else { if (mine()) defConfirm = null; renderStage(); renderSide(); }
+      } catch (err) {
+        finish(w, null);
+        if (err.code === 'confirm' && err.body && err.body.needsScope) {
+          if (action !== actionNo || elem !== sel.elem) { say('The box change on element ' + elem + ' was not saved: its box is shared, and needs a confirm on that element.', 'err'); return; }
+          defConfirm = confirmOf({ affects: err.body.affects || [], header: 'Default block', line: null });
+          renderStage(); renderSide();
+          return;
+        }
+        if (mine()) defConfirm = null;
+        failed(err, (m) => { boxErr = m; renderStage(); renderSide(); });
+      }
+    });
+  }
+
+  // ELEMENT FIELDS. `time` is shown as a plan first: a duration is a hit
+  // timing (§9) - every AnimElem trigger on a later element fires at a
+  // different tick - so the impact is on screen before the Save that writes
+  // it. Every other field writes on Enter / change and shows airedit's
+  // warnings after.
+  function commitField(field, value) {
+    const e = curEl();
+    if (!e) return;
+    const F = e.fields[field];
+    const elem = e.ordinal;
+    // The field as it will read once the page's own queued write of it lands:
+    // what a second value typed meanwhile replaces and expects.
+    const key = keyOf(act().no, elem, 'field:' + field);
+    const dep = field === 'time' ? null : pendingOf(key);
+    const raw = dep ? dep.value : F.present ? F.raw : '';
+    if (String(value).trim() === raw && field !== 'time') { if (!dep) { delete fieldErr[field]; renderSide(); } return; }
+    if (field === 'time') return previewTime(value, true);
+    // Enter and the blur that follows it are one edit, not two.
+    const sig = view.sha1 + '|' + elem + '|' + field + '|' + String(value).trim();
+    if (sentField === sig) return;
+    sentField = sig;
+    const reader = (a2) => { const e2 = a2 && a2.elements[elem - 1]; return e2 ? [e2.line, e2.fields[field].present ? e2.fields[field].raw : null] : null; };
+    const snap = snapOf(reader, undefined, dep);
+    const queued = track(key, String(value).trim(), dep);
+    return serial(async () => {
+      const sha1 = sendable(snap, field + ' of element ' + elem);
+      if (!sha1) { sentField = null; finish(queued, null); return; }
+      try {
+        const r = await postJson('/api/char-air-edit', { char, op: 'element', action: snap.action, elem, field, value, sha1 });
+        finish(queued, reader, r.air ? r.air.action : null);
+        const w = (r.plan && r.plan.warnings) || [];
+        if (r.changed) say(field + ' of element ' + elem + ': ' + (r.plan.before === null ? '(absent)' : '"' + r.plan.before + '"') + ' → "' + r.plan.after + '"'
+          + (r.plan.filled && r.plan.filled.length ? ' (also wrote ' + r.plan.filled.join(', ') + ' = 1, never blank)' : '')
+          + (w.length ? ' · ' + w.join(' · ') : ''), w.length ? 'err' : 'ok');
+        if (r.air) adopt(r.air); else { delete fieldErr[field]; renderSide(); }
+      } catch (err) {
+        sentField = null;
+        finish(queued, null);
+        failed(err, (m) => { fieldErr[field] = { msg: m, value }; renderSide(); });
+      }
+    });
+  }
+
+  let sentField = null;
+  let previewTimer = null;
+  function previewTime(value, now) {
+    const e = curEl();
+    if (!e) return;
+    clearTimeout(previewTimer);
+    const action = actionNo, line = e.line, made = structure, ep = epoch;
+    const run = () => serial(async () => {
+      const cur = curEl();
+      if (!cur || cur.ordinal !== e.ordinal || actionNo !== action || cur.line !== line || structure !== made || epoch !== ep) return;
+      try {
+        const r = await postJson('/api/char-air-edit', { char, op: 'element', action, elem: e.ordinal, field: 'time', value, dryRun: true });
+        delete fieldErr.time;
+        timing = (r.plan && r.plan.noop) ? null : { elem: e.ordinal, value: String(value).trim(), plan: r.plan, timing: r.timing, structure: made };
+      } catch (err) {
+        timing = null;
+        fieldErr.time = { msg: err.message, value };
+      }
+      // Only the panel is redrawn: the field keeps its focus and whatever is
+      // being typed into it.
+      fillTiming();
+    });
+    if (now) return run();
+    previewTimer = setTimeout(run, 300);
+  }
+  function saveTime() {
+    if (!timing || timing.saving) return;
+    const t = timing;
+    const reader = (a2) => { const e2 = a2 && a2.elements[t.elem - 1]; return e2 ? [e2.line, e2.fields.time.raw] : null; };
+    const snap = snapOf(reader);
+    if (t.structure !== undefined) snap.structure = t.structure;   // previewed before an insert, delete or move landed: no frame now
+    // One Save per preview: the button is off while its write is queued.
+    const queued = track(keyOf(snap.action, t.elem, 'field:time'), t.value, null);
+    t.saving = queued;
+    fillTiming();
+    return serial(async () => {
+      const sha1 = sendable(snap, 'time of element ' + t.elem);
+      if (!sha1) { finish(queued, null); t.saving = null; if (timing === t) fillTiming(); return; }
+      try {
+        const r = await postJson('/api/char-air-edit', { char, op: 'element', action: snap.action, elem: t.elem, field: 'time', value: t.value, sha1 });
+        finish(queued, reader, r.air ? r.air.action : null);
+        if (r.changed) say('time of element ' + t.elem + ': ' + r.plan.before + ' → ' + r.plan.after
+          + (r.timing && r.timing.impacts.length ? ' · ' + r.timing.impacts.length + ' attack block(s) now fire at a different tick' : ''), 'ok');
+        if (r.air) adopt(r.air); else { timing = null; renderSide(); }
+      } catch (err) {
+        finish(queued, null);
+        t.saving = null;
+        failed(err, (m) => { fieldErr.time = { msg: m, value: t.value }; timing = null; renderSide(); });
+      }
+    });
+  }
+
+  // STRUCTURAL OPERATIONS (§9 "a separate, confirmed operation"). The first
+  // POST has no confirm and writes nothing: it returns airedit's plan - the
+  // Clsn blocks it must write so every surviving element keeps its boxes, the
+  // AnimElem / AnimElemTime triggers it would renumber in the state files, and
+  // the ones it cannot (expressions, a removed element, a state that also
+  // plays another action). Apply sends the same request with confirm and the
+  // sha1; triggers it cannot renumber need an explicit acknowledgment, and
+  // are then left exactly as written.
+  // A NUDGE STILL WAITING IS WRITTEN FIRST, before a plan is made or applied:
+  // it belongs to the frame it was made on, and after an insert, delete or move
+  // that frame may carry another number (or none).
+  // THE ELEMENT NUMBERS OF A PLAN ARE THE CLICK'S. A button clicked while an
+  // earlier insert, delete or move is still on its way names the element as
+  // the page showed it then; the dry run waits behind that write, and by its
+  // turn the number can be another frame's (anim.go:330-341). The click's
+  // snapshot decides: the plan is made only while nothing renumbered the
+  // elements since, and Apply goes out only while that still holds.
+  function runPlan(req, label) {
+    plan = null;
+    flushNudge(true);
+    const snap = snapOf();
+    return serial(async () => {
+      if (actionNo !== snap.action) return;
+      if (snap.epoch !== epoch || snap.structure !== structure || linesOf(act()) !== snap.lines) {
+        say(label + ' was not planned: the elements changed since it was clicked (an insert, delete or move was written first) - click it again.', 'err');
+        renderSide();
+        return;
+      }
+      try {
+        const r = await postJson('/api/char-air-edit', Object.assign({ char, action: snap.action }, req));
+        if (r.plan && r.plan.noop) { say(label + ': nothing to change.', 'ok'); renderSide(); return; }
+        plan = { req, res: r, label, ack: false, error: '', action: snap.action, snap };
+      } catch (err) {
+        plan = { req, res: null, label, ack: false, error: err.message, needsLoop: /loopstart: 'next'/.test(err.message), snap };
+      }
+      renderSide();
+    });
+  }
+  function applyPlan() {
+    if (!plan || !plan.res || plan.applying) return;
+    const p = plan;
+    const force = !!p.res.needsForce;
+    if (force && !p.ack) return;
+    // One Apply per plan: a second click while it is on its way would send the
+    // same delete again against the new elements.
+    p.applying = true;
+    flushNudge(true);
+    const snap = p.snap;
+    renderSide();
+    return serial(async () => {
+      // A nudge flushed just above lands first and its view replaces the
+      // panel; the plan still holds while no insert, delete or move landed
+      // since the click it was made from, and the element lines are the ones
+      // it was made on.
+      const sha1 = snap ? sendable(snap, p.label) : null;
+      if (!sha1) { p.applying = false; if (plan === p) renderSide(); return; }
+      try {
+        const r = await postJson('/api/char-air-edit', Object.assign({ char }, p.req, { action: snap.action, confirm: true, force: force || undefined, sha1 }));
+        const files = (r.files || []).filter((f) => f.changed).map((f) => f.file);
+        const pl0 = r.plan || {};
+        // Every element number queued before this lands names another frame now.
+        if (r.changed && ['insert', 'delete', 'move'].includes(pl0.op)) structure++;
+        if (files.length > 1) together.push({ files, label: p.label });
+        say(p.label + ': wrote ' + (files.join(' + ') || 'nothing') + (r.renumbered ? ' · renumbered ' + r.renumbered + ' trigger' + (r.renumbered === 1 ? '' : 's') : '')
+          + (r.leftAsIs && (r.leftAsIs.blocking.length || r.leftAsIs.noSpan.length) ? ' · left ' + (r.leftAsIs.blocking.length + r.leftAsIs.noSpan.length) + ' as written' : ''), 'ok');
+        const pl = r.plan || {};
+        let next = {};
+        if (pl.op === 'insert') next = { elem: pl.newElem, which: null, box: null };
+        else if (pl.op === 'move') next = { elem: pl.to };
+        else if (pl.op === 'delete') next = { elem: Math.max(1, Math.min(pl.elem, (r.air ? r.air.action.elements.length : 1))), which: null, box: null };
+        else if (pl.op === 'addbox') next = { which: pl.which, box: pl.box };
+        else if (pl.op === 'removebox') next = { which: null, box: null };
+        if (r.air) adopt(r.air, next);
+      } catch (err) {
+        p.applying = false;
+        if (err.code === 'blocking') {
+          // The confirmed request plans again against the state files as they
+          // are now (charAirEditIn): one changed since the dry run can hold a
+          // trigger the plan never listed. The acknowledgment is for what the
+          // forced write leaves as written, so the list is read again and the
+          // box unticked.
+          p.ack = false;
+          p.error = err.message;
+          let again = null;
+          try { again = await postJson('/api/char-air-edit', Object.assign({ char }, p.req, { action: snap.action })); } catch (e2) { again = null; }
+          if (again && again.plan && !again.plan.noop) {
+            p.res = again;
+            p.error = err.message + ' - the state files changed since the plan was made; the triggers below are read again.';
+          } else {
+            const pl = (p.res && p.res.plan) || {};
+            const rn = pl.renumber || { triggers: [], blocking: [] };
+            const body = err.body || {};
+            p.res = Object.assign({}, p.res, { needsForce: true, plan: Object.assign({}, pl, { renumber: Object.assign({}, rn, {
+              blocking: Array.isArray(body.blocking) ? body.blocking : rn.blocking,
+              triggers: rn.triggers.filter((x) => x.splices && x.splices.length).concat(Array.isArray(body.noSpan) ? body.noSpan : []),
+            }) }) });
+          }
+          if (actionNo === snap.action) plan = p;
+          renderSide();
+          return;
+        }
+        failed(err, (m) => { p.error = m; if (plan === p) renderSide(); });
+      }
+    });
+  }
+
+  // ---- right: fields, timing, boxes, structure ---------------------------------------------------
+  const FIELD_HELP = {
+    time: 'ticks · -1 holds forever · 0 is never drawn but still counts for AnimElem',
+    group: 'sprite group · -1 = no sprite',
+    number: 'sprite number · -1 = no sprite',
+    x: 'moves the sprite only; the boxes stay on the axis',
+    y: 'moves the sprite only; the boxes stay on the axis',
+    flip: 'mirrors the sprite about its axis; the boxes do not flip',
+    blend: 'A add · A1 half add · S subtract · AS<src>D<dst>',
+    xscale: 'Ikemen / MUGEN 1.1 only · the boxes do not scale',
+    yscale: 'Ikemen / MUGEN 1.1 only · the boxes do not scale',
+    angle: 'Ikemen / MUGEN 1.1 only · not drawn here',
+  };
+  const EXTRA = ['xscale', 'yscale', 'angle'];
+
+  function renderSide() {
+    const host = $('side');
+    host.textContent = '';
+    const a = act(), e = curEl();
+    if (!a) return;
+    if (!e) { host.append(el('div', { class: 'none', text: 'Nothing to edit in this action.' })); return; }
+    const ro = !editable();
+    host.append(el('div', { class: 'blockh', text: 'Element ' + e.ordinal + ' of ' + a.elements.length + ' · .air line ' + e.line }));
+    for (const x of e.errors) host.append(el('div', { class: 'warnl', text: 'The engine logs: ' + x }));
+    if (e.flipHoldsBlend) host.append(el('div', { class: 'warnl', text: 'This line writes its transparency in the flip field (the WinMugen "...,5,A" form, anim.go:74-92): flip and blend are read-only here.' }));
+
+    const table = el('table', { class: 'fields' });
+    const shown = ['time', 'group', 'number', 'x', 'y', 'flip', 'blend'].concat(EXTRA.filter((f) => e.fields[f].present || added.has(f)));
+    for (const f of shown) table.append(fieldRow(e, f, ro));
+    host.append(table);
+    const missing = EXTRA.filter((f) => !e.fields[f].present && !added.has(f));
+    if (missing.length && !ro) {
+      const ops = el('div', { class: 'ops', style: 'margin-top:4px' }, el('span', { class: 'fh', text: 'Fields 8-10:' }));
+      for (const f of missing) {
+        const b = el('button', { text: '+ ' + f, title: 'Show ' + f + ' for this element. Nothing is written until you enter a value; a skipped xscale/yscale is written as 1, never blank (a blank is 0 in MUGEN 1.1, anim.go:198-224).' });
+        b.onclick = () => { added.add(f); renderSide(); };
+        ops.append(b);
+      }
+      host.append(ops);
+    }
+    timingSlot = el('div');
+    host.append(timingSlot);
+    fillTiming();
+
+    host.append(boxesSection(e, a, ro));
+    if (!ro) host.append(structureSection(e, a));
+  }
+
+  function fieldRow(e, f, ro) {
+    const F = e.fields[f];
+    // A value this page has queued for the field is what it will read.
+    const queuedW = f === 'time' ? null : pendingOf(keyOf(act().no, e.ordinal, 'field:' + f));
+    const raw = queuedW ? queuedW.value : F.present ? F.raw : '';
+    const err = fieldErr[f];
+    let input;
+    if (f === 'flip') {
+      input = el('select', { disabled: ro || e.flipHoldsBlend, title: 'flip' });
+      for (const o of [['', '(none)'], ['H', 'H'], ['V', 'V'], ['HV', 'HV']]) input.append(el('option', { value: o[0], text: o[1] }));
+      input.value = queuedW ? queuedW.value : (e.values.h ? 'H' : '') + (e.values.v ? 'V' : '');
+      input.onchange = () => commitField('flip', input.value);
+    } else {
+      input = el('input', { type: 'text', spellcheck: 'false', value: err ? err.value : raw, disabled: ro || (f === 'blend' && e.flipHoldsBlend), title: f, list: f === 'blend' ? 'blendlist' : undefined,
+        placeholder: !F.present ? (f === 'angle' ? '0' : f === 'blend' ? '' : '1') : undefined });
+      if (err) input.className = 'bad';
+      if (f === 'time') timeInput = input;
+      input.onkeydown = (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); commitField(f, input.value); }
+        else if (ev.key === 'Escape') { delete fieldErr[f]; if (f === 'time') timing = null; input.value = raw; renderSide(); }
+      };
+      if (f === 'time') {
+        input.oninput = () => previewTime(input.value, false);
+      } else {
+        input.onblur = () => { if (input.value.trim() !== raw && !(err && err.value === input.value)) commitField(f, input.value); };
+      }
+    }
+    const td = el('td', {}, input);
+    if (f === 'blend') td.append(el('datalist', { id: 'blendlist' }, ['A', 'A1', 'S', 'AS128D128', 'AS255D255'].map((x) => el('option', { value: x }))));
+    if (f === 'time' && !ro) {
+      const pv = el('button', { text: 'Preview', title: 'Show which attack blocks fire at a different tick before saving' });
+      pv.onclick = () => previewTime(input.value, true);
+      td.append(' ', pv);
+    }
+    if (f === 'group' || f === 'number') {
+      if (!e.sprite && e.values.group !== -1 && e.values.number !== -1) td.append(el('div', { class: 'warnl', text: 'sprite ' + e.values.group + ',' + e.values.number + ' is not in the .sff: nothing draws' }));
+    }
+    td.append(el('div', { class: 'fh', text: FIELD_HELP[f] + (F.present ? '' : ' · not written') }));
+    if (err && f !== 'time') td.append(el('div', { class: 'err', text: err.msg }));
+    return el('tr', {}, el('td', { class: 'nm', text: f }), td);
+  }
+
+  // The time field's message and its timing panel live in one slot under the
+  // table, redrawn on their own while the field is being typed into.
+  let timingSlot = null, timeInput = null;
+  function fillTiming() {
+    if (!timingSlot) return;
+    timingSlot.textContent = '';
+    const e = curEl();
+    if (timeInput) timeInput.className = fieldErr.time ? 'bad' : '';
+    if (fieldErr.time) timingSlot.append(el('div', { class: 'err', text: 'time: ' + fieldErr.time.msg }));
+    if (timing && e && timing.elem === e.ordinal) timingSlot.append(timingPanel(timing));
+  }
+  function timingPanel(t) {
+    const tm = t.timing, pl = t.plan;
+    const box = el('div', { class: 'panel timing' });
+    box.append(el('div', { class: 't', text: 'Timing impact · not saved yet' }));
+    if (!tm) { box.append(el('div', { text: 'time ' + (pl && pl.before) + ' → ' + t.value })); }
+    else {
+      box.append(el('div', { text: 'Element ' + tm.elem + ': time ' + tm.oldTime + ' → ' + tm.newTime + ' · the action runs '
+        + (tm.totalBefore < 0 ? 'forever' : tm.totalBefore + ' ticks') + ' → ' + (tm.totalAfter < 0 ? 'forever' : tm.totalAfter + ' ticks') }));
+      const moved = tm.ticksBefore.map((b, k) => (b !== tm.ticksAfter[k] ? '#' + (k + 1) + ' t' + b + '→t' + tm.ticksAfter[k] : null)).filter(Boolean);
+      if (moved.length) box.append(el('div', { class: 'fh', text: 'Start ticks: ' + moved.join(' · ') }));
+      if (tm.impacts.length) {
+        const ul = el('ul');
+        for (const x of tm.impacts) {
+          ul.append(el('li', {}, el('b', { text: x.type }), ' state ' + x.state + ' (' + x.file + ':' + x.line + '), '
+            + (x.kind === 'animelemtime' ? 'AnimElemTime(' + x.elem + ') = ' + x.offset : 'element ' + x.elem) + ': fires at tick ' + x.before + ' → ' + x.after
+            + (x.conditional ? ' - when its other conditions hold' : '') + (x.anims ? ' - on action ' + actionNo + ' (the state also plays ' + x.anims.filter((n) => n !== actionNo).join(', ') + ')' : '')));
+        }
+        box.append(ul);
+      } else {
+        box.append(el('div', { text: 'No attack block that plays this action fires at a different tick' + (tm.unchanged ? ' (' + tm.unchanged + ' unchanged)' : '') + '.' }));
+      }
+      for (const w of tm.warnings || []) box.append(el('div', { class: 'warnl', text: w }));
+    }
+    for (const w of (pl && pl.warnings) || []) if (!(tm && (tm.warnings || []).includes(w))) box.append(el('div', { class: 'warnl', text: w }));
+    const save = el('button', { class: 'warn', text: 'Save time = ' + t.value, disabled: !!t.saving });
+    const cancel = el('button', { text: 'Cancel' });
+    save.onclick = () => { if (!t.saving) saveTime(); };
+    cancel.onclick = () => { timing = null; fillTiming(); };
+    box.append(el('div', { class: 'btns' }, save, cancel));
+    return box;
+  }
+
+  const boxInputs = new Map();   // 'which:box' -> [4 inputs]
+  function fillBoxInputs(which, box, rect) {
+    const ins = boxInputs.get(which + ':' + box);
+    if (ins) ins.forEach((inp, k) => { inp.value = String(rect[k]); });
+  }
+  function boxesSection(e, a, ro) {
+    const wrap = el('div');
+    boxInputs.clear();
+    wrap.append(el('div', { class: 'blockh', text: 'Boxes' }));
+    if (defConfirm) {
+      const d = defConfirm;
+      const p = el('div', { class: 'panel confirm' },
+        el('div', { class: 't', text: 'Shared box · not saved yet' }),
+        el('div', { text: 'Clsn' + d.which + '[' + d.box + '] comes from "' + d.header + '"' + (d.line ? ' (line ' + d.line + ')' : '') + '. Changing it applies to elements ' + d.affects.join(', ') + '.' }),
+        el('div', { class: 'fh', text: normRect(d.base || curEl()['clsn' + d.which].rects[d.box] || d.rect).join(', ') + ' → ' + d.rect.join(', ') }));
+      // Off while its own write is queued: a second click would send it again.
+      const yes = el('button', { class: 'warn', text: 'Apply to elements ' + d.affects.join(', '), disabled: !!d.sending });
+      const no = el('button', { text: 'Cancel' });
+      yes.onclick = () => {
+        if (d.sending) return;
+        commitBox(d.which, d.box, d.rect, 'default', d.elem ? { action: d.action, elem: d.elem, dep: d.dep || null, confirm: d } : undefined);
+        if (d.sending) { yes.disabled = true; }
+      };
+      no.onclick = () => { defConfirm = null; renderStage(); renderSide(); };
+      p.append(el('div', { class: 'btns' }, yes, no),
+        el('div', { class: 'fh', text: 'To change element ' + e.ordinal + ' alone, Cancel and use "+ Clsn' + d.which + '" / remove below: that gives it its own block first.' }));
+      wrap.append(p);
+    }
+    if (boxErr) wrap.append(el('div', { class: 'err', text: boxErr }));
+    // WHETHER THIS ELEMENT'S ATTACK BOXES HIT, said where they are edited:
+    // in which states they hit and for how much, and where they do nothing.
+    {
+      const hits = view && view.hits;
+      if (hits && e.clsn1.rects.length) {
+        const many = e.clsn1.rects.length > 1;
+        const live = hits.states.filter((h) => h.kind !== 'none');
+        const dead = hits.states.filter((h) => h.kind === 'none');
+        const p = el('div', { class: 'hit ' + (dead.length && !live.length ? 'nohit' : 'ok') });
+        if (!hits.states.length) p.append(el('div', { text: 'No state found that plays this action, so the Studio cannot tell whether ' + (many ? 'these boxes hit' : 'this box hits') + '.' }));
+        for (const h of live) {
+          for (const b of h.blocks) {
+            const line = el('div', { text: 'Hits in ' + stateName(h) + (h.kind === 'own' ? ' (' + b.type + ' line ' + b.line + ')' : '') + ' · damage ' });
+            line.append(damageInput(b));
+            p.append(line);
+          }
+          if (h.kind === 'added' && h.missing.includes(e.ordinal)) {
+            p.append(el('div', { class: 'warnl', text: 'The hit added for ' + stateName(h) + ' does not arm on this element yet.' }));
+            if (!ro) p.append(hitOpButton(h, 'update', 'Update the hit', 'Rewrite the hit for the boxes as they are now (the damage stays)'));
+          }
+        }
+        if (dead.length) {
+          p.append(el('div', { class: live.length ? 'warnl' : '', text: live.length
+            ? 'Does nothing in ' + dead.map(stateName).join(' and ') + ': ' + (dead.length > 1 ? 'they have' : 'it has') + ' no HitDef.'
+            : 'The attack box' + (many ? 'es' : '') + ' on this element can\'t hit yet: ' + dead.map(stateName).join(' and ') + (dead.length > 1 ? ' have' : ' has') + ' no HitDef, so the engine never tests ' + (many ? 'them' : 'it') + '.' }));
+          if (hits.zss) p.append(el('div', { class: 'fh', text: 'This character\'s states are ZSS, which the Studio does not write.' }));
+          else if (!ro) for (const h of dead) p.append(makeHitButton(h));
+        }
+        wrap.append(p);
+      }
+    }
+    for (const which of [1, 2]) {
+      const c = e['clsn' + which];
+      const B = c.source !== 'none' ? a.clsn[c.block] : null;
+      const srcText = c.source === 'none' ? 'Clsn' + which + ': none'
+        : c.source === 'default' ? 'Clsn' + which + ' from "' + B.headerRaw + '" (line ' + B.line + ') - shared by elements ' + B.boundTo.join(', ')
+        : 'Clsn' + which + ' from its own block "' + B.headerRaw + '" (line ' + B.line + ')';
+      wrap.append(el('div', { class: 'src' + (c.source === 'default' ? ' def' : ''), text: srcText }));
+      if (B && B.short) wrap.append(el('div', { class: 'warnl', text: '"' + B.headerRaw + '" counts more boxes than it has lines; the engine fills the rest with 0,0,0,0.' }));
+      c.rects.forEach((r0, k) => {
+        // What the box will read: a confirm not yet answered, a nudge not yet
+        // written, or the page's own write of it still queued.
+        const boxKey = keyOf(a.no, e.ordinal, 'clsn' + which + ':' + k);
+        const queuedW = pendingOf(boxKey);
+        const pend = defConfirm && defConfirm.which === which && defConfirm.box === k ? defConfirm.rect
+          : nudge && nudge.action === a.no && nudge.elem === e.ordinal && nudge.which === which && nudge.box === k ? normRect(nudge.rect)
+            : queuedW ? queuedW.value : r0;
+        const on = sel.which === which && sel.box === k;
+        const row = el('div', { class: 'boxrow' + (on ? ' on' : '') });
+        const key = el('span', { class: 'k', text: '[' + k + ']', title: 'Select on the stage' });
+        key.onclick = () => { sel.which = which; sel.box = k; renderStage(); renderSide(); };
+        row.append(key);
+        const ins = ['left', 'top', 'right', 'bottom'].map((nm, j) => {
+          const inp = el('input', { type: 'text', spellcheck: 'false', value: pend[j], title: 'Clsn' + which + '[' + k + '] ' + nm, disabled: ro || (B && k >= B.boxes.length) });
+          const go = () => {
+            const vals = ins.map((x) => x.value.trim());
+            if (vals.some((x) => !/^[+-]?\d+$/.test(x))) { boxErr = 'Box coordinates are whole numbers (the engine reads them with Atoi, anim.go:398-417).'; renderSide(); return; }
+            const rect = normRect(vals.map(Number));
+            // The inputs show a nudge still waiting on this box, or the page's
+            // own write of it still queued; that is what the typed value
+            // replaces, so it is written first and the typed one after it -
+            // never the other way round - and the typed one expects what it
+            // left (commitBox takes the queued write as its base).
+            const pendN = nudge && nudge.action === actionNo && nudge.elem === e.ordinal && nudge.which === which && nudge.box === k ? normRect(nudge.rect) : null;
+            const pendW = pendingOf(boxKey);
+            const shown = pendN || (pendW ? pendW.value : normRect(r0));
+            if (rect.join() === shown.join() && !(defConfirm && defConfirm.which === which && defConfirm.box === k)) return;
+            flushNudge(false);
+            sel.which = which; sel.box = k;
+            commitBox(which, k, rect, undefined, { action: actionNo, elem: e.ordinal });
+          };
+          // change fires on Enter and on leaving the field: one handler, so an
+          // Enter is not committed twice.
+          inp.onkeydown = (ev) => { if (ev.key === 'Escape') { inp.value = String(pend[j]); } };
+          inp.onchange = () => go();
+          return inp;
+        });
+        boxInputs.set(which + ':' + k, ins);
+        row.append(...ins);
+        if (!ro) {
+          const rm = el('button', { text: '×', title: 'Remove this box (shown as a plan first)' });
+          rm.onclick = () => runPlan({ op: 'removebox', elem: e.ordinal, which, box: k }, 'Remove Clsn' + which + '[' + k + '] of element ' + e.ordinal);
+          row.append(rm);
+        }
+        wrap.append(row);
+      });
+      if (!ro) {
+        const add = el('button', { text: '+ Clsn' + which + ' box', title: 'Add a box to this element (shown as a plan first)' });
+        add.onclick = () => runPlan({ op: 'addbox', elem: e.ordinal, which }, 'Add a Clsn' + which + ' box to element ' + e.ordinal);
+        wrap.append(el('div', { class: 'ops' }, add));
+      }
+    }
+    return wrap;
+  }
+
+  function structureSection(e, a) {
+    const wrap = el('div');
+    const N = a.elements.length;
+    wrap.append(el('div', { class: 'blockh', text: 'Structure' }));
+    wrap.append(el('div', { class: 'fh', text: 'Each operation is planned first: the Clsn blocks written so every element keeps its boxes, and the AnimElem triggers renumbered in the state files. Nothing is written until Apply.' }));
+    const ops = el('div', { class: 'ops', style: 'margin-top:5px' });
+    // Each label names the frame as well as its number: the number is only a
+    // position.
+    const frame = ' (sprite ' + e.values.group + ',' + e.values.number + ')';
+    const ins = el('button', { text: 'Insert before #' + e.ordinal, title: 'A copy of element ' + e.ordinal + ' placed before it' });
+    ins.onclick = () => runPlan({ op: 'insert', after: e.ordinal - 1, copyOf: e.ordinal }, 'Insert a copy of element ' + e.ordinal + frame + ' before it');
+    const dup = el('button', { text: 'Duplicate #' + e.ordinal, title: 'A copy of element ' + e.ordinal + ' placed after it' });
+    dup.onclick = () => runPlan({ op: 'insert', after: e.ordinal, copyOf: e.ordinal }, 'Duplicate element ' + e.ordinal + frame);
+    const del = el('button', { class: 'danger', text: 'Delete #' + e.ordinal, disabled: N < 2, title: N < 2 ? 'The only element: an action with no frames plays the NEXT action (anim.go:1210-1222)' : 'Delete element ' + e.ordinal });
+    del.onclick = () => runPlan({ op: 'delete', elem: e.ordinal }, 'Delete element ' + e.ordinal + frame);
+    const to = el('select', { title: 'Move to position' });
+    for (let k = 1; k <= N; k++) to.append(el('option', { value: k, text: 'to ' + k }));
+    to.value = String(e.ordinal);
+    const mv = el('button', { text: 'Move #' + e.ordinal, disabled: N < 2 });
+    mv.onclick = () => { const t = Number(to.value); if (t !== e.ordinal) runPlan({ op: 'move', elem: e.ordinal, to: t }, 'Move element ' + e.ordinal + frame + ' to ' + t); };
+    ops.append(ins, dup, del, to, mv);
+    wrap.append(ops);
+    if (plan) wrap.append(planPanel(plan));
+    return wrap;
+  }
+
+  function planPanel(p) {
+    const box = el('div', { class: 'panel' });
+    box.append(el('div', { class: 't', text: p.label + (p.res ? ' · plan, not written' : '') }));
+    if (!p.res) {
+      box.append(el('div', { class: 'err', text: p.error }));
+      const btns = el('div', { class: 'btns' });
+      if (p.needsLoop) {
+        const b = el('button', { class: 'warn', text: 'Loop from the following element instead' });
+        b.onclick = () => runPlan(Object.assign({}, p.req, { loopstart: 'next' }), p.label + ' (loop from the next element)');
+        btns.append(b);
+      }
+      const x = el('button', { text: 'Close' });
+      x.onclick = () => { plan = null; renderSide(); };
+      btns.append(x);
+      box.append(btns);
+      return box;
+    }
+    const pl = p.res.plan || {};
+    const rn = pl.renumber || { triggers: [], blocking: [] };
+    const noSpan = rn.triggers.filter((t) => !t.splices || !t.splices.length);
+    const list = (title, items) => { if (!items.length) return; box.append(el('div', { class: 'fh', text: title })); const ul = el('ul'); items.forEach((x) => ul.append(x)); box.append(ul); };
+    if (pl.op === 'insert') box.append(el('div', { text: 'New element ' + pl.newElem + ', a copy of element ' + pl.copyOf + '. Elements after it move up by one.' }));
+    if (pl.op === 'delete') box.append(el('div', { text: 'Element ' + pl.elem + ' goes' + ((pl.removedWith || []).length ? ', with ' + pl.removedWith.map((x) => x.kind + ' (line ' + x.line + ')').join(', ') : '') + '. Elements after it move down by one.' }));
+    if (pl.op === 'move') box.append(el('div', { text: 'Element ' + pl.elem + ' moves to position ' + pl.to + ((pl.movedWith || []).length ? ', carrying ' + pl.movedWith.map((x) => x.kind + ' (line ' + x.line + ')').join(', ') : '') + '.' }));
+    if (pl.op === 'addbox') box.append(el('div', { text: 'Element ' + pl.elem + ' gets Clsn' + pl.which + '[' + pl.box + '] = ' + pl.rect.join(', ') + (pl.materialisedDefault ? ', in its own block holding a copy of the Default boxes (the Default stays as it is for the other elements)' : '') + '.' }));
+    if (pl.op === 'removebox') box.append(el('div', { text: 'Element ' + pl.elem + ' loses Clsn' + pl.which + '[' + pl.box + '] = ' + (pl.removed || []).join(', ') + (pl.materialisedDefault ? ', by getting its own block without it (the Default stays as it is for the other elements)' : '') + '.' }));
+    if (pl.expected && pl.expected.loopstart !== undefined && a0().loopstartLines.length && a0().loopstart > 0) box.append(el('div', { class: 'fh', text: 'Loopstart stays before the same element: element ' + (pl.expected.loopstart + 1) + ' afterwards.' }));
+    // RE-PARENTED BOXES (§9): a Clsn block binds to the element that follows
+    // it, so inserting or moving a frame line changes which element a block
+    // belongs to. The plan writes an explicit own block wherever an element
+    // would otherwise lose or gain boxes.
+    list('Boxes kept by writing an explicit block:', (pl.materialized || []).map((m) => el('li', { text: 'element ' + m.elem + (m.from && m.from !== m.elem ? ' (now ' + m.from + ')' : '') + ': Clsn' + m.which + ': ' + m.boxes.length + (m.boxes.length ? ' - ' + m.boxes.map((b) => '[' + b.join(', ') + ']').join(' ') : '') })));
+    list('Triggers renumbered in the state files:', rn.triggers.filter((t) => t.splices && t.splices.length).map((t) => el('li', {},
+      el('code', { text: t.file + ':' + t.line }), ' state ' + t.state + (t.type ? ' ' + t.type : '') + ': ', el('code', { text: t.before }), ' → ', el('code', { text: t.after }),
+      t.ticks && t.ticks.length ? ' · fires at tick ' + t.ticks.map((x) => x.before + ' → ' + x.after).join(', ') : '',
+      t.partial ? ' (partly: see below)' : '')));
+    list('Triggers left as written (they need you):', rn.blocking.map((b) => el('li', {},
+      el('code', { text: b.file + ':' + b.line }), ' state ' + b.state + (b.type ? ' ' + b.type : '') + ': ', el('code', { text: b.text }), ' - ' + b.why,
+      b.suggested !== undefined ? ' (on this action it would become ' + b.suggested + ')' : '')).concat(noSpan.map((t) => el('li', {},
+      el('code', { text: t.file + ':' + t.line }), ' ', el('code', { text: t.before }), ' → ', el('code', { text: t.after }), ' - its position in the file is not exact, so it is not written automatically'))));
+    if (!rn.triggers.length && !rn.blocking.length && ['insert', 'delete', 'move'].includes(pl.op)) box.append(el('div', { class: 'fh', text: 'No AnimElem trigger of a state playing this action needs renumbering.' }));
+    for (const w of pl.warnings || []) box.append(el('div', { class: 'warnl', text: w }));
+    if (p.error) box.append(el('div', { class: 'err', text: p.error }));
+    const btns = el('div', { class: 'btns' });
+    const force = !!p.res.needsForce;
+    const apply = el('button', { class: 'warn', text: force ? 'Apply, leaving those triggers as written' : 'Apply', disabled: (force && !p.ack) || !!p.applying });
+    apply.onclick = () => applyPlan();
+    if (force) {
+      const ack = el('input', { type: 'checkbox', title: 'acknowledge' });
+      ack.checked = p.ack;
+      ack.onchange = () => { p.ack = !!ack.checked; apply.disabled = !p.ack || !!p.applying; };
+      btns.append(el('label', {}, ack, ' I have read the triggers above'));
+    }
+    const cancel = el('button', { text: 'Cancel' });
+    cancel.onclick = () => { plan = null; renderSide(); };
+    btns.append(apply, cancel);
+    box.append(btns);
+    return box;
+  }
+  const a0 = () => act() || { loopstartLines: [], loopstart: 0 };
+
+  // ---- boot -------------------------------------------------------------------------------------------
+  if (!char) {
+    $('side').textContent = '';
+    $('side').append(el('div', { class: 'none', text: 'No character was passed to this window.' }));
+  } else {
+    serial(async () => {
+      const ok = await loadAction(actionNo, false);
+      if (!ok && actionNo !== 0) await loadAction(0, false);
+    });
+    mountPlayer();
+    window.addEventListener('beforeunload', () => { if (player) player.destroy(); });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/themes.css">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/booklet.css">
+<script src="/booklet.js"></script>
+<title>Animation player</title>
+<style>
+  /* THE POP-OUT PLAYER, printed as a booklet page (docs/STUDIO-BOOKLET.md):
+     the section band with the character's name and the keys, then the
+     picture as large as the window allows on the plate ground. A window
+     opened with window.open() shares nothing with the page that opened it,
+     so it links the booklet's own sheets (themes.css, booklet.css) and
+     restates only the player's controls here, square and printed like the
+     Animation editor's. The player itself arrives with the module. */
+  :root {
+    /* The player asks for this when it sizes its stage. In the panel it is a
+       138px square; here it is whatever the window has left. */
+    --av-stage: auto;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  /* Nothing selects, nothing drags, the cursor is an arrow - the Studio's
+     rule, restated because a window shares no stylesheet with the page. */
+  img { -webkit-user-drag: none; user-drag: none; }
+  select { user-select: text; cursor: auto; }
+  body { user-select: none; cursor: default; margin: 0; background: var(--paper); color: var(--ink);
+    font: 400 var(--t-13)/1.45 var(--f-body); display: flex; flex-direction: column; }
+
+  /* ---- the band: the name, then the keys (and any message, in their place) ---- */
+  #band .bk-secband-t .t { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+  #band .hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 var(--t-12)/1 var(--f-data); color: var(--ink2); }
+
+  main { flex: 1 1 auto; min-height: 0; padding: 16px var(--m) var(--m); display: flex; }
+  #player { flex: 1 1 auto; min-height: 0; display: flex; }
+  #player > .animwrap { flex: 1 1 auto; min-height: 0; }
+  #player .animstage { background: var(--plate); border: 0; }
+  #player .animside .rd { font: 400 var(--t-12)/1.4 var(--f-data); color: var(--ink2); }
+
+  /* buttons and fields, square and printed (the Animation editor's) */
+  button, select {
+    height: 26px; background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink);
+    padding: 0 8px; font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%; cursor: pointer; border-radius: 0; box-shadow: none;
+  }
+  select { border-color: var(--line); background: var(--well); font: 400 var(--t-12)/1 var(--f-data); }
+  button:hover { background: var(--plate); }
+  select:hover { border-color: var(--ink); }
+  button:active, button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  button:disabled { border-color: var(--line); color: var(--ink2); background: var(--paper); cursor: default; }
+  button:focus-visible, select:focus-visible, input:focus-visible,
+  .animstage:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+
+  /* the GIF options, laid on the page like a printed slip: paper, a 2px ink
+     edge, the segmented choices of the booklet */
+  .avgifpop { background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: none; font: 400 var(--t-12)/1.35 var(--f-body); }
+  .avgifpop legend { color: var(--ink2); font: 700 var(--t-11)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .03em; }
+  .avgifpop .seg span { border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); font: 700 var(--t-12)/1.2 var(--f-disp); }
+  .avgifpop .seg label:hover span { background: var(--plate); color: var(--ink); }
+  .avgifpop .seg input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .avgifpop .seg input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 1px; }
+  .palhint { color: var(--ink2); font-size: var(--t-12); }
+</style>
+</head>
+<body>
+  <header class="bk-secband" id="band">
+    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who">&hellip;</span><span class="k" lang="ja">アニメーション</span></h1>
+    <div class="bk-secband-meta">
+      <span class="hint">drag to pan &middot; scroll to zoom &middot; right-click resets
+        &middot; space plays &middot; &larr; &rarr;</span>
+    </div>
+  </header>
+  <main><div id="player"><div class="palhint">Reading&hellip;</div></div></main>
+
+<script src="./ikemen/animview-core.js"></script>
+<script>
+  // WHAT THE WINDOW WAS OPENED WITH. The Studio hands over the character, the
+  // action you were looking at and the palette you had picked, so the window
+  // opens on what you were already watching rather than back at the top of the
+  // list. After that the two are independent: this window has its own timer,
+  // its own zoom and its own pan, which is the point of having opened it.
+  const q = new URLSearchParams(location.search);
+  const char = q.get('char') || '';
+  const want = q.get('sel') || '';
+  const pal = q.get('pal');
+  const name = q.get('name') || char;
+
+  document.getElementById('who').textContent = name || 'no character';
+  document.title = (name || 'Animation') + ' — player';
+
+  // The same sprite URL the Studio builds, including the palette pick. Built
+  // here rather than passed, because a URL is the only thing that survives the
+  // trip through window.open().
+  const spriteUrl = (c, gi) => '/api/sprite?char=' + encodeURIComponent(c)
+    + '&group=' + gi[0] + '&index=' + gi[1]
+    + (pal !== null && pal !== '' ? '&pal=' + encodeURIComponent(pal) : '');
+  const palOf = () => (pal !== null && pal !== '' ? pal : undefined);
+
+  // A window has no toast strip, so say it in the header line instead - it is
+  // the only place a message can go that is not the picture.
+  const hint = document.querySelector('.hint');
+  const hintWas = hint.textContent;
+  let hintTimer = null;
+  // A save's message can be long (what the file could not draw the engine's
+  // way rides along), and the line is one row: cut with an ellipsis, whole on
+  // hover, and up longer when it carries a caveat.
+  const toast = (m, kind) => {
+    hint.textContent = m;
+    hint.title = m;
+    hint.style.color = kind === 'err' ? 'var(--bad)' : kind === 'warn' ? 'var(--warn)' : 'var(--ink2)';
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => { hint.textContent = hintWas; hint.title = ''; hint.style.color = ''; }, kind === 'warn' ? 9000 : 6000);
+  };
+
+  const host = document.getElementById('player');
+  if (!char) {
+    host.innerHTML = '<div class="palhint">No character was passed to this window.</div>';
+  } else {
+    const view = mountAnimView(host, {
+      char, spriteUrl, palOf, toast,
+      fill: true,
+      // The whole reason this window exists. Whole-number steps only, so a
+      // 70px sprite in a 700px window is drawn at exactly 8x and stays as sharp
+      // as it was authored.
+      magnify: true,
+      onReady: () => {
+        // Open on the action the panel was showing. Done here rather than
+        // before the list exists, because setting a <select> to a value it does
+        // not have yet silently selects nothing.
+        //
+        // SET THE PICKER, DO NOT LOAD IT. onReady runs immediately BEFORE the
+        // player's own load(pick.value), so calling load() here just fired the
+        // same request twice and started two loads that raced (the ticket
+        // decided it correctly, but one of them was always wasted). Moving the
+        // picker is enough - the load that follows reads it.
+        if (!want) return;
+        const has = [...view.pick.options].some((o) => o.value === want);
+        if (has) view.pick.value = want;
+      },
+    });
+    // Give the picture the keys straight away, so space and the arrows work
+    // without having to click the window first.
+    setTimeout(() => {
+      const stage = host.querySelector('.animstage');
+      if (stage) stage.focus();
+    }, 300);
+    addEventListener('beforeunload', () => view.destroy());
+  }
+</script>
+</body>
+</html>

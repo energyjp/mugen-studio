@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rankings</title>
+<!--
+    THE PLAIN STANDINGS PAGE: a leaderboard server's ranking as a table. The
+    default of the two leaderboard pages the Studio offers (Settings > Online);
+    the other is the Score Ranking board beside it. The Website export writes
+    the chosen one next to the game as leaderboard.html and fills in RANKING.
+
+    One fetch: <server>/mugen/leaderboard?limit=N. No libraries, system fonts.
+
+    URL flags (they override RANKING, for previews): ?server=<url>,
+    ?title=<name>, ?demo=1 (sample data).
+-->
+<script>window.RANKING = window.RANKING || {};</script>
+<style>
+  :root {
+    --bg: #0b0912; --panel: #15111f; --panel2: #1d1829; --line: #2a2440; --line2: #3a3550;
+    --ink: #dcdaea; --dim: #8b84a8; --mute: #5b5478;
+    --accent: #ff8800; --score: #46e07a;
+    --gold: #ffd447; --silver: #e6edf8; --bronze: #ef9f52;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 48px; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { margin: 0; font: 700 26px/1.2 "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+  .site { color: var(--accent); font: 600 13px/1 "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+  .meta { margin-left: auto; color: var(--mute); font-size: 12.5px; }
+  .meta button { margin-left: 8px; background: var(--panel2); color: var(--ink); border: 1px solid var(--line2);
+    font: inherit; padding: 2px 10px; cursor: pointer; }
+  .meta button:hover { border-color: var(--accent); color: var(--accent); }
+  .wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 12px; text-align: left; white-space: nowrap; }
+  th { font: 600 11px/1 "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); background: var(--panel2); border-bottom: 1px solid var(--line); }
+  td { border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; }
+  .place { width: 1%; font: 700 17px/1 "Bahnschrift", "Segoe UI", sans-serif; color: var(--dim); }
+  tr.p1 .place { color: var(--gold); font-size: 21px; }
+  tr.p2 .place { color: var(--silver); font-size: 19px; }
+  tr.p3 .place { color: var(--bronze); font-size: 18px; }
+  .name { font-weight: 600; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .name small { display: block; font-weight: 400; color: var(--mute); font-size: 12px; }
+  .tier { display: inline-block; padding: 2px 8px; font: 600 11px/1.4 "Bahnschrift", "Segoe UI", sans-serif;
+    letter-spacing: .1em; border: 1px solid; }
+  .rating { color: var(--score); font-weight: 700; font-size: 16px; }
+  .note { color: var(--dim); text-align: center; padding: 40px 16px; line-height: 1.8; }
+  .note b { color: var(--accent); font-weight: 600; }
+  @media (max-width: 560px) { .opt { display: none; } h1 { font-size: 22px; } .meta { margin-left: 0; width: 100%; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="site" id="site"></span>
+    <h1>Rankings</h1>
+    <span class="meta"><span id="when"></span><button type="button" id="again">Refresh</button></span>
+  </header>
+  <div class="wrap"><div id="out" class="note">Loading&hellip;</div></div>
+</main>
+<script>
+(function () {
+  'use strict';
+  var QS = new URLSearchParams(location.search);
+  var CFG = window.RANKING || {};
+  var SERVER = String(QS.get('server') || CFG.server || '').replace(/\/+$/, '');
+  var TITLE = String(QS.get('title') || CFG.title || '');
+  var DEMO = QS.has('demo');
+  var LIMIT = 100;
+  document.getElementById('site').textContent = TITLE;
+  document.title = (TITLE ? TITLE + ' - ' : '') + 'Rankings';
+
+  // The same tiers and colors as the in-game YOUR RANK and the Score Ranking board.
+  var TIER = { UNRANKED: '#8b84a8', BRONZE: '#d08b4a', SILVER: '#dfe6f0', GOLD: '#ffe07a', PLATINUM: '#9df3e6',
+    DIAMOND: '#b3d4ff', MASTER: '#e0b0ff', GRANDMASTER: '#ffb3b3' };
+  var SAMPLE = [
+    { name: 'champion', rating: 1299, tier: 'GRANDMASTER', wins: 110, losses: 17, winRate: 86.6, streak: 6, main: 'kfm' },
+    { name: 'rival', rating: 1141, tier: 'DIAMOND', wins: 88, losses: 47, winRate: 65.2, streak: 2, main: 'ryu' },
+    { name: 'mikel', rating: 1088, tier: 'PLATINUM', wins: 40, losses: 30, winRate: 57.1, streak: 1, character: 'ken' },
+    { name: 'chun', rating: 1012, tier: 'GOLD', wins: 25, losses: 24, winRate: 51, streak: -1, character: 'chun-li' },
+    { name: 'combo', rating: 988, tier: 'GOLD', wins: 18, losses: 20, winRate: 47.4, streak: 1, character: 'terry' },
+    { name: 'newbie', rating: 950, tier: 'SILVER', wins: 9, losses: 14, winRate: 39.1, streak: -2, character: 'kula' },
+    { name: 'rookie', rating: 1000, tier: 'UNRANKED', placement: 2, wins: 1, losses: 0, winRate: 100, streak: 1, character: 'kfm' }
+  ];
+  var out = document.getElementById('out');
+
+  function note(html) { out.className = 'note'; out.innerHTML = html; }
+  function cell(tr, text, cls) { var td = document.createElement('td'); if (cls) td.className = cls; td.textContent = text; tr.appendChild(td); return td; }
+  function render(players) {
+    if (!players.length) { note('No ranked matches yet.<br>Play a <b>RANKED MATCH</b> online to put your name here.'); return; }
+    out.className = '';
+    out.innerHTML = '<table><thead><tr><th>#</th><th>Player</th><th>Tier</th><th class="num">Rating</th>'
+      + '<th class="num">W&ndash;L</th><th class="num opt">Win %</th><th class="num opt">Streak</th></tr></thead><tbody></tbody></table>';
+    var body = out.querySelector('tbody');
+    players.forEach(function (p, i) {
+      var tr = document.createElement('tr');
+      if (i < 3) tr.className = 'p' + (i + 1);
+      cell(tr, String(i + 1), 'place');
+      // Names are user-supplied: text only, never markup.
+      var nm = cell(tr, String(p.name || '???'), 'name');
+      var ch = p.main || p.character;
+      if (ch) { var s = document.createElement('small'); s.textContent = (p.main ? 'main ' : 'last ') + ch; nm.appendChild(s); }
+      var tierName = p.placement > 0 ? 'UNRANKED' : String(p.tier || 'UNRANKED').toUpperCase();
+      var t = document.createElement('span'); t.className = 'tier';
+      t.style.color = t.style.borderColor = TIER[tierName] || TIER.UNRANKED;
+      t.textContent = tierName; var td = document.createElement('td'); td.appendChild(t); tr.appendChild(td);
+      cell(tr, String(p.rating == null ? '' : p.rating), 'num rating');
+      cell(tr, (p.wins || 0) + '–' + (p.losses || 0), 'num');
+      cell(tr, (p.winRate == null ? '' : p.winRate + '%'), 'num opt');
+      cell(tr, p.streak >= 2 ? 'W' + p.streak : p.streak <= -2 ? 'L' + (-p.streak) : '', 'num opt');
+      body.appendChild(tr);
+    });
+  }
+  var lastRefresh = 0;
+  function load() {
+    lastRefresh = Date.now();
+    document.getElementById('when').textContent = '';
+    if (DEMO) { render(SAMPLE); document.getElementById('when').textContent = 'sample data'; return; }
+    if (!SERVER) { note('No leaderboard address is set.<br>Set one in the Studio: Settings &gt; Online &gt; Leaderboard.'); return; }
+    fetch(SERVER + '/mugen/leaderboard?limit=' + LIMIT, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (b) {
+        render((b && b.players) || []);
+        document.getElementById('when').textContent = 'updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      })
+      .catch(function () { note('Could not reach the ranking server.<br>It may be waking up - try again in a moment.'); });
+  }
+  document.getElementById('again').onclick = load;
+  load();
+  // Refresh only while someone is looking: a ranking server that sleeps when
+  // idle and is billed by uptime would otherwise be kept awake by one
+  // forgotten tab. Coming back to a stale page refreshes it at once.
+  var REFRESH_MS = 5 * 60 * 1000;
+  setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && Date.now() - lastRefresh >= REFRESH_MS) load();
+  });
+})();
+</script>
+</body>
+</html>

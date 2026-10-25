@@ -1,0 +1,370 @@
+/* THE STAGES AND MUSIC TABS, PRINTED AS BOOKLET PAGES (rd-stages-music).
+   ---------------------------------------------------------------------------
+   Stages is the stage-select page: an entry per stage under an inked rule,
+   the picture on a plate cut like the select screen's with the stage's number
+   in the select screen's order, the name as a small title, its songs as
+   fill-in lines, and the thumbnail and widescreen-fit verdicts as printed
+   notes. Music is the sound test: a numbered track table (No. / Track / Size /
+   Listen / Stage fallback / remove), and on the right-hand page the menu music
+   under the table as two fill-in lines (DJ AR's tip says "at the bottom of the
+   music tab"). Both right-hand pages carry the margin notes (what each control
+   does, from the controls' own tooltips), the page's whole height (the band's
+   tips are a slip over the page, dealt from the header mascot).
+
+   Same elements, ids, handlers and behaviors as before: the .pframe is still
+   the drop target sized by fitRoster, each stage is still `.card.stage`
+   [data-id] with .thumbline / .wideline, each track still `.card[data-id]`
+   with its buttons as its own children (a read-only build hides
+   `#music .card > button`). This file loads BEFORE studio.html's own <style>,
+   whose shared button rules reach these pages at (1,7,1) - so every rule here
+   is scoped under the panel id AND the list id (2,x,x) where those reach.
+   Tokens only (themes.css / booklet.css): no raw hex, no shadow-as-card, no
+   glass, no gradients, no motion. */
+
+/* ---------- the band ---------- */
+#panel-stages > .bk-secband, #panel-music > .bk-secband { margin: 0 0 14px; }
+#panel-stages #stageBandMeta:empty, #panel-music #musicBandMeta:empty { display: none; }
+#panel-stages #stageBandMeta .bkm-narrow b { color: var(--mark); }
+
+/* ---------- the drop strip (shown while + Add is open) ---------- */
+#panel-stages > .drops .drop, #panel-music > .drops .drop {
+  padding: 10px 14px; border: 2px dashed var(--line); border-radius: 0; background: var(--paper); color: var(--ink2);
+  font: 700 var(--t-13)/1.3 var(--f-disp); letter-spacing: 0; text-transform: none;
+}
+#panel-stages > .drops .drop:hover, #panel-music > .drops .drop:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ---------- the spread: the list's page | the fold | the margin page ---------- */
+#panel-stages > .pframe, #panel-music > .pframe {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); grid-template-rows: auto auto minmax(0, 1fr);
+  column-gap: calc(var(--fold) / 2); border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: hidden;
+}
+#panel-stages > .pframe > .pbar, #panel-music > .pframe > .pbar { grid-column: 1; grid-row: 1; }
+#panel-stages > .pframe > .pickbar, #panel-music > .pframe > .pickbar { grid-column: 1; grid-row: 2; }
+#panel-stages > .pframe > .pickbar[hidden], #panel-music > .pframe > .pickbar[hidden] { display: none; }
+#panel-stages > .pframe > .pbody, #panel-music > .pframe > .pbody {
+  grid-column: 1; grid-row: 3; min-height: 0; overflow-y: auto; padding: 0 6px 18px 0;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+#panel-stages > .pframe > .bkm-margin, #panel-music > .pframe > .bkm-margin {
+  grid-column: 2; grid-row: 1 / -1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  padding: 4px 0 14px calc(var(--fold) / 2); border-left: 2px solid var(--rule);
+}
+/* the notes scroll */
+#panel-stages .bkm-margin > .bkm-scroll, #panel-music .bkm-margin > .bkm-scroll {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+/* A narrow window: the list keeps the whole page. The margin page is notes the
+   controls' own tooltips also carry (no control lives there:
+   the menu music is on the list's page), so it steps aside, as the Characters
+   page folds its index under 900px. */
+@media (max-width: 900px) {
+  #panel-stages > .pframe, #panel-music > .pframe { grid-template-columns: minmax(0, 1fr); }
+  #panel-stages > .pframe > .bkm-margin, #panel-music > .pframe > .bkm-margin { display: none; }
+}
+
+/* ---------- the page's top line: a side head with the list's controls ---------- */
+#panel-stages > .pframe > .pbar, #panel-music > .pframe > .pbar {
+  display: flex; align-items: center; gap: 8px; height: auto; min-height: 30px; padding: 4px 0 12px; margin: 0;
+  border: 0; background: transparent; box-shadow: none; color: var(--ink);
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase;
+}
+#panel-stages > .pframe > .pbar .lbl, #panel-music > .pframe > .pbar .lbl {
+  order: 0; display: flex; align-items: center; gap: 8px; color: var(--ink); white-space: nowrap; font: inherit; letter-spacing: inherit;
+}
+#panel-stages > .pframe > .pbar .lbl::before, #panel-music > .pframe > .pbar .lbl::before {
+  content: ''; flex: none; width: 10px; height: 10px; background: var(--band);
+}
+/* the count is the band's; the strip between the head and its buttons is the side head's run-in rule */
+#panel-stages > .pframe > .pbar .k, #panel-music > .pframe > .pbar .k { display: none; }
+#panel-stages > .pframe > .pbar .spacer, #panel-music > .pframe > .pbar .spacer {
+  order: 1; flex: 1 1 auto; height: 2px; min-width: 12px; background: var(--rule);
+}
+#panel-stages > .pframe > .pbar button, #panel-music > .pframe > .pbar button { order: 2; }
+/* THE MASTER PREVIEW VOLUME (rd-r3-small, 2026-10-18; studio.html
+   masterPreviewVolume): last on the sound test's top line, after the list's
+   keys and set off by a rule - a fill-in of its own, the booklet's range, the
+   level in the data face. Every preview starts at it. */
+#panel-music > .pframe > .pbar .mvol {
+  order: 3; flex: none; display: inline-flex; align-items: center; gap: 8px; margin: 0 0 0 4px; padding: 0 0 0 12px;
+  border-left: 2px solid var(--rule); color: var(--ink); cursor: pointer; white-space: nowrap;
+}
+#panel-music > .pframe > .pbar .mvol .bk-rng { width: 128px; min-width: 88px; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+#panel-music > .pframe > .pbar .mvol output {
+  min-width: 4ch; text-align: right; color: var(--ink2); font: 400 var(--t-12)/1 var(--f-data); text-transform: none; font-variant-numeric: tabular-nums;
+}
+
+/* buttons on these pages: the booklet's small button (.bk-btn.sm), restated for
+   the Studio's own <button class="tiny"> elements these lists are built from */
+#panel-stages .pframe > :is(.pbar, .pickbar) button, #panel-music .pframe > :is(.pbar, .pickbar) button,
+#panel-stages #stages .card button, #panel-music #music .card button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 24px; min-width: 0; padding: 0 8px; margin: 0;
+  border: 1.5px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); cursor: pointer; white-space: nowrap;
+  font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: 0; text-transform: none; box-shadow: none; transition: none;
+}
+#panel-stages .pframe > :is(.pbar, .pickbar) button::before, #panel-stages .pframe > :is(.pbar, .pickbar) button::after,
+#panel-music .pframe > :is(.pbar, .pickbar) button::before, #panel-music .pframe > :is(.pbar, .pickbar) button::after { content: none; display: none; }
+#panel-stages .pframe > :is(.pbar, .pickbar) button:hover, #panel-music .pframe > :is(.pbar, .pickbar) button:hover,
+#panel-stages #stages .card button:hover, #panel-music #music .card button:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#panel-stages .pframe > :is(.pbar, .pickbar) button:active, #panel-music .pframe > :is(.pbar, .pickbar) button:active,
+#panel-stages #stages .card button:active, #panel-music #music .card button:active,
+#panel-stages .pframe > :is(.pbar, .pickbar) button[aria-pressed="true"], #panel-music .pframe > :is(.pbar, .pickbar) button[aria-pressed="true"],
+#panel-stages .pframe > :is(.pbar, .pickbar) button[aria-expanded="true"], #panel-music .pframe > :is(.pbar, .pickbar) button[aria-expanded="true"] {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+#panel-stages .pframe > :is(.pbar, .pickbar) button:disabled, #panel-music .pframe > :is(.pbar, .pickbar) button:disabled,
+#panel-stages #stages .card button:disabled, #panel-music #music .card button:disabled {
+  background: var(--paper); color: var(--ink2); border-color: var(--line); cursor: default;
+}
+#panel-stages .pframe > :is(.pbar, .pickbar) button.danger, #panel-music .pframe > :is(.pbar, .pickbar) button.danger,
+#panel-stages #stages .card button.danger, #panel-music #music .card button.danger {
+  border-color: var(--flag); color: var(--ink); background: var(--paper); font-size: var(--t-13);
+}
+#panel-stages .pframe > :is(.pbar, .pickbar) button.danger:hover, #panel-music .pframe > :is(.pbar, .pickbar) button.danger:hover,
+#panel-stages .pframe > :is(.pbar, .pickbar) button.danger.armed, #panel-music .pframe > :is(.pbar, .pickbar) button.danger.armed,
+#panel-stages #stages .card button.danger:hover, #panel-music #music .card button.danger:hover,
+#panel-stages #stages .card button.danger.armed, #panel-music #music .card button.danger.armed {
+  background: var(--flag); color: var(--onflag); border-color: var(--flag);
+}
+#panel-stages #stages .card button.danger.armed, #panel-music #music .card button.danger.armed { font-size: var(--t-12); }
+
+/* ---------- Select mode's strip: printed reversed, a mode is on ---------- */
+#panel-stages > .pframe > .pickbar, #panel-music > .pframe > .pickbar {
+  height: auto; min-height: 34px; margin: 0 0 12px; padding: 4px 6px 4px 12px; border: 0; background: var(--plate); color: var(--ink);
+  box-shadow: inset 4px 0 0 var(--band); font: 700 var(--t-12)/1.2 var(--f-disp); letter-spacing: 0; text-transform: none;
+}
+#panel-stages > .pframe > .pickbar .k, #panel-music > .pframe > .pickbar .k { color: var(--ink); font: inherit; letter-spacing: 0; }
+#panel-stages > .pframe > .pickbar .k.hint, #panel-music > .pframe > .pickbar .k.hint { color: var(--ink2); }
+
+/* ================================================================== */
+/* STAGES: the stage-select page                                       */
+/* ================================================================== */
+#panel-stages #stages {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 430px), 1fr)); gap: 6px 30px; align-items: start;
+}
+#panel-stages #stages .card.stage {
+  position: relative; display: grid; grid-template-columns: 176px minmax(0, 1fr); column-gap: 14px; align-items: start;
+  margin: 0; padding: 12px 0 16px; border: 0; border-top: 2px solid var(--ink); border-radius: 0;
+  background: transparent; box-shadow: none; color: var(--ink);
+}
+/* the plate: the stage's picture, its number in the select screen's order */
+#panel-stages #stages .card.stage .stplate {
+  grid-column: 1; grid-row: 1; width: 176px; aspect-ratio: 16 / 10; display: block;
+}
+#panel-stages #stages .card.stage .stplate > img.sthumb {
+  width: 100%; height: 100%; object-fit: cover; border: 0; border-radius: 0; margin: 0; background: transparent;
+}
+#panel-stages #stages .card.stage .stplate .stno {
+  position: absolute; left: 0; top: 0; z-index: 2; padding: 4px 8px 3px 6px; background: var(--band); color: var(--onband);
+  font: italic 800 var(--t-13)/1 var(--f-disp); font-stretch: 110%; font-variant-numeric: tabular-nums;
+}
+#panel-stages #stages .card.stage .stplate .nopic {
+  display: none; position: absolute; inset: 0; place-items: center; color: var(--ink2); font: 700 var(--t-12)/1 var(--f-disp);
+}
+#panel-stages #stages .card.stage .stplate.empty .nopic { display: grid; }
+
+/* the entry's text column */
+#panel-stages #stages .card.stage > .body { grid-column: 2; grid-row: 1; display: block; min-width: 0; }
+#panel-stages #stages .card.stage .line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+#panel-stages #stages .card.stage .line.ident { display: block; padding-right: 40px; }
+#panel-stages #stages .card.stage:has(> button.danger.armed) .line.ident { padding-right: 76px; }
+#panel-stages #stages .card.stage .name {
+  min-width: 0; margin: 0; color: var(--ink); overflow-wrap: anywhere;
+  font: italic 800 var(--t-20)/1.05 var(--f-disp); font-stretch: 108%; letter-spacing: -.005em; text-transform: uppercase;
+}
+#panel-stages #stages .card.stage .meta {
+  flex: 0 1 auto; color: var(--ink2); font: 400 var(--t-12)/1.45 var(--f-body); letter-spacing: 0; text-transform: none;
+}
+#panel-stages #stages .card.stage .line.ident .meta { margin-top: 3px; font-family: var(--f-data); overflow-wrap: anywhere; }
+
+/* the songs: fill-in lines - the label once, a blank per song, the empty blank that adds the next */
+#panel-stages #stages .card.stage .line.songs {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: end; margin-top: 8px;
+}
+#panel-stages #stages .card.stage .line.songs > label {
+  grid-column: 1; grid-row: 1; margin: 0; padding-bottom: 6px; color: var(--ink2);
+  font: 700 var(--t-12)/1.2 var(--f-disp); letter-spacing: 0; text-transform: capitalize;
+}
+#panel-stages #stages .card.stage .line.songs > .fill-v,
+#panel-stages #stages .card.stage .line.songs > .meta { grid-column: 2; }
+#panel-stages #stages .card.stage .line.songs > .meta { padding-top: 2px; }
+#panel-stages #stages .card.stage .fill-v { position: relative; display: block; min-width: 0; }
+#panel-stages #stages .card.stage .fill-v > select {
+  appearance: none; -webkit-appearance: none; display: block; width: 100%; max-width: none; height: 28px; padding: 0 24px 2px 2px; margin: 0;
+  border: 0; border-bottom: 2px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); box-shadow: none;
+  font: 700 var(--t-13)/1 var(--f-body); cursor: pointer; text-overflow: ellipsis;
+}
+#panel-stages #stages .card.stage .fill-v > select:hover { border-bottom-color: var(--ink); color: var(--ink); }
+#panel-stages #stages .card.stage .fill-v > select:focus-visible { outline: none; border-bottom: 3px solid var(--focus); padding-bottom: 1px; }
+#panel-stages #stages .card.stage .fill-v > select option { background: var(--paper); color: var(--ink); }
+#panel-stages #stages .card.stage .fill-v:has(select)::after {
+  content: ''; position: absolute; right: 4px; bottom: 11px; width: 10px; height: 6px; background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%); pointer-events: none;
+}
+/* the blank that adds another song: a dashed rule, quieter type */
+#panel-stages #stages .card.stage .fill-v.addsong > select { border-bottom-style: dashed; color: var(--ink2); font-weight: 600; }
+#panel-stages #stages .card.stage .fill-v > .roval {
+  display: block; margin: 0; padding: 0 2px 6px; border-bottom: 2px solid var(--rule); color: var(--ink); font: 700 var(--t-13)/1.2 var(--f-body);
+}
+
+/* the printed notes: the thumbnail line, the thumbnail-fit and widescreen-fit verdicts */
+#panel-stages #stages .card.stage .stnotes { margin-top: 10px; display: grid; row-gap: 6px; }
+#panel-stages #stages .card.stage .thumbline, #panel-stages #stages .card.stage .fitline, #panel-stages #stages .card.stage .wideline { min-height: 24px; }
+#panel-stages #stages .card.stage .fitline:empty, #panel-stages #stages .card.stage .wideline:empty { display: none; }
+#panel-stages #stages .card.stage .thumbline .meta, #panel-stages #stages .card.stage .fitline .meta, #panel-stages #stages .card.stage .wideline .meta { font-size: var(--t-12); }
+/* the stage ships its own select picture: a printed check */
+#panel-stages #stages .card.stage .thumbline[data-state="own"] .meta::before { content: '\2713'; margin-right: 6px; color: var(--good); font-weight: 800; }
+/* fitted: a printed stamp; offered: the button, and the verdict on a warning rule */
+#panel-stages #stages .card.stage .fitline .bkm-verdict, #panel-stages #stages .card.stage .wideline .bkm-verdict {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink);
+  font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
+}
+#panel-stages #stages .card.stage .fitline .bkm-verdict::before, #panel-stages #stages .card.stage .wideline .bkm-verdict::before { content: '\2713'; font-size: var(--t-13); }
+#panel-stages #stages .card.stage .fitline[data-state="offer"], #panel-stages #stages .card.stage .wideline[data-state="fits"] { padding-left: 10px; box-shadow: inset 3px 0 0 var(--warn); }
+#panel-stages #stages .card.stage .fitline .bkm-why, #panel-stages #stages .card.stage .wideline .bkm-why { flex: 1 1 160px; }
+/* made for Ikemen before 2025 (a 3D model's texture transforms): the same
+   printed note - a stamp once ignored, the warning rule only where the
+   textures are predicted to smear, a plain line where they are not */
+#panel-stages #stages .card.stage .texline { min-height: 24px; }
+#panel-stages #stages .card.stage .texline .meta { font-size: var(--t-12); }
+#panel-stages #stages .card.stage .texline .bkm-verdict {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink);
+  font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
+}
+#panel-stages #stages .card.stage .texline .bkm-verdict::before { content: '\2713'; font-size: var(--t-13); }
+#panel-stages #stages .card.stage .texline[data-state="smear"] { padding-left: 10px; box-shadow: inset 3px 0 0 var(--warn); }
+#panel-stages #stages .card.stage .texline .bkm-why { flex: 1 1 160px; }
+/* fit camera to model (a 3D stage's camera running past its model): the same
+   printed note - a stamp once fitted, the warning rule where it is offered,
+   a plain line where the bounds cannot help */
+#panel-stages #stages .card.stage .camline { min-height: 24px; }
+#panel-stages #stages .card.stage .camline:empty { display: none; }
+#panel-stages #stages .card.stage .camline .meta { font-size: var(--t-12); }
+#panel-stages #stages .card.stage .camline .bkm-verdict {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink);
+  font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
+}
+#panel-stages #stages .card.stage .camline .bkm-verdict::before { content: '\2713'; font-size: var(--t-13); }
+#panel-stages #stages .card.stage .camline[data-state="offer"] { padding-left: 10px; box-shadow: inset 3px 0 0 var(--warn); }
+#panel-stages #stages .card.stage .camline .bkm-why { flex: 1 1 160px; }
+/* fix flicker on desktop (a 3D stage's near plane, nearfit.js): the same printed note */
+#panel-stages #stages .card.stage .nearline { min-height: 24px; }
+#panel-stages #stages .card.stage .nearline:empty { display: none; }
+#panel-stages #stages .card.stage .nearline .meta { font-size: var(--t-12); }
+#panel-stages #stages .card.stage .nearline .bkm-verdict {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink);
+  font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
+}
+#panel-stages #stages .card.stage .nearline .bkm-verdict::before { content: '\2713'; font-size: var(--t-13); }
+#panel-stages #stages .card.stage .nearline[data-state="offer"] { padding-left: 10px; box-shadow: inset 3px 0 0 var(--warn); }
+#panel-stages #stages .card.stage .nearline .bkm-why { flex: 1 1 160px; }
+/* a missing attached character (attachfix.js): the warning rule while the
+   game would stop on the stage, the printed stamp once it plays without it */
+#panel-stages #stages .card.stage .attachline { min-height: 24px; }
+#panel-stages #stages .card.stage .attachline .meta { font-size: var(--t-12); }
+#panel-stages #stages .card.stage .attachline .bkm-verdict {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink);
+  font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+#panel-stages #stages .card.stage .attachline .bkm-verdict::before { content: '\2713'; font-size: var(--t-13); }
+#panel-stages #stages .card.stage .attachline[data-state="stops"] { padding-left: 10px; box-shadow: inset 3px 0 0 var(--warn); }
+#panel-stages #stages .card.stage .attachline .bkm-why { flex: 1 1 160px; overflow-wrap: anywhere; }
+
+/* remove: the entry's top right corner, over the title's reserved end (the notes and songs get the full column) */
+#panel-stages #stages .card.stage > button.danger { position: absolute; top: 12px; right: 0; min-width: 28px; }
+
+/* Select mode: the tick sits on the plate's top right; a ticked entry is screened */
+body.picking-stage #panel-stages #stages .card[data-id]::before {
+  position: absolute; top: 18px; left: 150px; z-index: 3; width: 18px; height: 18px; border: 2px solid var(--ink); background: var(--paper);
+}
+body.picking-stage #panel-stages #stages .card.picked::before { background: var(--ink); box-shadow: inset 0 0 0 3px var(--paper); border-color: var(--ink); }
+body.picking-stage #panel-stages #stages .card.picked { background: var(--plate); border-color: var(--band); box-shadow: none; }
+
+@media (max-width: 1100px) {
+  #panel-stages #stages .card.stage { grid-template-columns: 144px minmax(0, 1fr); }
+  #panel-stages #stages .card.stage .stplate { width: 144px; }
+  body.picking-stage #panel-stages #stages .card[data-id]::before { left: 118px; }
+}
+
+/* ================================================================== */
+/* MUSIC: the sound test                                               */
+/* ================================================================== */
+/* One grid; each row is a subgrid, so the columns line up across rows. */
+#panel-music #music {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto auto auto auto; column-gap: 0; align-items: stretch;
+}
+#panel-music #music > .mhead {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; height: var(--bk-row);
+  background: var(--band); color: var(--onband); font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .02em;
+}
+#panel-music #music > .mhead > span { padding: 0 10px; white-space: nowrap; }
+#panel-music #music > .mhead > span + span { border-left: 2px solid var(--paper); align-self: stretch; display: flex; align-items: center; }
+#panel-music #music > .mhead > span.r { justify-content: flex-end; }
+#panel-music #music > .mhead > span:nth-child(5) { grid-column: span 2; }
+#panel-music #music > .card[data-id] {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; position: relative;
+  min-height: 36px; margin: 0; padding: 0; gap: 0; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0;
+  background: transparent; box-shadow: none; color: var(--ink);
+}
+#panel-music #music > .card[data-id]:nth-child(odd):not(:first-child) { background: var(--plate); }
+#panel-music #music > .card[data-id] > * { min-width: 0; padding: 4px 10px; margin: 0; }
+#panel-music #music > .card[data-id] > .no {
+  color: var(--mark); font: italic 800 var(--t-13)/1 var(--f-disp); font-stretch: 110%; font-variant-numeric: tabular-nums;
+}
+#panel-music #music > .card[data-id] > .name {
+  min-width: 0; color: var(--ink); font: 600 var(--t-13)/1.3 var(--f-body); overflow-wrap: anywhere; letter-spacing: 0;
+}
+#panel-music #music > .card[data-id] > .meta {
+  flex: none; color: var(--ink2); font: 400 var(--t-12)/1.3 var(--f-body); letter-spacing: 0; text-transform: none;
+}
+#panel-music #music > .card[data-id] > .meta.size { font-family: var(--f-data); text-align: right; white-space: nowrap; }
+#panel-music #music > .card[data-id] > .meta.fb { padding-right: 0; }
+/* not the fallback: no stamp, and "Use as fallback" starts the column under its head */
+#panel-music #music > .card[data-id] > .meta.fb:empty { display: none; }
+#panel-music #music > .card[data-id] > .meta.fb:empty + button { grid-column: span 2; }
+/* the fallback track: a printed stamp in its column */
+#panel-music #music > .card.fallback > .meta.fb {
+  justify-self: start; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; margin-left: 10px; white-space: nowrap;
+  color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); font: 800 var(--t-11)/1 var(--f-disp); letter-spacing: .03em; text-transform: uppercase;
+}
+#panel-music #music > .card.fallback > .meta.fb::before { content: '\2605'; font-size: var(--t-12); }
+#panel-music #music > .card[data-id] > button.danger { min-width: 28px; justify-self: end; margin: 0 6px 0 10px; padding: 0 8px; }
+#panel-music #music > .card[data-id] > button:not(.danger) { justify-self: start; margin-left: 8px; }
+/* Listen: the play button, then the player in its place */
+#panel-music #music > .card[data-id] audio { display: block; width: 210px; height: 28px; }
+[data-paper="night"] #panel-music #music audio { color-scheme: dark; }
+#panel-music #music > .mempty {
+  grid-column: 1 / -1; margin: 0; padding: 22px 18px; border: 2px dashed var(--line); color: var(--ink2); font: 600 var(--t-13)/1.5 var(--f-body);
+}
+/* Select mode: the tick takes the No. column */
+body.picking-music #panel-music #music .card[data-id]::before {
+  position: absolute; left: 12px; top: 50%; margin-top: -9px; z-index: 2; width: 18px; height: 18px; border: 2px solid var(--ink); background: var(--paper);
+}
+body.picking-music #panel-music #music .card[data-id] > .no { visibility: hidden; }
+body.picking-music #panel-music #music .card.picked::before { background: var(--ink); box-shadow: inset 0 0 0 3px var(--paper); border-color: var(--ink); }
+body.picking-music #panel-music #music .card.picked { background: var(--plate); border-color: var(--rule); box-shadow: inset 4px 0 0 var(--band); }
+@media (max-width: 1100px) {
+  #panel-music #music > .card[data-id] audio { width: 170px; }
+}
+
+/* ---------- the margin page: notes, the menu music ---------- */
+#panel-stages .bkm-scroll > .bk-sh, #panel-music .bkm-scroll > .bk-sh { margin: 0 0 10px; }
+/* the menu music: under the track table, two fill-in lines side by side */
+#panel-music .bkm-menu { margin-top: 26px; }
+#panel-music .bkm-menu > .bk-sh { margin: 0 0 8px; }
+#panel-music #menuMusic { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 30px; }
+#panel-music #menuMusic .bk-fill { --fill-l: 108px; }
+#panel-music #menuMusic .bk-fill .fill-v > select { font-size: var(--t-13); }
+#panel-music #menuMusic .bk-fill .fill-v > .roval {
+  display: block; margin: 0; padding: 0 2px 6px; border-bottom: 2px solid var(--rule); color: var(--ink); font: 700 var(--t-13)/1.2 var(--f-body);
+}
+#panel-music .bkm-cap { margin: 8px 0 0; }
+.bkm-notes { margin: 0; }
+.bkm-notes dt {
+  margin: 12px 0 0; color: var(--ink); font: 800 var(--t-12)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .02em; text-transform: uppercase;
+}
+.bkm-notes dt:first-child { margin-top: 0; }
+.bkm-notes dd { margin: 3px 0 0; color: var(--ink2); font: 400 var(--t-12)/1.5 var(--f-body); }
+.bkm-notes dd b { color: var(--ink); font-weight: 700; }
+/* A build opened read-only adds and removes nothing: those notes go with the controls. */
+body.readonly .bkm-notes .rw { display: none; }

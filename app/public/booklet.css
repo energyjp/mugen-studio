@@ -1,0 +1,449 @@
+/* MUGEN STUDIO - THE BOOKLET: the shared components (2026-10-18).
+   The Studio is printed like a 2000s fighting-game instruction booklet. This
+   file holds the faces, the constants and every shared component; the inks
+   are themes.css's (ten printings, tools/printings.js). Link it AFTER
+   themes.css and BEFORE a page's own <style>; booklet.js beside it.
+
+   THE PREFIX. studio.html already uses .btn, .sh, .flag, .hint, .num, .k,
+   .title ... for other things, so every component's ROOT class here is
+   prefixed `bk-` (.bk-btn, .bk-sh, .bk-tip). Modifiers and inner parts keep
+   the round-2 mockup's short names and are only ever matched UNDER their root
+   (.bk-btn.primary, .bk-tip .who), so they cannot leak into old markup.
+   The contract for every lane: $X/rd-foundation/CONTRACT.md.
+
+   RULES: square corners everywhere; no glass, blur, shadows-as-cards, pills,
+   glows or gradient skies; nothing animates but a character's sprites and
+   SHiZUKA's glasses; colors only through the tokens. */
+
+/* ------------------------------------------------------------------ */
+/* 1. FACES (bundled, OFL: public/fonts/OFL-*.txt)                     */
+/* ------------------------------------------------------------------ */
+@font-face {
+  font-family: 'Saira'; font-style: normal; font-weight: 100 900; font-stretch: 50% 125%; font-display: swap;
+  src: url('/fonts/Saira[wdth,wght].ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Saira'; font-style: italic; font-weight: 100 900; font-stretch: 50% 125%; font-display: swap;
+  src: url('/fonts/Saira-Italic[wdth,wght].ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Share Tech Mono'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/ShareTechMono-Regular.ttf') format('truetype');
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. CONSTANTS: type, grid, content colors (same in every printing)  */
+/* ------------------------------------------------------------------ */
+/* :root:root outranks a page's own :root, so the Studio's face tokens
+   (--fd display, --fu UI, --fm mono) become the booklet's faces too. */
+:root:root {
+  --bk-tick: polygon(14% 52%, 28% 38%, 42% 52%, 74% 18%, 88% 32%, 42% 80%);   /* the printed tick: .bk-chk, and every self-drawn checkbox an area file prints */
+  --f-jp: 'Yu Gothic UI', 'Yu Gothic', Meiryo, sans-serif;           /* Japanese kickers set on their own */
+  --f-disp: 'Saira', var(--f-jp);                                     /* bands, side heads, tabs, buttons, numerals */
+  --f-body: 'Saira', var(--f-jp);                                     /* running text, names */
+  --f-data: 'Share Tech Mono', Consolas, var(--f-jp), monospace;      /* files, paths, state numbers, frame data */
+  --fd: var(--f-disp); --fu: var(--f-body); --fm: var(--f-data);
+
+  /* type scale (px at the 1400x900 design size) */
+  --t-11: 11px; --t-12: 12px; --t-13: 13.5px; --t-16: 16px; --t-20: 20px; --t-26: 26px; --t-40: 40px; --t-64: 64px;
+
+  /* grid */
+  --head-h: 52px;       /* running head */
+  --foot-h: 34px;       /* running foot */
+  --thumbs-w: 46px;     /* thumb-tab rail on the outer (right) edge */
+  --secband-h: 46px;    /* section color band */
+  --m: 28px;            /* page margin */
+  --g: 16px;            /* column gutter */
+  --fold: 33px;         /* the fold between the two pages of a spread */
+  --bk-row: 26px;       /* table / index row (the Studio's --row is something else) */
+  --slant: 18px;        /* the speed cut on bands, plates and the folio */
+
+  /* content colors: the engine's own, never re-inked */
+  --clsn1: #E8251C; --clsn2: #2457F0;
+  /* the Studio's amber template mark, constant; NON-TEXT only. (--ok, the green, is a
+     printing token in themes.css: the same fitted green as --good, text-safe.) */
+  --tmpl: #E0A000;
+  /* the band's own hues (black type on them, 6:1 or better) */
+  --wb: #4A9EFF; --ar: #FF5533; --sz: #AA66FF; --onmember: #000000;
+  /* their lit hues: a tip's name and line on the reverse-printed slip (the old toast tip's, GRAIL 3.1) */
+  --wb-lit: #85BFFF; --ar-lit: #FF2F26; --sz-lit: #CC99FF;
+}
+@media (max-width: 1100px), (max-height: 760px) {
+  :root:root { --head-h: 44px; --foot-h: 30px; --thumbs-w: 38px; --secband-h: 38px; --m: 18px; --g: 12px; --fold: 21px;
+    --t-26: 22px; --t-40: 32px; --t-64: 48px; --bk-row: 24px; --slant: 14px; }
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. BASE: square everything, the focus ring, the selection          */
+/* ------------------------------------------------------------------ */
+/* A component's own display never beats the hidden attribute. */
+[class^="bk-"][hidden], [class*=" bk-"][hidden] { display: none !important; }
+*, *::before, *::after { border-radius: 0 !important; }
+/* studio.html's old `button { border-radius: 4px !important }` outranks `*` */
+:root button, :root select, :root input { border-radius: 0 !important; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+::selection { background: var(--band); color: var(--onband); }
+.bk-mono, .bk-data { font-family: var(--f-data); font-size: var(--t-12); }
+.bk-num { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.bk-dim { color: var(--ink2); }
+.bk-jp { font-family: var(--f-jp); font-weight: 700; letter-spacing: .02em; }
+.bk-nocaps { text-transform: none !important; }   /* names keep their case: SHiZUKA, chun_li_jj */
+.bk-est::before { content: '\2248'; margin-right: 1px; }   /* the Studio's estimate mark */
+.bk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.bk-px, .bk-px img { image-rendering: pixelated; }
+@media (prefers-reduced-motion: reduce) { .bk-rhead *, .bk-thumbs * { transition: none !important; } }
+
+/* ------------------------------------------------------------------ */
+/* 4. THE CHROME: running head, thumb-tab rail, running foot           */
+/*    (studio.html places them; any page may reuse the classes)        */
+/* ------------------------------------------------------------------ */
+.bk-rhead {
+  display: flex; align-items: center; gap: 14px; height: var(--head-h); padding: 0 var(--m) 0 0; min-width: 0;
+  border-bottom: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+}
+.bk-rhead-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; white-space: nowrap; }
+.bk-rhead-title b, .bk-rhead-title h1 { margin: 0; font: italic 800 var(--t-20)/1 var(--f-disp); font-stretch: 112%; letter-spacing: -.01em; }
+.bk-rhead-title span { font: 400 var(--t-12)/1 var(--f-body); color: var(--ink2); overflow: hidden; text-overflow: ellipsis; }
+.bk-rhead-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* the publisher's mark: energy.jp on a band plate with the speed cut */
+.bk-imprint {
+  position: relative; isolation: isolate; display: inline-flex; align-items: center; align-self: stretch;
+  padding: 0 calc(var(--slant) + 16px) 0 var(--m); margin-right: calc(var(--slant) - 6px);
+  font: italic 800 var(--t-16)/1 var(--f-disp); font-stretch: 108%; letter-spacing: .005em;
+  color: var(--onband); text-decoration: none; white-space: nowrap; border: 0; background: none; cursor: pointer;
+}
+.bk-imprint::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--band);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+.bk-imprint::after { content: ''; position: absolute; top: 0; bottom: 0; right: calc(-1 * var(--slant) + 2px); width: calc(var(--slant) + 7px);
+  z-index: -1; background: var(--band2); clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+.bk-mark { font: italic 800 1em/1 var(--f-disp); font-stretch: 108%; color: var(--mark); white-space: nowrap; }
+
+/* the thumb-tab rail: tabs printed down the outer edge, rotated caps. The
+   inactive tabs are printed in the printing's own inks (--tab, --ontab,
+   --tab-hover, --tab-edge: tools/printings.js measures them), the active one
+   in the band ink pulled into the page. studio.html restates these rules for
+   its rail (#main > nav.tabs) and booklet-export.css for the back page's "no
+   active tab" state: keep the three in step. */
+.bk-thumbs {
+  display: flex; flex-direction: column; gap: 3px; padding: 10px 0; min-height: 0; width: var(--thumbs-w);
+  border-left: 2px solid var(--ink); background: var(--paper);
+}
+.bk-thumb {
+  position: relative; flex: 1 1 auto; min-height: 0; padding: 10px 0; margin: 0 0 0 6px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  writing-mode: vertical-rl; text-orientation: mixed;
+  background: var(--tab); color: var(--ontab); box-shadow: inset 0 0 0 2px var(--tab-edge); border: 0; cursor: pointer; white-space: nowrap;
+  font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .06em; text-transform: uppercase;
+}
+.bk-thumb:hover { background: var(--tab-hover); color: var(--ontab); }
+.bk-thumb[aria-selected="true"], .bk-thumb[aria-current="page"] {
+  background: var(--band); color: var(--onband); margin-left: -12px; box-shadow: inset -5px 0 0 var(--band2);
+}
+.bk-thumb:focus-visible { outline: 3px solid var(--focus); outline-offset: -5px; }
+.bk-thumb[aria-selected="true"]:focus-visible, .bk-thumb[aria-current="page"]:focus-visible { outline-color: var(--onband); }
+.bk-thumb small, .bk-thumb .n { font: 600 var(--t-11)/1 var(--f-data); letter-spacing: 0; text-transform: none; }
+
+/* the running foot: status | imprint line | folio */
+.bk-rfoot {
+  display: flex; align-items: stretch; height: var(--foot-h); min-width: 0;
+  border-top: 2px solid var(--ink); background: var(--paper); color: var(--ink); font-size: var(--t-12);
+}
+.bk-rfoot-status { display: flex; align-items: center; gap: 10px; padding-left: var(--m); min-width: 0; flex: 1 1 auto; white-space: nowrap; overflow: hidden; }
+.bk-rfoot-status b { font: 700 var(--t-13)/1 var(--f-disp); }
+.bk-rfoot-imprint { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 16px; color: var(--ink2); white-space: nowrap; }
+.bk-folio {
+  position: relative; isolation: isolate; display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  padding: 0 var(--m) 0 calc(var(--slant) + 14px); min-width: calc(var(--thumbs-w) + 70px);
+  color: var(--onband); white-space: nowrap;
+}
+.bk-folio::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--band);
+  clip-path: polygon(var(--slant) 0, 100% 0, 100% 100%, 0 100%); }
+.bk-folio b { font: italic 800 var(--t-20)/1 var(--f-disp); font-stretch: 110%; font-variant-numeric: tabular-nums; }
+.bk-folio small { font: 600 var(--t-11)/1 var(--f-disp); letter-spacing: .02em; }
+
+/* ------------------------------------------------------------------ */
+/* 5. PAGES: section band, spreads, side heads, titles                 */
+/* ------------------------------------------------------------------ */
+.bk-secband {
+  display: flex; align-items: stretch; gap: 16px; flex: 0 0 var(--secband-h); min-height: var(--secband-h);
+  border-bottom: 3px solid var(--band); padding-right: var(--m); min-width: 0;
+}
+.bk-secband-t {
+  position: relative; isolation: isolate; display: flex; align-items: center; gap: 12px; margin: 0;
+  padding: 0 calc(var(--slant) + 22px) 0 var(--m); margin-right: calc(var(--slant) + 4px);
+  color: var(--onband); white-space: nowrap;
+}
+.bk-secband-t::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--band);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+.bk-secband-t::after { content: ''; position: absolute; top: 0; bottom: 0; right: calc(-1 * var(--slant) - 6px); width: calc(var(--slant) + 12px);
+  z-index: -1; background: var(--band2); clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+.bk-secband-t .t { font: italic 800 var(--t-26)/1 var(--f-disp); font-stretch: 116%; letter-spacing: -.005em; text-transform: uppercase; }
+.bk-secband-t .k { font: 700 var(--t-12)/1 var(--f-jp); letter-spacing: .04em; }
+.bk-secband-t .no { font: 800 var(--t-16)/1 var(--f-disp); padding-right: 4px; }
+.bk-secband-meta { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--ink2); font-size: var(--t-12); white-space: nowrap; }
+.bk-secband-meta b { color: var(--ink); font: 700 var(--t-13)/1 var(--f-disp); }
+
+.bk-spread { flex: 1 1 auto; min-height: 0; display: grid;
+  grid-template-columns: minmax(0, var(--l, 1fr)) var(--fold) minmax(0, var(--r, 1fr)); }
+.bk-fold { position: relative; }
+.bk-fold::after { content: ''; position: absolute; top: 14px; bottom: 14px; left: 50%; width: 2px; margin-left: -1px; background: var(--rule); }
+.bk-pg { min-width: 0; min-height: 0; overflow: auto; padding: 18px 0; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.bk-pg.l { padding-left: var(--m); }
+.bk-pg.r { padding-right: var(--m); }
+.bk-single { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 18px var(--m); }
+.bk-cols { display: grid; grid-template-columns: repeat(var(--n, 6), minmax(0, 1fr)); column-gap: var(--g); row-gap: 12px; }
+
+/* side head: the technical manual's square, caps, a run-in rule */
+.bk-sh { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; padding: 0; border: 0; color: var(--ink);
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase; }
+.bk-sh::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); align-self: center; }
+.bk-sh::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); align-self: center; min-width: 12px; }
+.bk-sh .k { font: 700 var(--t-11)/1 var(--f-jp); color: var(--ink2); text-transform: none; letter-spacing: .04em; }
+.bk-sh .aside { order: 3; font: 400 var(--t-12)/1 var(--f-body); color: var(--ink2); text-transform: none; letter-spacing: 0; }
+.bk-sh.plain::after { display: none; }
+
+.bk-title { padding: 0; border: 0; color: var(--ink); -webkit-text-fill-color: currentColor; margin: 0; font: italic 800 var(--t-40)/.95 var(--f-disp); font-stretch: 112%; letter-spacing: -.01em; text-transform: uppercase; }
+.bk-title + .sub { font: 700 var(--t-16)/1.3 var(--f-body); color: var(--ink2); margin-top: 4px; }
+.bk-slotno { font: italic 800 var(--t-16)/1 var(--f-disp); color: var(--mark); font-variant-numeric: tabular-nums; }
+.bk-slotno small { font: 600 var(--t-12)/1 var(--f-body); color: var(--ink2); font-style: normal; margin-left: 4px; }
+.bk-caption { font-size: var(--t-12); color: var(--ink2); line-height: 1.45; }
+
+/* ------------------------------------------------------------------ */
+/* 6. CONTROLS                                                         */
+/* ------------------------------------------------------------------ */
+.bk-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 30px; padding: 0 12px; margin: 0;
+  border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; white-space: nowrap;
+  font: 700 var(--t-13)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .005em; text-decoration: none; box-shadow: none;
+}
+.bk-btn svg { width: 11px; height: 11px; fill: currentColor; flex: none; }
+.bk-btn:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+.bk-btn:active, .bk-btn[aria-pressed="true"], .bk-btn[aria-expanded="true"] { background: var(--ink); color: var(--paper); }
+.bk-btn.primary { background: var(--band); color: var(--onband); border-color: var(--band); }
+.bk-btn.primary:hover { background: var(--band2); border-color: var(--band2); color: var(--onband2); }
+.bk-btn.go { background: var(--spot); color: var(--onspot); border-color: var(--ink); font-weight: 800; }
+.bk-btn.go:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+[data-paper="night"] .bk-btn.go { border-color: var(--spot); }
+[data-paper="night"] .bk-btn.go:hover { background: var(--paper); color: var(--ink); border-color: var(--spot); }
+.bk-btn.quiet { border-color: transparent; background: transparent; padding: 0 6px; }
+.bk-btn.quiet:hover { border-color: var(--line); background: transparent; }
+.bk-btn.sm { height: 24px; padding: 0 8px; font-size: var(--t-12); border-width: 1.5px; }
+.bk-btn.lg { height: 38px; padding: 0 18px; font-size: var(--t-16); }
+.bk-btn[disabled], .bk-btn[aria-disabled="true"] { border-color: var(--line); color: var(--ink2); background: var(--paper); cursor: default; }
+.bk-btn.danger { border-color: var(--flag); color: var(--ink); }
+.bk-btn.danger:hover { background: var(--flag); color: var(--onflag); }
+
+/* segmented choice: Website / Desktop, Day / Night, Edit off / on */
+.bk-seg { display: inline-flex; border: 2px solid var(--ink); }
+.bk-seg > button { height: 26px; padding: 0 12px; margin: 0; border: 0; background: var(--paper); color: var(--ink); cursor: pointer;
+  font: 700 var(--t-13)/1 var(--f-disp); font-stretch: 104%; box-shadow: none; }
+.bk-seg > button + button { border-left: 2px solid var(--ink); }
+.bk-seg > button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.bk-seg > button:not([aria-pressed="true"]):hover { background: var(--plate); }
+.bk-seg > button:focus-visible { outline: 3px solid var(--spot); outline-offset: -5px; }
+.bk-seg.sm > button { height: 22px; padding: 0 8px; font-size: var(--t-12); }
+
+/* fill-in line: a picker printed as a blank to fill in */
+.bk-fill { display: grid; grid-template-columns: var(--fill-l, 64px) minmax(0, 1fr); align-items: end; column-gap: 10px; min-height: 30px; }
+.bk-fill .fill-l { font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink2); padding-bottom: 6px; }
+.bk-fill .fill-v { position: relative; display: block; min-width: 0; }
+.bk-fill .fill-v > select, .bk-fill .fill-v > input {
+  appearance: none; -webkit-appearance: none; width: 100%; max-width: none; height: 28px; padding: 0 24px 2px 2px; border: 0;
+  border-bottom: 2px solid var(--line); background: transparent; color: var(--ink);
+  font: 700 var(--t-16)/1 var(--f-body); cursor: pointer; text-overflow: ellipsis;
+}
+.bk-fill .fill-v > input { cursor: text; padding-right: 2px; }
+.bk-fill .fill-v > select:hover { border-bottom-color: var(--ink); }
+.bk-fill .fill-v > select:focus-visible, .bk-fill .fill-v > input:focus-visible { outline: none; border-bottom: 3px solid var(--focus); padding-bottom: 1px; }
+.bk-fill .fill-v:has(select)::after { content: ''; position: absolute; right: 4px; bottom: 11px; width: 10px; height: 6px; background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%); pointer-events: none; }
+.bk-fill .fill-v > select option { background: var(--paper); color: var(--ink); }
+.bk-fill.stack { grid-template-columns: 1fr; row-gap: 2px; }
+.bk-fill.stack .fill-l { padding-bottom: 0; }
+
+/* boxed inputs and selects */
+.bk-inp { height: 28px; padding: 0 8px; border: 2px solid var(--line); background: var(--well); color: var(--ink);
+  font: 400 var(--t-13)/1 var(--f-body); min-width: 0; }
+.bk-inp:hover { border-color: var(--ink); }
+.bk-inp:focus-visible { border-color: var(--focus); outline: 2px solid var(--focus); outline-offset: 0; }
+.bk-inp::placeholder { color: var(--ink2); opacity: 1; }
+.bk-inp.num { font-family: var(--f-data); font-size: var(--t-12); text-align: right; width: 72px; }
+.bk-inp.sm { height: 22px; padding: 0 5px; border-width: 1.5px; }
+select.bk-inp { appearance: none; -webkit-appearance: none; padding-right: 24px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: right 13px center, right 8px center; background-size: 5px 5px; background-repeat: no-repeat; }
+select.bk-inp option { background: var(--paper); color: var(--ink); }
+
+/* checkbox: <label class="bk-chk"><input type="checkbox"><i></i>Loop</label> */
+.bk-chk { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--t-13); user-select: none; }
+.bk-chk > input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.bk-chk > i { position: relative; flex: none; width: 16px; height: 16px; border: 2px solid var(--ink); background: var(--paper); }
+.bk-chk > input:checked + i { background: var(--ink); }
+.bk-chk > input:checked + i::after { content: ''; position: absolute; inset: 1px; background: var(--paper);
+  clip-path: var(--bk-tick); }
+.bk-chk > input:focus-visible + i { outline: 3px solid var(--focus); outline-offset: 2px; }
+.bk-chk > input:disabled + i { border-color: var(--line); }
+
+/* range: square thumb on a printed rule; set --fillpct */
+.bk-rng { appearance: none; -webkit-appearance: none; height: 20px; background: transparent; cursor: pointer; min-width: 80px; }
+.bk-rng::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(var(--band), var(--band)) no-repeat 0 0 / var(--fillpct, 50%) 100%, var(--line); }
+.bk-rng::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 20px; margin-top: -8px; background: var(--ink); border: 2px solid var(--paper); }
+
+/* ------------------------------------------------------------------ */
+/* 7. TABLES, INDEX ROWS, PROFILE DATA, PLATES                         */
+/* ------------------------------------------------------------------ */
+.bk-tbl { width: 100%; border-collapse: collapse; font-size: var(--t-13); }
+.bk-tbl th { height: var(--bk-row); padding: 0 10px; text-align: left; vertical-align: middle; white-space: nowrap;
+  background: var(--band); color: var(--onband); font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .02em; }
+.bk-tbl th + th { border-left: 2px solid var(--paper); }
+.bk-tbl td { height: var(--bk-row); padding: 3px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.bk-tbl tbody tr:nth-child(even) td { background: var(--plate); }
+.bk-tbl.flat tbody tr:nth-child(even) td { background: transparent; }
+.bk-tbl .r, .bk-tbl .num { text-align: right; }
+.bk-tbl td.num { font-family: var(--f-data); font-size: var(--t-12); }
+.bk-tbl tr.grp td { background: var(--paper) !important; border-bottom: 2px solid var(--ink); padding-top: 12px;
+  font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; color: var(--ink); }
+.bk-tbl tr[aria-selected="true"] td { background: var(--ink) !important; color: var(--paper); }
+.bk-tbl tbody tr.pick { cursor: pointer; }
+.bk-tbl tbody tr.pick:hover td { box-shadow: inset 0 -2px 0 var(--ink); }
+
+/* back-of-book index row: name ......... value */
+.bk-idx { display: flex; align-items: baseline; gap: 6px; height: var(--bk-row); line-height: var(--bk-row); padding: 0 6px; cursor: pointer; }
+.bk-idx .lead { flex: 1 1 auto; height: 1px; align-self: center; margin-top: 6px; min-width: 12px;
+  background: radial-gradient(circle, var(--ink2) 0 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x; }
+.bk-idx[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.bk-idx[aria-selected="true"] .lead { background-image: radial-gradient(circle, var(--paper) 0 0.9px, transparent 1.1px); }
+
+/* profile data: a character page's data block */
+.bk-prof { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 14px; row-gap: 3px; margin: 0; }
+.bk-prof dt { font: 700 var(--t-11)/1.7 var(--f-disp); color: var(--ink2); text-transform: uppercase; letter-spacing: .03em; }
+.bk-prof dd { margin: 0; font-size: var(--t-13); line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+
+/* plates: where the game's own art sits */
+.bk-plate { position: relative; background: var(--plate); overflow: hidden; }
+.bk-plate > img, .bk-plate > canvas { display: block; image-rendering: pixelated; }
+.bk-plate.rev { background: var(--ink); }
+.bk-plate.cut { clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--slant)), calc(100% - var(--slant)) 100%, 0 100%); }
+
+/* ruled page (the NOTES page at the back) */
+.bk-ruled { background: repeating-linear-gradient(to bottom, transparent 0 27px, var(--rule) 27px 28px); line-height: 28px; }
+.bk-ruled > * { min-height: 28px; }
+
+/* ------------------------------------------------------------------ */
+/* 8. COMMAND GLYPHS (Booklet.glyphs; written facing right)            */
+/* ------------------------------------------------------------------ */
+.bk-cmd { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; vertical-align: middle; line-height: 1; }
+.bk-cmd.nowrap { flex-wrap: nowrap; }                                                         /* Booklet.glyphs(t, { nowrap: true }), data-nowrap */
+.bk-cmd .ar { width: 17px; height: 17px; fill: currentColor; color: var(--ink); flex: none; }
+.bk-cmd .ar.hollow { fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-linejoin: miter; }   /* a held/charged direction: the engine's ~B..~UF draw hollow */
+.bk-cmd .b { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 3px;
+  font: 800 var(--t-11)/1 var(--f-disp); text-transform: uppercase; }
+.bk-cmd .b.p { background: var(--ink); color: var(--paper); }                                   /* x y z: punches */
+.bk-cmd .b.k { background: var(--band); color: var(--onband); }                                /* a b c: kicks */
+.bk-cmd .b.s { background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }   /* anything else */
+.bk-cmd .plus { font: 800 var(--t-12)/1 var(--f-disp); color: var(--ink2); margin: 0 1px; }
+.bk-cmd .sep { width: 4px; }
+.bk-cmd .txt { font: 400 var(--t-12)/1 var(--f-body); color: var(--ink2); }
+.bk-cmd .hold { display: inline-flex; align-items: center; gap: 2px; padding: 0 3px 0 0; box-shadow: inset 0 -3px 0 var(--spot); }
+.bk-cmd .hold em { font: 700 var(--t-11)/1 var(--f-disp); font-style: normal; color: var(--ink2); }
+/* a charge: the hold mark reading "charge", a dotted leader (the motif's "..." _.), then the release direction */
+.bk-cmd .then { align-self: center; width: 13px; height: 3px; margin: 0 1px; flex: none;
+  background: radial-gradient(circle, var(--ink2) 1.2px, transparent 1.4px) 0 50% / 4.33px 3px repeat-x; }
+/* a word plate: AIR (the jump mark, the engine's _AIR) - square, ink-ruled, like the s-chip */
+.bk-cmd .w { display: inline-grid; place-items: center; height: 17px; padding: 0 4px; font: 800 10px/1 var(--f-disp);
+  letter-spacing: .06em; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); flex: none; }
+.bk-cmd .rel { position: relative; }
+.bk-cmd .rel::after { content: ''; position: absolute; left: 2px; right: 2px; top: -3px; height: 2px; background: var(--ink); }
+.bk-cmd.lg .ar { width: 22px; height: 22px; }
+.bk-cmd.lg .b { min-width: 22px; height: 22px; font-size: var(--t-13); }
+.bk-cmd.lg .w { height: 22px; font-size: var(--t-11); padding: 0 5px; }
+.bk-cmd.lg .then { width: 17px; }
+[aria-selected="true"] .bk-cmd .ar { color: var(--paper); }
+[aria-selected="true"] .bk-cmd .b.p { background: var(--paper); color: var(--ink); }
+[aria-selected="true"] .bk-cmd .plus, [aria-selected="true"] .bk-cmd .hold em { color: var(--paper); }
+[aria-selected="true"] .bk-cmd .w { color: var(--paper); box-shadow: inset 0 0 0 1.5px var(--paper); }
+[aria-selected="true"] .bk-cmd .then { background-image: radial-gradient(circle, var(--paper) 1.2px, transparent 1.4px); }
+
+/* ------------------------------------------------------------------ */
+/* 9. THE BAND'S TIPS: the slip laid over the page; a window's mascot  */
+/* ------------------------------------------------------------------ */
+/* No page holds a tip box any more (the owner's second review): a tip is a
+   SLIP over the page (booklet.js Booklet.tip, #bkTip), laid under the mascot
+   that dealt it, gone after the reading time. Fixed, so it takes no layout:
+   nothing on a page moves or resizes when it shows or goes. Printed in reverse
+   like the toast (a ground darker than --toast-bg, so every speaker's lit hue
+   clears 4.5:1 in all ten printings, measured), framed in the speaker's lit hue
+   with the old toast tip's line down its left edge and the name in that hue. */
+.bk-tip { --lit: var(--wb-lit); --tip-bg: color-mix(in srgb, var(--toast-bg) 70%, black);
+  position: fixed; z-index: 2147483000; left: 0; top: 0; box-sizing: border-box;
+  width: max-content; max-width: min(440px, calc(100vw - 16px)); margin: 0; padding: 9px 14px 11px 12px;
+  background: var(--tip-bg); color: var(--toast-ink); border: 2px solid var(--lit); border-left-width: 6px;
+  font: 400 var(--t-13)/1.5 var(--f-body); text-align: left; text-transform: none; letter-spacing: normal; white-space: normal;
+  pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility 0s linear .2s; }
+.bk-tip[data-member="ar"] { --lit: var(--ar-lit); }
+.bk-tip[data-member="sz"] { --lit: var(--sz-lit); }
+.bk-tip.show { opacity: 1; visibility: visible; transition: opacity .2s ease, visibility 0s; }
+/* the notch: points up at the mascot that spoke */
+.bk-tip::before { content: ''; position: absolute; top: -10px; left: var(--nx, 20px); width: 16px; height: 9px;
+  background: var(--lit); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.bk-tip.nonotch::before { display: none; }
+.bk-tip .who { color: var(--lit); font: italic 800 var(--t-13)/1 var(--f-disp); font-stretch: 108%; letter-spacing: .01em; }
+@media (prefers-reduced-motion: reduce) { .bk-tip, .bk-tip.show { transition: none; } }
+
+/* A window's mascot (Booklet.mascot: the Moves window, E-Select): WB, DJ AR or
+   SHiZUKA on a paper plate in the window's head, standing on its foot; the art
+   is the affordance, so no frame. */
+.bk-bandmascot { display: inline-flex; align-items: flex-end; justify-content: center; flex: none; align-self: stretch;
+  margin: 0; padding: 3px 6px 0; border: 0; background: var(--paper); color: var(--ink); cursor: pointer; line-height: 0; box-shadow: none; }
+.bk-bandmascot:hover { background: var(--plate); }
+.bk-bandmascot:active .bk-sprite { transform: translateY(1px); }
+.bk-bandmascot:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.bk-bandmascot .bk-sprite { height: 34px; }
+
+/* THE MASCOTS' SPRITES (booklet.js paintSprite): one canvas per frame, each at
+   device pixels, stacked on the box's foot; one shows. Idle by default; a blink
+   step names its frame in data-show (booklet.js blinker). The idle pose
+   breathes: `.breathe` alternates idle with `breath` (idle with all but his feet
+   a device pixel lower) on whole steps, never a tween, so no frame is ever
+   drawn between pixels. The head's build poses are studio.html's
+   (header[data-pose]). Reduced motion: no breath (and booklet.js runs no blink). */
+.bk-sprite { position: relative; display: block; flex: none; }
+.bk-sprite > canvas { position: absolute; left: 0; bottom: 0; display: block; visibility: hidden; }
+.bk-sprite > canvas[data-f="idle"] { visibility: visible; }
+.bk-sprite[data-show] > canvas[data-f="idle"] { visibility: hidden; }
+.bk-sprite[data-show="idle"] > canvas[data-f="idle"],
+.bk-sprite[data-show="blink"] > canvas[data-f="blink"],
+.bk-sprite[data-show="shutter1"] > canvas[data-f="shutter1"],
+.bk-sprite[data-show="shutter2"] > canvas[data-f="shutter2"],
+.bk-sprite[data-show="shut"] > canvas[data-f="shut"] { visibility: visible; }
+@keyframes bkBreathIdle { 0%, 46% { visibility: visible; } 50%, 92% { visibility: hidden; } 96%, 100% { visibility: visible; } }
+@keyframes bkBreathIn { 0%, 46% { visibility: hidden; } 50%, 92% { visibility: visible; } 96%, 100% { visibility: hidden; } }
+.bk-sprite.breathe:not([data-show]) > canvas[data-f="idle"] { animation: bkBreathIdle 2.6s step-end infinite; }
+.bk-sprite.breathe:not([data-show]) > canvas[data-f="breath"] { animation: bkBreathIn 2.6s step-end infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .bk-sprite.breathe:not([data-show]) > canvas[data-f="idle"],
+  .bk-sprite.breathe:not([data-show]) > canvas[data-f="breath"] { animation: none; }
+}
+.bk-szart { position: relative; overflow: hidden; flex: none; }
+.bk-szart > .stage { position: absolute; left: 0; top: 0; }
+.bk-szart img, .bk-szart canvas { position: absolute; display: block; }
+.bk-szart img { z-index: 2; }
+.bk-szart canvas { z-index: 1; }
+
+/* ------------------------------------------------------------------ */
+/* 10. MARKS: audit flag, the Studio's three edit tiers                */
+/* ------------------------------------------------------------------ */
+.bk-flag { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; white-space: nowrap;
+  background: var(--flag); color: var(--onflag); font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; }
+.bk-flag::before { content: '!'; font-weight: 900; font-size: var(--t-13); }
+.bk-flag.warn { background: var(--warn); color: var(--onwarn); }
+.bk-flag.ok { background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+.bk-flag.ok::before { content: '\2713'; }
+.bk-flag.corner { position: absolute; top: 0; right: 0; z-index: 3; }
+.bk-flagged { box-shadow: inset 4px 0 0 var(--flag); }
+
+.bk-tier { display: inline-block; min-width: 34px; padding: 1px 5px; font: 700 var(--t-12)/1.3 var(--f-data); text-align: right; }
+.bk-tier.plain { box-shadow: inset 0 -2px 0 var(--ok); }     /* green: a plain number, written as typed */
+.bk-tier.tmpl { box-shadow: inset 0 -2px 0 var(--tmpl); }    /* amber: the CvS damage template */
+.bk-tier.verb { box-shadow: inset 0 -2px 0 var(--flag); }    /* red: verbatim, never written */

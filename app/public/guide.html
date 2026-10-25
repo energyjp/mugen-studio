@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/themes.css">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/booklet.css">
+<title>Setting up online play</title>
+<link rel="icon" type="image/png" sizes="32x32" href="icon/app-32.png">
+<style>
+  /* THE ONLINE SETUP GUIDE, opened from Settings > Online. The guide is
+     docs/RANKED-SETUP.md beside the program (/api/setup-guide); this page only
+     draws it, printed as the booklet's appendix (docs/STUDIO-BOOKLET.md): the
+     section band, the guide's title in the booklet's display face, its
+     contents list, side heads with the run-in rule for its sections, tables
+     with the band-colored head, code on the plate. Every color is a printing
+     token (themes.css). The text stays selectable: it holds commands to copy. */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.6 var(--f-body); display: flex; flex-direction: column; }
+  .page { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  main { max-width: 800px; margin: 0 auto; padding: 26px var(--m) 64px; }
+  h1, h2, h3 { font-family: var(--f-disp); line-height: 1.2; text-wrap: balance; color: var(--ink); }
+  /* the title: the booklet's page title */
+  h1 { margin: 0 0 18px; font: italic 800 var(--t-40)/1 var(--f-disp); font-stretch: 112%; letter-spacing: -.01em; text-transform: uppercase; }
+  /* a section: the side head - the band's square, caps, a run-in rule */
+  h2 { display: flex; align-items: center; gap: 10px; margin: 36px 0 12px; font: 800 var(--t-16)/1.25 var(--f-disp); font-stretch: 104%;
+    text-transform: uppercase; letter-spacing: .01em; }
+  h2::before { content: ''; flex: none; width: 12px; height: 12px; background: var(--band); }
+  h2::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); min-width: 12px; }
+  h3 { margin: 24px 0 6px; font: 800 var(--t-13)/1.3 var(--f-disp); font-stretch: 104%; text-transform: uppercase; letter-spacing: .02em; }
+  p { margin: 0 0 12px; }
+  ul, ol { margin: 0 0 12px; padding-left: 24px; }
+  li { margin: 4px 0; }
+  li::marker { color: var(--ink2); }
+  b { font-weight: 700; }
+  a { color: var(--mark); text-underline-offset: 2px; }
+  a:hover { color: var(--ink); }
+  code { font: 400 13px var(--f-data); background: var(--plate); padding: 1px 5px; }
+  pre { background: var(--plate); border-left: 4px solid var(--ink); padding: 12px 14px; overflow-x: auto; margin: 0 0 14px; }
+  pre code { background: none; padding: 0; font-size: 12.5px; line-height: 1.5; }
+  /* a quote is the guide's note: the page's margin note, ruled in the band ink */
+  blockquote { margin: 0 0 16px; padding: 10px 14px; border-left: 4px solid var(--band); background: var(--plate); color: var(--ink); }
+  blockquote p:last-child { margin-bottom: 0; }
+  hr { border: 0; border-top: 2px solid var(--rule); margin: 28px 0; }
+  .tablewrap { overflow-x: auto; margin: 0 0 16px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--band); color: var(--onband); font: 800 var(--t-12)/1.3 var(--f-disp); font-stretch: 104%; letter-spacing: .02em; }
+  th + th { border-left: 2px solid var(--paper); }
+  td { border-bottom: 1px solid var(--rule); }
+  tbody tr:nth-child(even) td { background: var(--plate); }
+  /* the contents: a numbered list under a 3px rule, like the booklet's own */
+  nav.toc { border-top: 3px solid var(--ink); padding: 10px 0 4px; margin: 0 0 22px; font-size: 14px; }
+  nav.toc b { display: block; margin-bottom: 6px; font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .03em; color: var(--ink); }
+  nav.toc ol { margin: 0; padding-left: 26px; columns: 2 260px; column-gap: 28px; }
+  nav.toc li { break-inside: avoid; margin: 2px 0; }
+  nav.toc li::marker { font: italic 800 13px var(--f-disp); color: var(--mark); }
+  nav.toc a { color: var(--ink); text-decoration: none; }
+  nav.toc a:hover { color: var(--mark); text-decoration: underline; }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<header class="bk-secband" id="band">
+  <div class="bk-secband-t"><span class="t">Online play</span><span class="k" lang="ja">オンライン</span></div>
+  <div class="bk-secband-meta"><span>Setup guide</span></div>
+</header>
+<div class="page">
+<main id="out">Reading the guide&hellip;</main>
+</div>
+<script>
+  // A SMALL MARKDOWN READER, enough for this one guide: headings, paragraphs,
+  // lists, tables, fenced code, quotes, rules, and bold / italic / code /
+  // links inside a line. Everything is escaped before any tag is added, so
+  // the text can only ever come out as text.
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // Code spans are set aside first and put back last, so bold can wrap one
+  // (**`at` MUST be identical**) and nothing inside one is ever styled.
+  function inline(s) {
+    const codes = [];
+    let t = String(s).replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+    t = esc(t);
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, txt, url) => '<a href="' + url + '" target="_blank" rel="noopener">' + txt + '</a>');
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+    t = t.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?![*\w])/g, '$1<i>$2</i>');
+    return t.replace(/\u0000(\d+)\u0000/g, (m, n) => '<code>' + esc(codes[+n]) + '</code>');
+  }
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  function render(md) {
+    const lines = md.replace(/\r\n/g, '\n').split('\n');
+    const out = []; const toc = [];
+    let i = 0, title = '';
+    const isBlank = (l) => !l.trim();
+    const listStart = (l) => /^\s*([-*]|\d+\.)\s+/.test(l);
+    while (i < lines.length) {
+      const l = lines[i];
+      if (isBlank(l)) { i++; continue; }
+      if (/^```/.test(l)) {
+        const buf = []; i++;
+        while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+        i++;
+        out.push('<pre><code>' + esc(buf.join('\n')) + '</code></pre>');
+        continue;
+      }
+      const h = /^(#{1,6})\s+(.*)$/.exec(l);
+      if (h) {
+        const n = h[1].length, txt = h[2].trim();
+        if (n === 1 && !title) title = txt;
+        const id = slug(txt);
+        if (n === 2) toc.push({ id, txt });
+        out.push('<h' + n + ' id="' + id + '">' + inline(txt) + '</h' + n + '>');
+        i++; continue;
+      }
+      if (/^\s*-{3,}\s*$/.test(l)) { out.push('<hr>'); i++; continue; }
+      if (/^\s*\|/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+        const cells = (row) => row.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const head = cells(l); i += 2;
+        const rows = [];
+        while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(cells(lines[i++]));
+        out.push('<div class="tablewrap"><table><thead><tr>' + head.map((c) => '<th>' + inline(c) + '</th>').join('')
+          + '</tr></thead><tbody>' + rows.map((r) => '<tr>' + r.map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('')
+          + '</tbody></table></div>');
+        continue;
+      }
+      if (/^\s*>/.test(l)) {
+        const buf = [];
+        while (i < lines.length && /^\s*>/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, ''));
+        out.push('<blockquote>' + buf.join('\n').split(/\n\s*\n/).map((p) => '<p>' + inline(p.replace(/\n/g, ' ')) + '</p>').join('') + '</blockquote>');
+        continue;
+      }
+      if (listStart(l)) {
+        const ordered = /^\s*\d+\./.test(l);
+        const items = [];
+        while (i < lines.length && (listStart(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && items.length))) {
+          if (listStart(lines[i])) items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, ''));
+          else items[items.length - 1] += ' ' + lines[i].trim();
+          i++;
+        }
+        const tag = ordered ? 'ol' : 'ul';
+        out.push('<' + tag + '>' + items.map((t) => '<li>' + inline(t) + '</li>').join('') + '</' + tag + '>');
+        continue;
+      }
+      const buf = [];
+      while (i < lines.length && !isBlank(lines[i]) && !/^(```|#{1,6}\s|\s*>|\s*\|)/.test(lines[i]) && !listStart(lines[i]) && !/^\s*-{3,}\s*$/.test(lines[i])) buf.push(lines[i++].trim());
+      out.push('<p>' + inline(buf.join(' ')) + '</p>');
+    }
+    // The contents list goes right after the title and the opening lines.
+    const tocHtml = toc.length ? '<nav class="toc"><b>In this guide</b><ol>'
+      + toc.map((t) => '<li><a href="#' + t.id + '">' + inline(t.txt.replace(/^\d+\.\s*/, '')) + '</a></li>').join('') + '</ol></nav>' : '';
+    const firstH2 = out.findIndex((x) => x.startsWith('<h2'));
+    if (firstH2 > 0) out.splice(firstH2, 0, tocHtml);
+    return { html: out.join('\n'), title };
+  }
+  (async () => {
+    const box = document.getElementById('out');
+    try {
+      const r = await fetch('/api/setup-guide');
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+      const { html, title } = render(await r.text());
+      box.innerHTML = html;
+      if (title) document.title = title;
+    } catch (e) {
+      box.innerHTML = '<p class="err">Could not open the setup guide: ' + esc(e.message) + '</p>';
+    }
+  })();
+</script>
+</body>
+</html>

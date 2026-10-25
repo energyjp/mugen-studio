@@ -1,0 +1,388 @@
+/* E-SELECT, PRINTED AS THE BOOKLET'S SELECT-SCREEN SPREAD (2026-10-18, Phase B).
+   grid.html links it AFTER its own <style>, so these rules win at equal
+   specificity; the old block keeps the layout (tracks, splitters, the
+   projected grid, every size the suites measure) and this file prints it.
+   Contract: docs/STUDIO-BOOKLET.md. Tokens only; square corners; no soft
+   shadows, glass or entrance motion.
+
+   THE SPREAD
+     running head  the band plate (the menu button, E-SELECT, セレクト画面) with
+                   the speed cut, then the path as running-head words (each its
+                   own menu), the unsaved note, and the toolbar as booklet
+                   buttons. Save is the one primary; Launch keeps --launch.
+     left page     the library: printed index tabs, the heading line, the
+                   search, the rows (name in the body face, the second line as
+                   data), the log as a ruled NOTES strip at the foot.
+     the fold      the splitters print as the fold's rule.
+     the figure    the screenpack, as the game draws it, framed in ink.
+     right page    the slot and the properties: section heads in the side-head
+                   style, the slot numeral (No.07 select slot) beside the
+                   title, the inspector's groups as side heads.
+     running foot  the cell under the pointer, the grid readout, and the folio
+                   with the picked cell's select slot.
+     dialogs       Preferences, About, Open Motif, View select.def, the stage
+                   details and the pickers: a page laid on the spread, the band
+                   strip as its head.
+   Everything H stays hidden unless the Studio's H-MUGEN module is on (the
+   page's own rules; nothing here names it). */
+
+/* ------------------------------------------------------------------ */
+/* 0. THE STOCK                                                        */
+/* ------------------------------------------------------------------ */
+body { background: var(--paper); color: var(--ink); font-family: var(--f-data); }
+aside { background: var(--paper); border-color: var(--rule); }
+#rightpane { border-left: 0; }
+#library { border-right: 0; }
+
+/* the fold: each splitter prints as a 2px rule; a drag inks it in the band */
+.splitter { background: var(--paper); }
+.splitter::before { content: ''; position: absolute; top: 10px; bottom: 10px; left: 50%; width: 2px; margin-left: -1px; background: var(--rule); }
+.splitter:hover, .splitter.dragging { background: var(--paper); }
+.splitter:hover::before, .splitter.dragging::before { top: 0; bottom: 0; background: var(--band); }
+.hsplit { background: var(--paper); border-top: 0; }
+.hsplit:hover, .hsplit.dragging { background: var(--band); }
+
+/* ------------------------------------------------------------------ */
+/* 1. THE RUNNING HEAD                                                 */
+/* ------------------------------------------------------------------ */
+header {
+  min-height: 44px; padding: 0 12px 0 0; gap: 6px 10px;
+  background: var(--paper); border-bottom: 3px solid var(--band); font-family: var(--f-body);
+}
+/* the band plate with the speed cut (the Moves window's band, in the head) */
+.es-plate {
+  position: relative; isolation: isolate; align-self: stretch; min-height: 44px;
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 0 calc(var(--slant) + 16px) 0 10px; margin-right: calc(var(--slant) + 2px);
+  color: var(--onband); white-space: nowrap;
+}
+.es-plate::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--band);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+.es-plate::after { content: ''; position: absolute; top: 0; bottom: 0; right: calc(-1 * var(--slant) - 6px); width: calc(var(--slant) + 12px);
+  z-index: -1; background: var(--band2); clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+.es-plate .appname { font: italic 800 var(--t-20)/1 var(--f-disp); font-stretch: 116%; letter-spacing: -.005em;
+  text-transform: uppercase; color: var(--onband); }
+.es-plate .k { font: 700 var(--t-11)/1 var(--f-jp); letter-spacing: .04em; color: var(--onband); }
+/* the menu button: printed in the band's own type, reversed while open */
+#menuBtn, #menuBtn:hover {
+  width: 30px; height: 28px; padding: 0; display: inline-grid; place-items: center;
+  background: transparent; border: 2px solid var(--onband); color: var(--onband);
+  font: 400 16px/1 var(--f-body);
+}
+#menuBtn:hover { background: var(--band2); border-color: var(--band2); color: var(--onband2); }
+#menuBtn:active, #menuBtn[aria-expanded="true"] { background: var(--onband); border-color: var(--onband); color: var(--band); }
+#menuBtn:focus-visible { outline: 3px solid var(--onband); outline-offset: 2px; }
+
+/* the path: two running-head words, each its own menu */
+/* the band's mascot (booklet.css .bk-bandmascot), standing on the head's rule after the plate */
+header > #esMascot { align-self: flex-end; margin: 0 0 0 -4px; padding: 3px 6px 0; }
+header > #esMascot .bk-sprite { height: 36px; }
+.crumb { font: 400 var(--t-13)/1.2 var(--f-body); color: var(--ink2); align-items: baseline; }
+.crumb .psep { color: var(--ink2); }
+.crumb .pword { border-bottom: 1.5px dashed; padding-bottom: 1px; }
+#engineWord { color: var(--ink); font-weight: 700; border-bottom-color: var(--line); }
+#engineWord:hover, #engineWord[aria-expanded="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+#packWord { color: var(--mark); font-weight: 700; border-bottom-color: var(--line); }
+#packWord:hover, #packWord[aria-expanded="true"] { color: var(--mark); border-bottom-color: var(--mark); }
+.crumb .by { color: var(--ink2); }
+#dirty { color: var(--warn); font: 700 var(--t-12)/1 var(--f-disp); }
+
+/* the toolbar: booklet buttons, one primary (Save), Launch in --launch */
+#toolbar { gap: 5px; }
+#toolbar button {
+  height: 28px; padding: 0 8px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+  font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 100%; letter-spacing: .005em; transition: none;
+}
+#toolbar button:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#toolbar button:active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+#toolbar button:disabled, #toolbar button:disabled:hover { background: var(--paper); border-color: var(--line); color: var(--ink2); }
+#toolbar button.primary { background: var(--band); border-color: var(--band); color: var(--onband); font-weight: 800; }
+#toolbar button.primary:hover { background: var(--band2); border-color: var(--band2); color: var(--onband2); }
+#toolbar button.primary:disabled, #toolbar button.primary:disabled:hover { background: var(--paper); border-color: var(--band); color: var(--ink2); }
+#toolbar button.launch { background: var(--launch); border-color: var(--launch); color: var(--launch-ink); font-weight: 800; }
+#toolbar button.launch:hover { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+#toolbar #zoomOut, #toolbar #zoomIn { width: 26px; padding: 0; font-size: var(--t-16); }
+#toolbar #zoomLbl { font: 400 var(--t-12)/1 var(--f-data); color: var(--ink); }
+#toolbar .tsep { background: var(--rule); }
+#toolbar #backBtn { border-color: transparent; background: transparent; }
+#toolbar #backBtn:hover { border-color: var(--line); background: transparent; }
+
+/* ------------------------------------------------------------------ */
+/* 2. THE LEFT PAGE: the library                                       */
+/* ------------------------------------------------------------------ */
+/* printed index tabs: the open one carries the band's rule under it */
+.tabs { border-bottom: 1px solid var(--line2); background: var(--paper); }
+.tab { font: 700 12px/1.35 var(--f-disp); color: var(--ink2); border-bottom: 3px solid transparent; background: none; }
+.tab:hover { color: var(--ink); border-bottom-color: var(--line); background: none; }
+.tab.on { color: var(--ink); border-bottom-color: var(--band); }
+#libhead { font: 400 11px/1.4 var(--f-body); color: var(--ink2); background: var(--paper); }
+#searchbar { background: var(--paper); }
+#search { font: 400 12px/1.4 var(--f-body); background: var(--sunk); color: var(--ink);
+  border: 1px solid var(--line); border-bottom: 2px solid var(--ink); }
+#search:focus { border-color: var(--focus); box-shadow: none; outline: 2px solid var(--focus); outline-offset: 0; }
+#search::placeholder { color: var(--ink2); }
+
+/* the index rows: the name in the body face, the second line as data */
+.row { border-left: 3px solid transparent; }
+.row .nm { font: 600 13px/1.3 var(--f-body); color: var(--ink); }
+.row .sub { font: 400 11px/1.35 var(--f-data); color: var(--ink2); }
+.row img { background: var(--plate); border: 0; }
+.row:hover { background: var(--plate); border-left-color: var(--band); }
+/* on the grid already: the face greys out, the name stays readable, a rule in the margin */
+.row.inbuild { background-image: none; border-left-color: var(--rule); }
+.row.inbuild .nm { color: var(--ink2); }
+.picker .row.on { background: var(--plate); border-left-color: var(--band); outline: 2px solid var(--ink); outline-offset: -2px; }
+
+/* the log: the page's NOTES strip, ruled. EVERY LINE OF TEXT SITS ON A RULE:
+   the line height IS the rule pitch (--log-pitch), the rules start where the
+   text starts (no padding above the first line, the gradient anchored to the
+   padding box and scrolling with the text), and an entry that wraps puts each of
+   its lines on the next rule. It printed 18px lines on 22px rules, 4px down, so
+   the text drifted off the rules a little more every line. */
+#log { --log-pitch: 22px;
+  background: var(--paper); color: var(--ink2); border-top: 2px solid var(--ink);
+  font: 400 11px/var(--log-pitch) var(--f-data); padding: 0 10px;
+  background-image: repeating-linear-gradient(to bottom, transparent 0 calc(var(--log-pitch) - 1px), var(--rule) calc(var(--log-pitch) - 1px) var(--log-pitch));
+  background-origin: padding-box; background-attachment: local; }
+#log > div { margin: 0; padding: 0; }
+#log div.act { color: var(--good); }
+#splitLog { border-top: 1px solid var(--line2); }
+#splitLog:hover, #splitLog.dragging { border-top-color: var(--band); }
+
+/* the Order tab's groups and the Stages tree's section heads: side heads */
+.ordgrp h4, .stsec > .sthd { color: var(--ink); font-family: var(--f-disp); font-weight: 800; text-transform: uppercase;
+  letter-spacing: .01em; border-bottom: 2px solid var(--ink); }
+.ordgrp h4 .del { color: var(--ink2); text-transform: none; }
+.ordgrp h4 .del:hover { color: var(--bad); }
+.ordrow .nm { font-family: var(--f-body); }
+.ordrow img { border: 0; background: var(--plate); }
+.ordgrp.drop { border-color: var(--warn); background: var(--plate); }
+.ordempty { color: var(--ink2); }
+.stnote { color: var(--ink2); }
+.stn { color: var(--ink2); }
+.sthead:hover { background-color: var(--plate); }
+.stgrp.nostage > .sthead { color: var(--ink2); }
+.stchip { color: var(--warn); background: var(--paper); border: 1.5px solid var(--warn); font-family: var(--f-disp); font-weight: 700; }
+.stgrp.sel { outline: 2px solid var(--ink); outline-offset: -2px; }
+.stgrp.sel > .sthead:not(.pic) { background-color: var(--plate); }
+.stgrp.sel > .stkids .row { background-color: var(--plate); }
+
+/* ------------------------------------------------------------------ */
+/* 3. THE FIGURE: the screenpack, framed in ink                        */
+/* ------------------------------------------------------------------ */
+.stage { background: var(--paper); }
+#wrap:not(.showoff) { outline: 2px solid var(--ink); outline-offset: 0; }
+#wrap .screenedge { box-shadow: 0 0 0 2px var(--ink); }
+.cell.hot { outline-color: var(--focus); }
+/* a slot group's member count "(2)" over the cell's art: printed as the warning
+   fill with its own type (--onwarn on --warn, 5.9:1 or better in every
+   printing). grid.html's own rule put --warn TYPE on a translucent black, which
+   the day printings' dark amber could not clear (3.5:1, 2.9:1 High contrast). */
+.badge { font-family: var(--f-data); background: var(--warn); color: var(--onwarn); }
+
+/* ------------------------------------------------------------------ */
+/* 4. THE RIGHT PAGE: the slot and the properties                      */
+/* ------------------------------------------------------------------ */
+#rightpane .ahead { padding: 10px 10px 6px; border-bottom: 2px solid var(--ink); color: var(--ink);
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; gap: 8px; }
+#rightpane .ahead::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); align-self: center; }
+#slotPane .ahead { color: var(--ink); }
+#slotPane .ahead::before { background: var(--warn); }
+#rightpane .ahead .x { color: var(--ink2); font-size: 18px; }
+#rightpane .ahead .x:hover { color: var(--ink); }
+#inshead, #slothead { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the select slot, as the Characters page prints it: No.07 select slot */
+#insNo { flex: none; font-size: var(--t-16); }
+#slotPane { background: var(--paper); }
+#slotBody, #ins { background: var(--paper); }
+
+/* the groups: side heads (a band square, caps, the run-in rule) */
+#ins .grp, #slotBody .grp { display: flex; align-items: center; gap: 6px; margin: 14px 0 8px; padding: 0; border: 0;
+  color: var(--ink); font: 800 12px/1.2 var(--f-disp); font-stretch: 104%; text-transform: uppercase; letter-spacing: .01em; }
+#ins .grp::after, #slotBody .grp::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); min-width: 12px; order: 9; }
+#ins .grp:not(:has(.tw))::before, #slotBody .grp:not(:has(.tw))::before { content: ''; flex: none; width: 9px; height: 9px; background: var(--band); }
+.blk > .grp .tw { width: 10px; color: var(--mark); }
+#ins .hint, #slotBody .hint { color: var(--ink2); font: 400 var(--t-12)/1.5 var(--f-body); }
+#ins .hint b, #slotBody .hint b { color: var(--ink); }
+
+/* fields: printed labels, boxed values */
+.fld label, .gridform label, .mus > .head label { font: 700 11px/1.2 var(--f-disp); color: var(--ink2); }
+.fld input, .fld select, .mus input, .mus select, .kvrow input, .slotmem input, .gridform input, table.mm input, .picker input {
+  background-color: var(--sunk); color: var(--ink); border: 1px solid var(--line); border-bottom: 2px solid var(--ink); font-family: var(--f-data); }
+.fld input:focus, .fld select:focus, .mus input:focus, .mus select:focus, .kvrow input:focus, .slotmem input:focus,
+.gridform input:focus, table.mm input:focus, .picker input:focus { border-color: var(--focus); box-shadow: none; outline: 2px solid var(--focus); outline-offset: 0; }
+select option { background: var(--paper); color: var(--ink); }
+.about dt { font: 700 11px/1.6 var(--f-disp); color: var(--ink2); text-transform: uppercase; letter-spacing: .03em; }
+.about dd { font-family: var(--f-data); color: var(--ink); }
+table.mm th, table.mm td.n { color: var(--ink2); font-family: var(--f-disp); }
+.mus .trk { border-left-color: var(--rule); }
+.mus .nums { color: var(--ink2); }
+.slotmem { background: var(--paper); border: 2px solid var(--ink); border-left: 6px solid var(--warn); }
+.slotmem .top .nm { color: var(--ink); font-family: var(--f-body); }
+.diag { background: var(--paper); border: 2px solid var(--ink); border-left: 6px solid var(--warn); color: var(--ink); }
+.diag .ico, .diag b { color: var(--warn); }
+.diag .more { color: var(--ink2); }
+/* the inspector's own buttons (Apply, the cell kinds, the music + and x) */
+#ins button, #slotBody button, .gridform button, #addOrder {
+  border: 2px solid var(--ink); background: var(--paper); color: var(--ink); font: 700 var(--t-12)/1.2 var(--f-disp); }
+#ins button:hover, #slotBody button:hover, .gridform button:hover, #addOrder:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#ins button:disabled, #slotBody button:disabled { border-color: var(--line); color: var(--ink2); background: var(--paper); }
+#ins button.primary, #slotBody button.primary { background: var(--band); border-color: var(--band); color: var(--onband); }
+#ins button.primary:hover, #slotBody button.primary:hover { background: var(--band2); border-color: var(--band2); color: var(--onband2); }
+#ins button.primary:disabled, #slotBody button.primary:disabled { background: var(--paper); border-color: var(--band); color: var(--ink2); }
+
+
+/* ------------------------------------------------------------------ */
+/* 5. THE RUNNING FOOT                                                 */
+/* ------------------------------------------------------------------ */
+footer { height: 34px; padding: 0 0 0 12px; gap: 14px; align-items: stretch; background: var(--paper);
+  border-top: 2px solid var(--ink); color: var(--ink2); font-size: var(--t-12); }
+footer > * { align-self: center; }
+#hover { color: var(--ink); font: 600 var(--t-13)/1.2 var(--f-body); }
+#geom { font: 400 var(--t-12)/1.2 var(--f-data); color: var(--ink2); }
+#geom.editable:hover { color: var(--mark); }
+#geom .over { color: var(--warn); }
+#geom button.rescue { background: var(--paper); color: var(--warn); border: 1.5px solid var(--warn); font-family: var(--f-disp); font-weight: 700; }
+#geom button.rescue:hover { background: var(--warn); color: var(--onwarn); }
+/* THE FOLIO NEVER GIVES WAY (the owner, 2026-10-18: the "No." clipped through when a
+   cell's name and author ran long). It was a flex item that could shrink: a long
+   #hover line made the row overflow, every item shrank by its share, the folio
+   stopped at its 132px min-width while its text needs ~160, and its number box
+   shrank to 2ch, so "No.01" ran over its own "of 4". Now the folio keeps its whole width (flex: none), the hover line takes
+   only the room that is left (basis 0, so it never pushes) and ellipsizes in it,
+   the spacer stands down (the hover line already pushes the readout right), and
+   the readout gives way last, with an ellipsis, only when it and the folio alone
+   are wider than the window. grid.html's one-line rule stands: nothing wraps. */
+footer > .spacer { flex: 0 0 0; min-width: 0; }
+#hover { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#geom { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#esFolio { align-self: stretch; flex: none; min-width: 132px; }
+#esFolio b { min-width: 2ch; }
+
+/* ------------------------------------------------------------------ */
+/* 6. MENUS, THE TOOLTIP, THE DROP VEIL                                */
+/* ------------------------------------------------------------------ */
+/* printed: a 2px ink frame on the stock, no soft shadow */
+.menu, .menu.hdr { background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: none; font-family: var(--f-body); }
+.menu .mhead { border-bottom: 2px solid var(--ink); font-family: var(--f-disp); }
+.menu.hdr .mhead { font-family: var(--f-data); font-weight: 400; color: var(--ink2); border-bottom: 1px solid var(--rule); }
+.menu .msep, .menu.hdr .msep { background: var(--rule); }
+.menu .mi:hover, .menu .mi.hl, .menu.hdr .mi:hover, .menu.hdr .mi.hl { background: var(--plate); color: var(--ink); }
+.menu .mi.off, .menu.hdr .mi.off { color: var(--ink2); }
+.menu .mi .mkey { color: var(--ink2); font-family: var(--f-data); }
+.menu .mi .arrow { color: var(--ink2); }
+#celltip { background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: none; font-family: var(--f-body); }
+#celltip .tipline[data-h="3"] { color: color-mix(in srgb, var(--sz) 62%, var(--ink)); }
+.hidbadge[data-h="3"] { color: var(--sz); }
+#dropveil { background: color-mix(in srgb, var(--paper) 78%, transparent); backdrop-filter: none; }
+#dropveil .card { background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: none; font-family: var(--f-body); }
+#dropveil .card b { font: italic 800 var(--t-20)/1.1 var(--f-disp); font-stretch: 112%; text-transform: uppercase; }
+#dropveil .card span { color: var(--ink2); }
+#dropveil .card::before, #dropveil .card::after { border-color: var(--band); }
+
+/* ------------------------------------------------------------------ */
+/* 7. DIALOGS AND PICKERS: a page laid on the spread                   */
+/* ------------------------------------------------------------------ */
+.edlg-back, .backdrop { background: color-mix(in srgb, var(--ink) 45%, transparent); }
+.edlg, .picker { background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: none; font-family: var(--f-body); }
+/* the head: the title printed on a band plate cut at the slant, the band's rule under the head */
+.edlg .ehead, .picker .phead { padding: 0 8px 0 0; min-height: 38px; gap: 10px; display: flex; align-items: center;
+  background: var(--paper); border-bottom: 3px solid var(--band); }
+.edlg .ehead .t, .picker .phead {
+  font: italic 800 var(--t-16)/1.1 var(--f-disp); font-stretch: 112%; letter-spacing: 0; text-transform: uppercase; }
+.edlg .ehead .t { flex: 0 1 auto; align-self: stretch; display: block; line-height: 38px; min-width: 0; max-width: calc(100% - 44px);
+  padding: 0 calc(var(--slant) + 16px) 0 14px; background: var(--band); color: var(--onband);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edlg .ehead::after { content: ''; flex: 1 1 auto; }
+.edlg .ehead .x { order: 2; color: var(--ink); background: none; border: 2px solid transparent; font-size: 22px; }
+.edlg .ehead .x:hover { color: var(--ink); background: var(--plate); border-color: var(--ink); }
+.picker .phead { padding: 0 10px 0 14px; }
+.picker .phead { background: var(--band); color: var(--onband); }
+.picker .phead.slot { color: var(--onband); }
+.picker .phead .x { color: var(--onband); background: none; border: 0; }
+.edlg .ebody { color: var(--ink); }
+.edlg .efoot, .picker .prow { border-top: 2px solid var(--ink); background: var(--paper); }
+.picker .pwhy { border-top: 1px solid var(--rule); color: var(--warn); }
+.edlg button, .picker button { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); font: 700 var(--t-13)/1.2 var(--f-disp); }
+.edlg button:hover, .picker button:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+.edlg button:disabled, .picker button:disabled { border-color: var(--line); color: var(--ink2); background: var(--paper); }
+.edlg button.primary, .picker button.primary { background: var(--band); border-color: var(--band); color: var(--onband); font-weight: 800; }
+.edlg button.primary:hover, .picker button.primary:hover { background: var(--band2); border-color: var(--band2); color: var(--onband2); }
+.edlg button.armed, .edlg button.armed:hover { border-color: var(--flag); color: var(--ink); background: var(--paper); box-shadow: inset 0 -3px 0 var(--flag); }
+.edlg .emsg.bad { color: var(--warn); }
+.edlg a { color: var(--mark); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+/* Preferences: each section a side head */
+.prefs .psec + .psec { border-top: 0; margin-top: 18px; padding-top: 0; }
+.prefs .ptitle { display: flex; align-items: center; gap: 8px; color: var(--ink);
+  font: 800 var(--t-12)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .02em; }
+.prefs .ptitle::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); }
+.prefs .ptitle::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); }
+.prefs .plabel { font: 600 var(--t-13)/1.3 var(--f-body); color: var(--ink); }
+.prefs .prow.child .plabel { color: var(--ink2); }
+.prefs .prow.off .plabel { color: var(--ink2); }
+.prefs .phelp { color: var(--ink2); font-size: var(--t-12); }
+.prefs .phelp.bad { color: var(--warn); }
+.prefs input[type=text], .prefs select { background-color: var(--sunk); color: var(--ink); border: 1px solid var(--line); border-bottom: 2px solid var(--ink); font-family: var(--f-data); }
+.prefs input[type=text]:focus-visible, .prefs select:focus-visible { border-color: var(--focus); outline: 2px solid var(--focus); outline-offset: 0; }
+.prefs input[type=text]:disabled, .prefs select:disabled { color: var(--ink2); border-color: var(--line); border-style: dashed; }
+.prefs input[type=checkbox] { accent-color: var(--ink); }
+.prefs .tintctl .sl input { accent-color: var(--band); }
+.prefs .tintctl .sl .n, .prefs .tprev { color: var(--ink2); }
+.prefs .tintctl .sl .v { font-family: var(--f-data); }
+
+/* About: the colophon */
+.edlg.about .ebody { font-family: var(--f-body); }
+.edlg.about .an { font: italic 600 var(--t-26)/1.1 var(--f-disp); font-stretch: 116%; color: var(--ink); }
+.edlg.about .av { color: var(--ink2); }
+
+/* Open Motif: the list as an index */
+.motifs .mrow { border-left: 3px solid transparent; }
+.motifs .mrow:hover, .motifs .mrow:focus-visible { background: var(--plate); }
+.motifs .mrow.cur { border-left-color: var(--band); }
+.motifs .mrow .nm { font-family: var(--f-body); }
+.motifs .mrow .fd { color: var(--ink2); font-family: var(--f-data); }
+.motifs .mrow .tags { color: var(--ink2); }
+.motifs .mrow .tags .on { color: var(--mark); }
+.motifs .mrow.off { color: var(--ink2); }
+.motifs .mcap { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 800 var(--t-12)/1.2 var(--f-disp); font-stretch: 104%; }
+.motifs .mcap::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); }
+.motifs .mcap::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); }
+
+/* View select.def: the file as printed data on the plate */
+.seldef .deftext { background: var(--plate); border: 0; border-left: 4px solid var(--band); color: var(--ink); font-family: var(--f-data); }
+.seldef .emsg.hint { color: var(--ink2); }
+
+/* the stage details (the gear) */
+.stdlg .stinfo dt { font: 700 var(--t-12)/1.6 var(--f-disp); color: var(--ink2); }
+.stdlg .stinfo dd.mono { font-family: var(--f-data); }
+
+/* High contrast night keeps grid.html's own rules for the menu highlight and the
+   disabled Preferences fields (they outrank these by their :root selectors). */
+
+/* scrollbars, printed */
+::-webkit-scrollbar-track { background: var(--paper); }
+::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--paper); }
+
+/* ------------------------------------------------------------------ */
+/* 8. THE ORDER TAB: the mode switch, the Max Matches table            */
+/* ------------------------------------------------------------------ */
+/* the Arcade / Survival switch, printed as the booklet's segmented choice */
+#orderPanel .seg { gap: 0; border: 2px solid var(--ink); }
+#orderPanel .seg button, #orderPanel .seg button:hover { margin: 0; height: 24px; border: 0; background: var(--paper); color: var(--ink);
+  font: 700 var(--t-12)/1 var(--f-disp); box-shadow: none; }
+#orderPanel .seg button + button { margin-left: 0; border-left: 2px solid var(--ink); }
+#orderPanel .seg button:not(.on):hover { background: var(--plate); }
+#orderPanel .seg button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); box-shadow: none; }
+/* Max Matches: its head carries inline colors (drawOrder), so the side head is stated with !important */
+#orderPanel > h4 { color: var(--ink) !important; border-bottom: 2px solid var(--ink) !important;
+  font: 800 12px/1.2 var(--f-disp) !important; text-transform: uppercase; letter-spacing: .01em; }
+#orderPanel .hint { color: var(--ink2); font: 400 var(--t-12)/1.5 var(--f-body); }
+table.mm th { font-weight: 700; }
+
+/* the cell tooltip: the cell's select slot ahead of its label (data-no, set on hover) */
+#celltip[data-no]::before { content: attr(data-no); margin-right: 8px; color: var(--mark);
+  font: italic 800 var(--t-13)/1 var(--f-disp); font-stretch: 110%; font-variant-numeric: tabular-nums; }
+
+/* a dialog's backdrop screens the spread back toward the stock: ink by day, the black stock by night */
+[data-paper="night"] .edlg-back, [data-paper="night"] .backdrop { background: color-mix(in srgb, var(--paper) 72%, transparent); }

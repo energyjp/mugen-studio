@@ -1,0 +1,393 @@
+/* MUGEN STUDIO - THE BOOKLET: the dialogs, the banner and the overlays
+   (rd-dialogs, 2026-10-18). One idiom for every dialog studio.html opens that
+   is not a tab page: an INSERT SHEET laid on the spread.
+
+   - The sheet: paper stock, a 2px ink frame, square. The spread under it is
+     knocked back by a screen of the paper (no dimming, no blur: the page under
+     an insert is still the page).
+   - Its head: the dialog's own <h3>, printed as the booklet's section band -
+     the band plate with the title, the speed cut, the band rule across the
+     sheet - built from the h3's two pseudo-elements, so no markup changes and
+     the code that writes a title (textContent) keeps working. The Japanese
+     kicker, where the dialog carries data-k, sits on the rule at the right,
+     before Close (as the export page's "Back cover" does).
+   - Inside: booklet controls (buttons, fields, checkboxes, ranges, the
+     segmented Sounds/Audit switch), band-headed tables, ink2 small print,
+     and "How this works" as the sheet's footnotes (a side head with the band
+     mark that opens and closes them).
+   Everything is scoped under the dialogs' ids with a :root prefix, so it
+   outranks studio.html's older rules (its head <style> and each dialog's own
+   <style> after this file) without !important. The export page (#exportDlg)
+   is Phase A's and keeps booklet-export.css. Tokens only (STUDIO-BOOKLET.md).
+
+   Also here: the read-only banner (#roBanner), the bundle switch cover
+   (#bundleSwitching) and the drop-target label ([data-dropzone].hover). The
+   toast stays the chrome's (bookletChrome; its tips keep the members' lit hues,
+   test-band-tips). */
+
+/* ------------------------------------------------------------------ */
+/* 1. THE SHEET                                                        */
+/* ------------------------------------------------------------------ */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) {
+  --dlg-px: 22px;
+  position: fixed; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); box-shadow: none;
+  padding: 0 var(--dlg-px) 18px; font: 400 var(--t-13)/1.45 var(--f-body);
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg)::backdrop {
+  background: color-mix(in srgb, var(--paper, #EFF0EC) 74%, transparent);
+}
+
+/* ---- the head: the dialog's <h3> printed as a section band ---------------
+   [title on the band plate][paper gap][speed cut][paper + band rule .......]
+   The h3 is a flex row: its text is the plate (the h3's own band ground);
+   ::before (order 2) is the speed cut, ::after (order 3) the paper that
+   starts at the plate's slanted edge and carries the band rule. z-index on
+   flex items puts the cut over the paper. */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg, #bundleSwitching .box) > h3 {
+  --cut-w: calc(var(--slant) + 10px);
+  position: relative; isolation: isolate; display: flex; align-items: center; column-gap: .32em; flex-wrap: nowrap;
+  min-height: 44px; margin: 0 calc(-1 * var(--dlg-px)) 16px; padding: 0 0 0 var(--dlg-px); border: 0;
+  background: var(--band); color: var(--onband); -webkit-text-fill-color: currentColor;
+  font: italic 800 var(--t-20)/1.12 var(--f-disp); font-stretch: 112%; letter-spacing: -.005em; text-transform: uppercase;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg, #bundleSwitching .box) > h3::before {
+  content: ''; order: 2; flex: none; align-self: stretch; z-index: 2; width: var(--cut-w); margin-left: calc(22px + 6px);
+  background: var(--band2); clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg, #bundleSwitching .box) > h3::after {
+  content: ''; order: 3; flex: 1 0 var(--tail, calc(var(--slant) + 40px)); align-self: stretch; z-index: 1;
+  margin-left: calc(-1 * (var(--cut-w) + 6px) - .32em);
+  background: var(--paper); box-shadow: inset 0 -3px 0 var(--band);
+  clip-path: polygon(var(--slant) 0, 100% 0, 100% 100%, 0 100%);
+}
+/* the paper after the cut keeps room for what sits on the rule (the kicker, Close),
+   so a long title a script writes wraps on the plate instead of running under them */
+:root dialog:has(> button.close) > h3 { --tail: 110px; }
+:root dialog[data-k] > h3 { --tail: 150px; }
+:root dialog[data-k]:has(> button.close) > h3 { --tail: 214px; }
+/* a name inside a title keeps its case (Colors - chun_li_jj) */
+:root :is(#palDlg, #fitDlg, #statsDlg, #depsDlg) > h3 > span { text-transform: none; }
+/* titles a script writes long (the deps warning, the import offer): smaller, and they may wrap */
+:root :is(#depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #hModuleDlg, #bundleRestartDlg) > h3 { font-size: var(--t-16); }
+
+/* the kicker: data-k on the dialog, printed at the right of the band rule */
+:root dialog[data-k]::before {
+  content: attr(data-k); position: absolute; top: 0; right: var(--k-right, var(--dlg-px)); height: 41px; z-index: 3;
+  display: flex; align-items: center; pointer-events: none;
+  font: 700 var(--t-11)/1 var(--f-jp); letter-spacing: .04em; color: var(--ink2); white-space: nowrap;
+}
+:root dialog[data-k]:has(> button.close) { --k-right: 96px; }
+
+/* Close: on the band rule at the top right of the sheet */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hReviewDlg,
+  #depsDlg, #readmeDlg, #matchDlg, #noticesDlg) > button.close {
+  position: absolute; top: 9px; right: 14px; float: none; z-index: 4; margin: 0;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hReviewDlg,
+  #depsDlg, #readmeDlg, #matchDlg, #noticesDlg) > button.close.close { text-transform: capitalize; }   /* doubled: outranks the sheet's button rule below */
+
+/* ------------------------------------------------------------------ */
+/* 2. TYPE ON THE SHEET                                                */
+/* ------------------------------------------------------------------ */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg, #bundleSwitching) :is(.meta, .foot) {
+  opacity: 1; color: var(--ink2); font-size: var(--t-12);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) :is(b, strong) { color: inherit; }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) :is(code, kbd) {
+  font-family: var(--f-data); font-size: .94em; background: none; border: 0; padding: 0; color: inherit;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) a { color: var(--mark); }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) :is(.bad, .err) { color: var(--bad); }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) :is(.good, .ok) { color: var(--good); }
+/* a heading inside a sheet: the booklet's side head */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hReviewDlg, #depsDlg, #matchDlg) h4,
+:root #readmeDlg .mdbody h4 {
+  display: flex; align-items: baseline; gap: 8px; margin: 14px 0 8px; padding: 0; border: 0; color: var(--ink);
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hReviewDlg, #depsDlg, #matchDlg) h4::before,
+:root #readmeDlg .mdbody h4::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); align-self: center; }
+
+/* ------------------------------------------------------------------ */
+/* 3. CONTROLS ON THE SHEET                                            */
+/* ------------------------------------------------------------------ */
+/* buttons: the booklet's (.bk-btn / .bk-btn.sm), restated over the old global button rules */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button:not(.bk-btn) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 3px 12px; margin: 0;
+  border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; white-space: nowrap; box-shadow: none; transform: none; transition: none;
+  font: 700 var(--t-13)/1.15 var(--f-disp); font-stretch: 104%; letter-spacing: .005em; text-transform: none; text-decoration: none;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button.tiny:not(.bk-btn) {
+  min-height: 24px; padding: 2px 8px; font-size: var(--t-12); border-width: 1.5px; letter-spacing: 0; line-height: 1.15;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button:not(.bk-btn)::before,
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button:not(.bk-btn)::after { display: none; }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button:not(.bk-btn):hover {
+  background: var(--plate); color: var(--ink); border-color: var(--ink);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button:not(.bk-btn):is(:active, .on, .armed, [aria-pressed="true"]) {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button.primary:not(.bk-btn) {
+  background: var(--band); color: var(--onband); border-color: var(--band); font-weight: 800;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button.primary:not(.bk-btn):hover {
+  background: var(--band2); color: var(--onband2); border-color: var(--band2);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button.danger:not(.bk-btn) {
+  border-color: var(--flag); color: var(--ink); background: var(--paper);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button.danger:not(.bk-btn):is(:hover, .armed) {
+  background: var(--flag); color: var(--onflag); border-color: var(--flag);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button:not(.bk-btn):disabled {
+  border-color: var(--line); color: var(--ink2); background: var(--paper); cursor: default;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) button:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 2px;
+}
+/* the Bundles sheet's old per-id button chain is (1,6,1): two ids outrank it */
+#bundleDlg#bundleDlg button:not(.danger):not(.primary):not(.bk-btn) { border-color: var(--ink); color: var(--ink); background: var(--paper); }
+#bundleDlg#bundleDlg button:not(.danger):not(.primary):not(.bk-btn):hover { background: var(--plate); }
+#bundleDlg#bundleDlg button:not(.danger):not(.primary):not(.bk-btn):is(:active, .on) { background: var(--ink); color: var(--paper); }
+#bundleDlg#bundleDlg button:not(.danger):not(.primary):not(.bk-btn):disabled { border-color: var(--line); color: var(--ink2); background: var(--paper); }
+
+/* rows of controls */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #depsDlg, #buildDropDlg, #buildDoneDlg,
+  #themeExtrasDlg, #themeOptDlg, #bundleRestartDlg) > :is(.acts, .row) { gap: 8px; }
+:root :is(#hModuleDlg, #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #bundleRestartDlg, #statsDlg) > :is(.acts, .row) {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; margin-top: 16px; padding-top: 12px; border-top: 2px solid var(--rule);
+}
+
+/* fields: boxed, the booklet's .bk-inp */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg)
+  :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], select:not([size]), textarea) {
+  min-height: 28px; padding: 0 8px; border: 2px solid var(--line); background: var(--well); color: var(--ink); box-shadow: none;
+  font: 400 var(--t-13)/1.2 var(--f-body);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) select:not([size]) {
+  appearance: none; -webkit-appearance: none; padding-right: 26px; cursor: pointer; height: 28px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: right 13px center, right 8px center; background-size: 5px 5px; background-repeat: no-repeat;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) select option { background: var(--paper); color: var(--ink); }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg)
+  :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], select, textarea):is(:hover, :focus) { border-color: var(--ink); }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg)
+  :is(input:not([type]), input[type="text"], input[type="search"], input[type="number"], select, textarea):focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border-color: var(--focus); }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) ::placeholder { color: var(--ink2); opacity: 1; }
+/* list boxes (the match picker): a boxed list, the picked row reversed */
+:root #matchDlg select[size] { border: 2px solid var(--line); background: var(--well); color: var(--ink); font: 400 var(--t-13)/1.35 var(--f-body); padding: 2px 0; }
+:root #matchDlg select[size] option { padding: 2px 8px; }
+:root #matchDlg select[size] option:checked { background: var(--ink) linear-gradient(var(--ink), var(--ink)); color: var(--paper); }
+
+/* checkboxes: a printed square, ticked in ink (no markup change: the input draws itself) */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 16px; height: 16px; margin: 0 6px 0 0; vertical-align: -3px;
+  border: 2px solid var(--ink); background: var(--paper); cursor: pointer; accent-color: auto;
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) input[type="checkbox"]:checked { background: var(--ink); }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; inset: 1px; background: var(--paper);
+  clip-path: var(--bk-tick);
+}
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) input[type="checkbox"]:disabled { border-color: var(--line); cursor: default; }
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+  #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg) input[type="checkbox"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ranges: a square thumb on a printed rule (the booklet's .bk-rng, no fill length) */
+:root :is(#palDlg, #sndDlg, #fitDlg, #benchDlg, #statsDlg) input[type="range"] {
+  appearance: none; -webkit-appearance: none; height: 20px; background: transparent; cursor: pointer; vertical-align: middle;
+}
+:root :is(#palDlg, #sndDlg, #fitDlg, #benchDlg, #statsDlg) input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: var(--line); }
+:root :is(#palDlg, #sndDlg, #fitDlg, #benchDlg, #statsDlg) input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 20px; margin-top: -8px; background: var(--ink); border: 2px solid var(--paper);
+}
+:root :is(#palDlg, #sndDlg, #fitDlg, #benchDlg, #statsDlg) input[type="range"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* the Sounds sheet's Sounds / Audit switch: the booklet's segmented choice */
+:root #sndDlg .tabs { display: inline-flex; gap: 0; margin-left: 6px; border: 2px solid var(--ink); }
+:root #sndDlg .tabs > button.tab { min-height: 24px; padding: 0 12px; border: 0; background: var(--paper); color: var(--ink); font-size: var(--t-12); }
+:root #sndDlg .tabs > button.tab + button.tab { border-left: 2px solid var(--ink); }
+:root #sndDlg .tabs > button.tab.on { background: var(--ink); color: var(--paper); }
+:root #sndDlg .tabs > button.tab:not(.on):hover { background: var(--plate); }
+
+/* ------------------------------------------------------------------ */
+/* 4. TABLES AND LISTS ON THE SHEET                                    */
+/* ------------------------------------------------------------------ */
+:root :is(#sndDlg, #auditDlg, #versionsDlg, #benchDlg, #statsDlg) table { border-collapse: collapse; }
+:root :is(#sndDlg, #auditDlg, #versionsDlg, #benchDlg, #statsDlg) th {
+  opacity: 1; height: var(--bk-row); padding: 0 8px; vertical-align: middle; white-space: nowrap; border: 0;
+  background: var(--band); color: var(--onband); font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .02em;
+}
+:root :is(#sndDlg, #auditDlg, #versionsDlg, #benchDlg, #statsDlg) th + th { border-left: 2px solid var(--paper); }
+:root :is(#sndDlg, #auditDlg, #versionsDlg, #benchDlg, #statsDlg) td { border-bottom: 1px solid var(--rule); }
+:root :is(#sndDlg, #auditDlg, #versionsDlg, #benchDlg) tbody tr:nth-child(even) > td { background: var(--plate); }
+/* dimmed rows stay readable: ink2, never opacity */
+:root #sndDlg tr.dim, :root #sndDlg tr.dim td { opacity: 1; color: var(--ink2); }
+
+/* the Bundles sheet's two ways in keep their own hue (the owner's call, for accessibility):
+   the side-head mark takes it too */
+:root #bundleDlg .sec h4::before { background: var(--sec); }
+:root #bundleDlg .imp.sec { border-width: 2px; }
+:root #bundleDlg .brow { border-bottom: 1px solid var(--rule); }
+:root #bundleDlg .badge2 { border-width: 1.5px; font: 800 var(--t-11)/1.4 var(--f-disp); letter-spacing: .03em; color: var(--ink2); }
+:root #bundleDlg .badge2.on { border-color: var(--mark); color: var(--mark); }
+
+/* small print the old sheets dimmed with opacity: printed in ink2 instead, so it keeps 4.5:1 */
+:root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #themeExtrasDlg, #themeOptDlg, #matchDlg)
+  :is(.note, .cap, .trig, .why, .unit, .risk, .cnt, .sl, .unused, .off, .gray, .dir, .srow .lab .k),
+:root :is(#bundleReport, #bundleExtReport) .dim { opacity: 1; color: var(--ink2); }
+/* a version's kind tag ("DIFFERENT ART"): studio.html's global .vkind is dimmed (.85) at 9px; the character page
+   prints it solid (booklet-chars.css), and so does this sheet (first seen in a walk with a real version to list,
+   2026-10-18) */
+:root #versionsDlg .vkind { opacity: 1; font: 800 var(--t-11)/1.4 var(--f-disp); letter-spacing: .02em; }
+:root #versionsDlg .vkind.k-dup { color: var(--ink2); }
+:root #versionsDlg .vkind.k-warn { color: var(--bad); }
+:root #versionsDlg .vkind.k-info { color: var(--mark); }
+:root #bundleReport .warn, :root #bundleExtReport .warn { color: var(--warn); }
+/* the pair bench's scene panes (H-Mugen mode; not shot: they need an H pair) and the chips' G/A/U/C marks */
+:root #benchScene :is(.bpane .who label, .bpane .none, .flags), :root #benchDlg .chip sup { opacity: 1; color: var(--ink2); }
+:root #benchScene, :root #benchScene .bpane { border-color: var(--rule); }
+:root :is(#themeExtrasDlg) .xrow code { opacity: 1; color: var(--ink2); }
+
+/* the folder picker's list: a back-of-book index, one rule per folder (the rows are buttons) */
+:root #folderList { border: 2px solid var(--line); background: var(--paper); padding: 0; }
+:root #folderDlg button.frow { display: flex; justify-content: flex-start; width: 100%; min-height: var(--bk-row); padding: 2px 10px; margin: 0;
+  border: 0; border-bottom: 1px solid var(--rule); background: transparent; color: var(--ink); font: 400 var(--t-13)/1.2 var(--f-body); white-space: nowrap; }
+:root #folderDlg button.frow:hover { background: var(--plate); color: var(--ink); }
+:root #folderDlg button.frow:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+:root #folderDlg .frow .ic { color: var(--ink2); }
+:root #folderDlg .frow.isbuild .nm { color: var(--mark); font-weight: 700; }
+:root #folderDlg .badge2 { border: 1.5px solid var(--mark); color: var(--mark); font: 800 var(--t-11)/1.4 var(--f-disp); letter-spacing: .03em; }
+:root #folderDlg .crumb .at .leaf { color: var(--ink); }
+:root #folderDlg .why { border: 2px solid var(--warn); }
+
+/* fighting stats: group heads are side heads; each field a ruled line */
+:root #statsDlg .gh { display: flex; align-items: center; gap: 8px; margin: 18px 0 4px; color: var(--ink);
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase; }
+:root #statsDlg .gh::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); }
+:root #statsDlg .gh::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); min-width: 12px; }
+:root #statsDlg .srow { border-bottom: 1px solid var(--rule); }
+:root #statsDlg .srow .lab .k { font: 400 var(--t-11)/1.4 var(--f-data); }
+:root #statsDlg .srow .band { opacity: 1; color: var(--ink2); }
+
+/* the H review queue: one row per character, its pair art on plates */
+:root #hReviewDlg .hrow { border: 0; border-bottom: 2px solid var(--rule); background: var(--paper); padding: 10px 0; }
+:root #hReviewDlg .hrow:first-child { border-top: 2px solid var(--ink); }
+:root #hReviewDlg .hpics img { background: var(--plate); border: 0; }
+:root #hReviewDlg .hwho b { font: 800 var(--t-16)/1.2 var(--f-disp); }
+
+/* the readme: the mod's own words, set in the booklet's body type */
+:root #readmeDlg .mdbody { font: 400 var(--t-13)/1.55 var(--f-body); color: var(--ink); }
+:root #readmeDlg .mdbody h5 { font: 800 var(--t-12)/1.2 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; }
+:root #readmeDlg .mdbody h6 { color: var(--ink2); }
+:root #readmeDlg .mdbody :is(code, pre) { background: var(--plate); border: 0; color: var(--ink); }
+:root #readmeDlg .mdbody pre { padding: 8px 10px; }
+:root #readmeDlg .mdbody pre code { background: none; }
+:root #readmeDlg .mdbody :is(th, td) { border: 0; border-bottom: 1px solid var(--rule); }
+:root #readmeDlg .mdbody th { background: var(--band); color: var(--onband); font: 800 var(--t-12)/1.2 var(--f-disp); }
+:root #readmeDlg .mdbody blockquote { border-left: 4px solid var(--band); color: var(--ink2); }
+:root #readmeDlg .mdbody hr { border-top: 2px solid var(--rule); }
+
+/* the licenses: the notices file as printed small type */
+:root #noticesDlg #noticesText { font: 400 var(--t-12)/1.5 var(--f-data); color: var(--ink); background: none; border: 0; border-top: 2px solid var(--ink); padding-top: 10px; }
+
+/* ------------------------------------------------------------------ */
+/* 5. "HOW THIS WORKS": the sheet's footnotes                          */
+/* ------------------------------------------------------------------ */
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp { margin-top: 18px; padding-top: 10px; border-top: 2px solid var(--ink); font-size: var(--t-12); line-height: 1.5; color: var(--ink); }
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp > summary {
+  display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; width: 100%;
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase; color: var(--ink);
+}
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp > summary::-webkit-details-marker { display: none; }
+/* the band mark opens and closes them: a triangle pointing at the notes when shut */
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp > summary::before {
+  content: ''; flex: none; width: 10px; height: 10px; background: var(--band); clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp[open] > summary::before { clip-path: polygon(0 0, 100% 0, 50% 100%); }
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp > summary::after { content: ''; flex: 1 1 auto; height: 2px; background: var(--rule); min-width: 12px; }
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fhcols { opacity: 1; gap: 4px 28px; margin-top: 8px; }
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp h5 {
+  margin: 8px 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--rule); color: var(--mark);
+  font: 800 var(--t-11)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .04em; text-transform: uppercase;
+}
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp :is(p, li) { color: var(--ink); }
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp ul { padding-left: 16px; }
+:root :is(#fitDlg, #palDlg, #benchDlg, #sndDlg, #auditDlg) .fithelp li::marker { color: var(--band); }
+
+/* ------------------------------------------------------------------ */
+/* 6. NOT DIALOGS: the read-only banner, the switch cover, drop targets */
+/* ------------------------------------------------------------------ */
+/* the read-only banner: an errata strip printed under the running head */
+:root #roBanner { gap: 12px; min-height: 30px; padding: 3px var(--m) 3px 0; border-top: 0; border-bottom: 2px solid var(--ink);
+  background: var(--paper); color: var(--ink2); font: 400 var(--t-12)/1.45 var(--f-body); }
+:root #roBanner .rok { align-self: stretch; display: flex; align-items: center; padding: 0 14px 0 var(--m); border: 0;
+  background: var(--ink); color: var(--paper); font: italic 800 var(--t-12)/1 var(--f-disp); font-stretch: 108%; letter-spacing: .04em; text-transform: uppercase;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); padding-right: 22px; }
+:root #roBanner .rot b { color: var(--ink); font-weight: 700; }
+:root #roBanner .path { font: 400 var(--t-12)/1 var(--f-data); color: var(--ink); }
+:root #roBanner #roScan { color: var(--ink2); }
+:root #roBanner.flash .rok { background: var(--warn); color: var(--onwarn); }
+:root #roBanner button { min-height: 24px; padding: 0 8px; border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink);
+  font: 700 var(--t-12)/1 var(--f-disp); letter-spacing: 0; text-transform: none; box-shadow: none; }
+:root #roBanner button::before, :root #roBanner button::after { display: none; }
+:root #roBanner button:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+
+/* the bundle switch in progress: the spread screened back, one sheet on it */
+:root #bundleSwitching { background: color-mix(in srgb, var(--paper) 82%, transparent); backdrop-filter: none; }
+:root #bundleSwitching .box { --dlg-px: 22px; padding: 0 var(--dlg-px) 18px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); text-align: left; min-width: 360px; }
+:root #bundleSwitching .box > h3 { margin-bottom: 12px; }
+
+/* a drop target: the frame ruled in the band ink, the label printed on a paper screen */
+:root [data-dropzone].hover { outline: 3px dashed var(--band); outline-offset: -3px; }
+:root [data-dropzone].hover::after {
+  background: color-mix(in srgb, var(--paper) 88%, transparent); color: var(--mark);
+  font: italic 800 var(--t-26)/1 var(--f-disp); font-stretch: 112%; letter-spacing: 0; text-transform: uppercase;
+}
+
+@media (max-width: 1100px), (max-height: 760px) {
+  :root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+    #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) { --dlg-px: 16px; }
+  :root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hModuleDlg, #hReviewDlg,
+    #depsDlg, #buildDropDlg, #buildDoneDlg, #themeExtrasDlg, #themeOptDlg, #readmeDlg, #bundleRestartDlg, #matchDlg, #noticesDlg) > h3 { min-height: 38px; font-size: var(--t-16); }
+  :root dialog[data-k]::before { height: 35px; }
+  :root :is(#benchDlg, #palDlg, #fitDlg, #sndDlg, #auditDlg, #statsDlg, #versionsDlg, #folderDlg, #bundleDlg, #hReviewDlg,
+    #depsDlg, #readmeDlg, #matchDlg, #noticesDlg) > button.close { top: 6px; }
+}

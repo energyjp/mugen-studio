@@ -1,0 +1,354 @@
+/* MUGEN STUDIO - THE BOOKLET: the Settings pages and the Options card (rd-settings, Phase B).
+   The booklet's "options / configuration" section. One section band (SETTINGS 設定, the
+   override count in its meta), then a page and its outer margin:
+     #settings        renderSettings' page: the chapter tabs (Common, All, Controls, Online,
+                      Engine) printed as an index strip, the chapter's caption, the filter as a
+                      fill-in line, then each group as a side head with its rows ruled under it
+     .set-margin      the key to the row marks (Common and All only; any other chapter gives the page
+                      the margin's width too - the band's tips are a slip over the page now)
+   Every id, class and data attribute the code and the suites use is unchanged: this file only
+   re-prints them. Rules are scoped under #panel-settings #settings (two ids) so they outrank
+   studio.html's older #settings rules, which load after this file. The Options card is
+   :root #topbar #optsPop (it must outrank the chrome's #topbar #optsPop).
+   Tokens only (docs/STUDIO-BOOKLET.md section 3). Square, no shadows-as-cards, no motion. */
+
+/* ------------------------------------------------------------------ */
+/* 1. THE FRAME: band, page, fold, margin                              */
+/* ------------------------------------------------------------------ */
+#panel-settings > #setFrame { border: 0; background: var(--paper); overflow: hidden; }
+#setFrame > #setBand { flex: 0 0 var(--secband-h); }
+#setFrame #setBarCount { font: 400 var(--t-12)/1 var(--f-body); color: var(--ink2); }
+#setFrame #setBarCount b { margin-right: 4px; font: 700 var(--t-13)/1 var(--f-disp); color: var(--ink); }
+#setFrame > #setBody {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); column-gap: var(--fold);
+  align-items: stretch; padding: 18px 0 28px var(--m); scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+/* the fold: a rule down the margin's inner edge, as tall as the page runs */
+#setBody > .set-margin { position: relative; min-width: 0; padding-right: var(--m); }
+#setBody > .set-margin::before { content: ''; position: absolute; top: 0; bottom: 0; left: calc(var(--fold) / -2 - 1px); width: 2px; background: var(--rule); }
+/* the marks key; it scrolls with the page like a printed margin. A chapter without the marks
+   (no filter row) has nothing in the margin, so the page takes its width and the fold goes. */
+#setBody .set-legend { margin-top: 0; display: none; }
+#setFrame > #setBody:not(:has(#settings > .filterrow)) { grid-template-columns: minmax(0, 1fr); padding-right: var(--m); }
+#setBody:not(:has(#settings > .filterrow)) > .set-margin { display: none; }
+#setBody:has(#settings > .filterrow) .set-legend { display: block; }
+#setBody .set-legend dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; row-gap: 9px; margin: 0; align-items: baseline; }
+#setBody .set-legend dt { margin: 0; justify-self: start; }
+#setBody .set-legend dd { margin: 0; font-size: var(--t-12); line-height: 1.45; color: var(--ink2); }
+#setBody .set-legend dd b { color: var(--ink); font-weight: 700; }
+#setBody .set-legend .only {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border: 1.5px solid var(--ink2); background: var(--paper); color: var(--ink); white-space: nowrap;
+  font: 700 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase;
+}
+#setBody .set-legend .only.adv { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+#setBody .set-legend .warn { color: var(--warn); font-size: var(--t-16); font-weight: 700; line-height: 1; padding-left: 4px; }
+#setBody .set-legend .mk-changed { display: inline-block; width: 26px; height: 16px; background: var(--plate); box-shadow: inset 4px 0 0 var(--mark); vertical-align: middle; }
+@media (max-width: 1100px), (max-height: 760px) {
+  #setFrame > #setBody { grid-template-columns: minmax(0, 1fr) minmax(190px, 220px); padding-top: 12px; }
+  #setBody .set-legend dl { grid-template-columns: minmax(0, 1fr); row-gap: 3px; }
+  #setBody .set-legend dd { margin-bottom: 7px; }
+}
+@media (max-width: 760px) {
+  #setFrame > #setBody { grid-template-columns: minmax(0, 1fr); row-gap: 18px; padding-right: var(--m); }
+  #setBody > .set-margin { padding-right: 0; }
+  #setBody > .set-margin::before { display: none; }
+}
+
+/* the page itself: the chapter strip prints first whatever order renderSettings appends in */
+#panel-settings #settings { display: flex; flex-direction: column; min-width: 0; color: var(--ink); font: 400 var(--t-13)/1.45 var(--f-body); }
+#panel-settings #settings > .settabs { order: -1; }
+/* a button set straight on the page (Check again, the setup guide) keeps its own width */
+#panel-settings #settings > button { align-self: flex-start; margin: 8px 0 14px; }
+
+/* ------------------------------------------------------------------ */
+/* 2. THE CHAPTER STRIP (.settabs .tab): an index printed across the   */
+/*    page on the plate, the open chapter in the band ink with the     */
+/*    speed cut's second ink under it, like the rail's open thumb      */
+/* ------------------------------------------------------------------ */
+#panel-settings #settings .settabs {
+  display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 0 0 14px; padding: 0;
+  border: 0; border-bottom: 3px solid var(--ink);
+}
+#panel-settings #settings .settabs .tab {
+  position: relative; display: inline-flex; align-items: baseline; gap: 8px; height: 34px; margin: 0; padding: 0 16px 0 14px;
+  border: 0; border-right: 2px solid var(--paper); background: var(--plate); color: var(--ink); box-shadow: none; cursor: pointer;
+  font: italic 800 var(--t-13)/34px var(--f-disp); font-stretch: 108%; letter-spacing: .02em; text-transform: uppercase; white-space: nowrap;
+}
+#panel-settings #settings .settabs .tab::before, #panel-settings #settings .settabs .tab::after { display: none; }
+#panel-settings #settings .settabs .tab .n { font: 400 var(--t-12)/1 var(--f-data); font-style: normal; letter-spacing: 0; color: inherit; opacity: 1; margin: 0; }
+#panel-settings #settings .settabs .tab:hover { background: var(--ink); color: var(--paper); }
+#panel-settings #settings .settabs .tab[aria-selected="true"] { background: var(--band); color: var(--onband); box-shadow: inset 0 -5px 0 var(--band2); }
+#panel-settings #settings .settabs .tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; z-index: 1; }
+
+/* the chapter's caption (renderSettings' sentence) and prose blocks */
+#panel-settings #settings > .gridhint { margin: 0 0 12px !important; padding: 0; border: 0; background: none; color: var(--ink2); font: 400 var(--t-13)/1.5 var(--f-body); max-width: 92ch; }
+#panel-settings #settings .none, #panel-settings #settings .pnone { color: var(--ink2); font-size: var(--t-13); padding: 6px 0; }
+
+/* the filter: a fill-in line; Reset all beside it */
+#panel-settings #settings .filterrow { display: flex; align-items: end; gap: 14px; margin: 0 0 16px; flex-wrap: wrap; }
+#panel-settings #settings .filterrow input[type=search] {
+  flex: 1 1 260px; max-width: 460px; height: 30px; padding: 0 2px 2px 2px; border: 0; border-bottom: 2px solid var(--line);
+  background: transparent; color: var(--ink); font: 400 var(--t-13)/1 var(--f-body); box-shadow: none;
+}
+#panel-settings #settings .filterrow input[type=search]:hover { border-bottom-color: var(--ink); }
+#panel-settings #settings .filterrow input[type=search]:focus-visible { outline: none; border-bottom: 3px solid var(--focus); padding-bottom: 1px; }
+#panel-settings #settings .filterrow input[type=search]::placeholder { color: var(--ink2); opacity: 1; }
+
+/* ------------------------------------------------------------------ */
+/* 3. GROUPS: a side head (square, caps, run-in rule) that opens; the  */
+/*    rows ruled under it                                               */
+/* ------------------------------------------------------------------ */
+#panel-settings #settings details.grp, #panel-settings #settings details.kslot {
+  margin: 0 0 4px; padding: 0; border: 0; background: none; box-shadow: none; overflow: visible;
+}
+#panel-settings #settings details.grp > summary, #panel-settings #settings details.kslot > summary {
+  display: flex; align-items: center; gap: 9px; padding: 9px 0 8px; margin: 0; cursor: pointer; list-style: none; color: var(--ink);
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase; background: none; border: 0;
+}
+#panel-settings #settings details > summary::-webkit-details-marker { display: none; }
+/* the square: an empty box when the group is shut, printed solid when it is open */
+#panel-settings #settings details.grp > summary::before, #panel-settings #settings details.kslot > summary::before {
+  content: ''; flex: none; width: 11px; height: 11px; box-sizing: border-box; border: 2px solid var(--band); background: transparent;
+  transform: none; transition: none; align-self: center; font-size: 0;
+}
+#panel-settings #settings details[open].grp > summary::before, #panel-settings #settings details[open].kslot > summary::before { background: var(--band); }
+#panel-settings #settings details.grp > summary::after, #panel-settings #settings details.kslot > summary::after {
+  content: ''; order: 99; flex: 1 1 auto; min-width: 12px; height: 2px; background: var(--rule); align-self: center;
+}
+#panel-settings #settings details.grp > summary:hover::after, #panel-settings #settings details.kslot > summary:hover::after { background: var(--ink2); }
+#panel-settings #settings details.grp > summary:focus-visible, #panel-settings #settings details.kslot > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#panel-settings #settings details.kslot > summary { text-transform: none; font-size: var(--t-16); font-style: italic; }
+#panel-settings #settings .grp .gcount { font: 400 var(--t-12)/1 var(--f-body); color: var(--ink2); text-transform: none; letter-spacing: 0; }
+#panel-settings #settings .grp .gchanged {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 6px; background: var(--mark); color: var(--onmark);
+  font: 800 var(--t-11)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .03em;
+}
+#panel-settings #settings details.grp:has(.gchanged), #panel-settings #settings details.grp[open] { box-shadow: none; }
+
+/* a setting: name | value | marks | what it does | reset */
+#panel-settings #settings .row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 38px; padding: 5px 4px 5px 20px; margin: 0;
+  border: 0; border-top: 1px solid var(--rule); background: none; box-shadow: none;
+}
+#panel-settings #settings details.grp > summary + .row, #panel-settings #settings details.grp > summary + .note + .row { border-top: 2px solid var(--ink); }
+#panel-settings #settings .row:nth-of-type(even) { background: var(--plate); }
+#panel-settings #settings .row .k { flex: 0 0 210px; min-width: 210px; font: 400 var(--t-13)/1.25 var(--f-body); color: var(--ink); }
+#panel-settings #settings .row .k b { font-weight: 700; }
+#panel-settings #settings .row .k .sec { font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); letter-spacing: 0; }
+#panel-settings #settings .row .d { flex: 1 1 140px; min-width: 120px; color: var(--ink2); font-size: var(--t-12); }
+/* a changed setting: the band's mark down its edge and its name in the mark ink */
+#panel-settings #settings .row.changed { background: none; box-shadow: inset 4px 0 0 var(--mark); }
+#panel-settings #settings .row.changed:nth-of-type(even) { background: var(--plate); }
+#panel-settings #settings .row.changed .k b { color: var(--mark); }
+/* which product a key reaches, and the other small marks */
+#panel-settings #settings .only, #panel-settings #settings .offlabel {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border: 1.5px solid var(--ink2); border-left-width: 1.5px;
+  background: var(--paper); color: var(--ink); white-space: nowrap;
+  font: 700 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase;
+}
+#panel-settings #settings .only.adv { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+#panel-settings #settings summary .only { margin-left: 2px; }
+#panel-settings #settings .warn { color: var(--warn); font-weight: 700; }
+#panel-settings #settings .row > .warn { font-size: var(--t-16); line-height: 1; }
+#panel-settings #settings .outside {
+  margin: 10px 0 12px; padding: 8px 10px 8px 12px; border: 0; border-left: 4px solid var(--warn); background: var(--plate);
+  color: var(--ink); font-size: var(--t-12); line-height: 1.5;
+}
+#panel-settings #settings .warnbox { border: 2px solid var(--warn); padding: 8px 12px; margin: 10px 0; background: var(--paper); }
+#panel-settings #settings .note { color: var(--ink2); font-size: var(--t-13); line-height: 1.5; padding: 6px 4px 8px 20px; border-top: 1px solid var(--rule); }
+#panel-settings #settings .grp > summary + .note { border-top: 0; padding-top: 0; }
+
+/* ------------------------------------------------------------------ */
+/* 4. CONTROLS ON THE PAGE: boxed inputs, printed buttons              */
+/* ------------------------------------------------------------------ */
+#panel-settings #settings input:not([type=checkbox]):not([type=radio]):not([type=search]):not([type=range]),
+#panel-settings #settings select, #panel-settings #settings textarea {
+  height: 28px; padding: 0 8px; border: 2px solid var(--line); background: var(--sunk); color: var(--ink); box-shadow: none;
+  font: 400 var(--t-13)/1 var(--f-body); min-width: 0;
+}
+#panel-settings #settings textarea { height: auto; padding: 6px 8px; line-height: 1.45; }
+#panel-settings #settings input[type=number], #panel-settings #settings input.kv, #panel-settings #settings input[type=password] { font-family: var(--f-data); font-size: var(--t-12); }
+#panel-settings #settings select {
+  appearance: none; -webkit-appearance: none; padding-right: 26px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position: right 13px center, right 8px center; background-size: 5px 5px; background-repeat: no-repeat;
+}
+#panel-settings #settings select option { background: var(--paper); color: var(--ink); }
+#panel-settings #settings :is(input, select, textarea):hover:not(:disabled) { border-color: var(--ink); }
+#panel-settings #settings :is(input, select, textarea):focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border-color: var(--focus); }
+#panel-settings #settings :is(input, textarea)::placeholder { color: var(--ink2); opacity: 1; }
+#panel-settings #settings :is(input, select, textarea):disabled { border-color: var(--rule); color: var(--ink2); background: var(--paper); }
+#panel-settings #settings input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; }
+
+#panel-settings #settings button:not(.tab):not(.hint-art) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; padding: 0 10px; margin: 0;
+  border: 1.5px solid var(--ink); background: var(--paper); background-image: none; color: var(--ink); box-shadow: none; cursor: pointer;
+  font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .005em; text-transform: none; white-space: nowrap; opacity: 1;
+}
+#panel-settings #settings button:not(.tab):not(.hint-art)::before, #panel-settings #settings button:not(.tab):not(.hint-art)::after { display: none; }
+#panel-settings #settings button:not(.tab):not(.hint-art):hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#panel-settings #settings button:not(.tab):not(.hint-art):active,
+#panel-settings #settings button.on:not(.tab):not(.hint-art) { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+#panel-settings #settings button.primary:not(.tab) { background: var(--band); color: var(--onband); border-color: var(--band); }
+#panel-settings #settings button.primary:not(.tab):hover { background: var(--band2); color: var(--onband2); border-color: var(--band2); }
+#panel-settings #settings button.danger:not(.tab) { border-color: var(--flag); color: var(--ink); background: var(--paper); }
+#panel-settings #settings button.danger:not(.tab):hover { background: var(--flag); color: var(--onflag); border-color: var(--flag); }
+#panel-settings #settings button:not(.tab):not(.hint-art):disabled,
+#panel-settings #settings button:not(.tab):not(.hint-art):disabled:hover { background: transparent; border-color: var(--line); color: var(--ink2); cursor: default; opacity: .6; }
+/* (a waiting button reads as off: no fill and dimmed, as the Online tab always printed it - test-host-ui) */
+/* armed: Reset all's second click, a key cell waiting for its key */
+#panel-settings #settings .filterrow > button[data-armed="1"] { background: var(--flag); color: var(--onflag); border-color: var(--flag); }
+#panel-settings #settings button.arming:not(.tab), #panel-settings #settings .kb button.cap.arming { border-color: var(--mark); color: var(--mark); background: var(--paper); font-style: italic; }
+#panel-settings #settings .row .rst { visibility: hidden; height: 22px; padding: 0 7px; border-color: var(--line); color: var(--ink2); font-size: var(--t-11); }
+#panel-settings #settings .row.changed .rst { visibility: visible; }
+#panel-settings #settings .row .rst:hover { border-color: var(--ink); color: var(--ink); }
+#panel-settings #settings label.chk { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-13); color: var(--ink); cursor: pointer; }
+
+/* ------------------------------------------------------------------ */
+/* 5. ONLINE: prose, the asks, the step log, the players table         */
+/* ------------------------------------------------------------------ */
+#panel-settings #settings .hostnote { margin: 0 0 14px; color: var(--ink2); font-size: var(--t-13); line-height: 1.55; max-width: 100ch; }
+#panel-settings #settings .hostnote b, #panel-settings #settings ol.steps b, #panel-settings #settings .fhint b { color: var(--ink); font-weight: 700; }
+#panel-settings #settings .hostnote .webonly {
+  margin: 0 0 12px; padding: 9px 12px 9px 14px; border: 0; border-left: 4px solid var(--band); background: var(--plate); color: var(--ink);
+}
+#panel-settings #settings .hostnote ul.wants { margin: 6px 0 10px; padding-left: 0; list-style: none; }
+#panel-settings #settings .hostnote ul.wants li { position: relative; margin: 3px 0; padding-left: 16px; }
+#panel-settings #settings .hostnote ul.wants li::before { content: ''; position: absolute; left: 2px; top: .55em; width: 6px; height: 6px; background: var(--band); }
+#panel-settings #settings :is(.hostnote, .note, .hostask, ol.steps, .fhint) code,
+#panel-settings #settings .row code.addr { font: 400 var(--t-12)/1.4 var(--f-data); color: var(--ink); word-break: break-all; }
+#panel-settings #settings .guidebtn { margin: -4px 0 16px; align-self: flex-start; }
+#panel-settings #settings ol.steps { color: var(--ink2); font-size: var(--t-13); line-height: 1.5; margin: 0; padding: 2px 4px 8px 40px; }
+#panel-settings #settings ol.steps li::marker { font: italic 800 var(--t-13)/1 var(--f-disp); color: var(--mark); }
+#panel-settings #settings .fhint { color: var(--ink2); font-size: var(--t-12); margin: -2px 4px 8px 240px; }
+@media (max-width: 1100px) { #panel-settings #settings .fhint { margin-left: 20px; } }
+#panel-settings #settings .row .tres { font-size: var(--t-12); color: var(--ink2); }
+#panel-settings #settings :is(.row, .hostask) .tres.ok, #panel-settings #settings .hostlog .ok { color: var(--good); }
+#panel-settings #settings :is(.row, .hostask) .tres.bad, #panel-settings #settings .hostlog .bad, #panel-settings #settings .hostproblem { color: var(--bad); }
+#panel-settings #settings :is(.row, .hostask) .tres.warn, #panel-settings #settings .hostlog .warn { color: var(--warn); }
+#panel-settings #settings .hostlog {
+  margin: 4px 4px 12px 20px; padding: 6px 12px; border: 0; border-left: 2px solid var(--ink); background: var(--sunk);
+  font: 400 var(--t-12)/1.75 var(--f-data); color: var(--ink);
+}
+#panel-settings #settings .hostlog .dim, #panel-settings #settings .hostlog .now { color: var(--ink2); }
+#panel-settings #settings .hostask {
+  margin: 6px 4px 12px 20px; padding: 10px 14px; border: 2px solid var(--warn); background: var(--paper); color: var(--ink);
+  font-size: var(--t-13); line-height: 1.5;
+}
+#panel-settings #settings .hostask.danger { border-color: var(--flag); box-shadow: inset 6px 0 0 var(--flag); padding-left: 18px; }
+#panel-settings #settings .lbprev .bar { color: var(--ink2); font-size: var(--t-12); }
+#panel-settings #settings .lbprev iframe { border: 2px solid var(--ink); }
+/* Players: the booklet's table (band head, ruled rows) */
+#panel-settings #settings .pwrap { margin: 4px 4px 12px 20px; }
+#panel-settings #settings .ptable { font-size: var(--t-13); }
+#panel-settings #settings .ptable th {
+  height: var(--bk-row); padding: 0 8px; background: var(--band); color: var(--onband); border: 0;
+  font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .02em;
+}
+#panel-settings #settings .ptable th + th { border-left: 2px solid var(--paper); }
+#panel-settings #settings .ptable td { border-bottom: 1px solid var(--rule); }
+#panel-settings #settings .ptable tbody tr[data-name]:nth-of-type(even) td { background: var(--plate); }
+#panel-settings #settings .ptable td.n { font: 400 var(--t-12)/1 var(--f-data); }
+#panel-settings #settings .ptable td.pname .sub, #panel-settings #settings .pedit label { color: var(--ink2); }
+#panel-settings #settings .pcode { font: 400 var(--t-20)/1.2 var(--f-data); color: var(--ink); }
+
+/* ------------------------------------------------------------------ */
+/* 6. CONTROLS: a slot is a page of the pad: directions, the six       */
+/*    attacks, start and the extras                                    */
+/* ------------------------------------------------------------------ */
+#panel-settings #settings .kpad { padding: 10px 4px 12px 20px; gap: 18px 40px; }
+#panel-settings #settings .kgrp h4 {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--ink);
+  font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase;
+}
+#panel-settings #settings .kgrp h4::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--rule); min-width: 12px; }
+#panel-settings #settings .kb .kbn b { font: 700 var(--t-13)/1.1 var(--f-disp); color: var(--ink); }
+#panel-settings #settings .kb .kbm { font-size: var(--t-12); color: var(--ink2); }
+#panel-settings #settings .kico { background: var(--ink); }
+#panel-settings #settings .kb input.kv { width: 108px; height: 26px; }
+#panel-settings #settings .kb input.kv.set { border-color: var(--ink); }
+#panel-settings #settings .kb input.kv.conflict { border-color: var(--warn); color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); }
+#panel-settings #settings .kb input.kv.arming { border-color: var(--mark); color: var(--mark); font-style: italic; }
+#panel-settings #settings .kb button { height: 24px; padding: 0 8px; }
+#panel-settings #settings .keyacts { padding: 0 4px 12px 20px; }
+
+/* the Command List's buttons: four styles, each a card with its own pictures */
+#panel-settings #settings .bstylegrp { margin: 6px 0 14px; padding: 0 4px 0 20px; }
+#panel-settings #settings .bstyles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 268px), 1fr)); gap: 8px; margin-top: 6px; }
+#panel-settings #settings .bstyle {
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; min-width: 0; cursor: pointer;
+  border: 2px solid var(--rule); background: var(--paper); color: var(--ink);
+}
+#panel-settings #settings .bstyle:hover { border-color: var(--ink2); }
+#panel-settings #settings .bstyle.on { border-color: var(--ink); box-shadow: inset 4px 0 0 var(--band); }
+#panel-settings #settings .bstyle:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+#panel-settings #settings .bstyle .bshead { display: flex; align-items: center; gap: 8px; font: 700 var(--t-13)/1.1 var(--f-disp); }
+#panel-settings #settings .bstyle .bshead input { margin: 0; accent-color: var(--band); }
+#panel-settings #settings .bstyle .bsicons { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; background: #22232a; }
+#panel-settings #settings .bstyle .bsi { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+#panel-settings #settings .bstyle .bsi img { display: block; width: auto; height: 26px; image-rendering: auto; }
+/* the second row: any punch / any kick (pictures of three buttons, wider than tall) and Start, a little smaller so the row fits a 268px card */
+#panel-settings #settings .bstyle .bsi.bsx img { height: 22px; }
+#panel-settings #settings .bstyle .bsbr { flex-basis: 100%; height: 0; }
+#panel-settings #settings .bstyle .bsi .bsk { font: 400 var(--t-11)/1 var(--f-data); color: #d8d9d4; }
+#panel-settings #settings .bstyle .bsmiss { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; font: 700 var(--t-11)/1 var(--f-data); color: #d8d9d4; }
+#panel-settings #settings .bstyle .bsnote { font-size: var(--t-12); line-height: 1.35; color: var(--ink2); }
+#panel-settings #settings .bstyle .bsnote.warn { color: var(--warn); }
+
+/* the punch / kick strengths keep their colors (they are the label's meaning, not decoration) */
+#panel-settings #settings .kico.light { background: var(--wb); }
+#panel-settings #settings .kico.medium { background: var(--tmpl); }
+#panel-settings #settings .kico.heavy { background: var(--ar); }
+
+/* ------------------------------------------------------------------ */
+/* 7. ENGINE: the zip, the game rules (.econsts) and the fight screen  */
+/* ------------------------------------------------------------------ */
+#panel-settings #settings .econsts .gh {
+  display: flex; align-items: center; gap: 8px; margin: 14px 0 0; padding: 0 0 6px 20px; color: var(--ink);
+  font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; border-bottom: 2px solid var(--ink);
+}
+#panel-settings #settings .econsts .erow { padding: 7px 4px 7px 20px; border-bottom: 1px solid var(--rule); }
+#panel-settings #settings .econsts .erow .lab { font: 600 var(--t-13)/1.3 var(--f-body); color: var(--ink); }
+#panel-settings #settings .econsts .erow .lab .k, #panel-settings #settings .econsts .files code {
+  font: 400 var(--t-11)/1.4 var(--f-data); color: var(--ink2); opacity: 1;
+}
+#panel-settings #settings .econsts .erow .info { font-size: var(--t-12); color: var(--ink); }
+#panel-settings #settings .econsts .erow :is(.risk, .band, .unit), #panel-settings #settings .econsts .art figure { color: var(--ink2); opacity: 1; }
+#panel-settings #settings .econsts .erow.changed { box-shadow: inset 4px 0 0 var(--mark); }
+#panel-settings #settings .econsts .erow.changed .lab { color: var(--mark); }
+#panel-settings #settings .econsts .erow .err, #panel-settings #settings .econsts :is(.files, figure).missing { color: var(--bad); }
+#panel-settings #settings .econsts .files { color: var(--ink2); font-size: var(--t-12); padding-left: 20px; }
+#panel-settings #settings .econsts .acts { padding-left: 20px; }
+#panel-settings #settings .econsts .art { padding-left: 20px; }
+
+/* ------------------------------------------------------------------ */
+/* 8. THE OPTIONS CARD (#optsPop under the running head's Options)     */
+/*    Look and Printing are the foundation's rows, re-set only in      */
+/*    spacing; their buttons and behavior are untouched                */
+/* ------------------------------------------------------------------ */
+:root #topbar #optsPop {
+  gap: 0; min-width: 300px; padding: 0 0 6px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 0 0 0 3px var(--paper);
+}
+:root #topbar #optsPop .opt-head {
+  position: relative; isolation: isolate; display: flex; align-items: center; gap: 10px; height: 28px; margin: 0 0 6px; padding: 0 30px 0 12px;
+  align-self: flex-start; color: var(--onband);
+}
+:root #topbar #optsPop .opt-head::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--band);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
+:root #topbar #optsPop .opt-head .t { font: italic 800 var(--t-13)/1 var(--f-disp); font-stretch: 112%; text-transform: uppercase; letter-spacing: .02em; }
+:root #topbar #optsPop .opt-head .k { font: 700 var(--t-11)/1 var(--f-jp); letter-spacing: .04em; }
+:root #topbar #optsPop > label.bk-chk { display: flex; padding: 5px 14px; color: var(--ink); font: 400 var(--t-13)/1.3 var(--f-body); }
+:root #topbar #optsPop > label.bk-chk[hidden] { display: none; }
+:root #topbar #optsPop > label.bk-chk:hover { background: var(--plate); color: var(--ink); }
+body.adv #topbar #optsPop > label.advtab > i { border-color: var(--warn); }
+body.adv #topbar #optsPop > label.advtab > input:checked + i { background: var(--warn); }
+body.adv #topbar #optsPop > label.advtab > input:checked + i::after { background: var(--onwarn); }
+:root #topbar #optsPop .optrow { margin: 6px 0 0; padding: 8px 14px 2px; border-top: 1px solid var(--rule); color: var(--ink); font-size: var(--t-13); }
+:root #topbar #optsPop .optrow .k { font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink2); min-width: 64px; }
+:root #topbar #optsPop .optrow .path { font: 400 var(--t-12)/1.2 var(--f-data); color: var(--ink2); }
+:root #topbar #optsPop .optrow > button.tiny {
+  height: 22px; padding: 0 8px; border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: none;
+  font: 700 var(--t-12)/1 var(--f-disp); letter-spacing: 0; text-transform: none;
+}
+:root #topbar #optsPop .optrow > button.tiny:hover { background: var(--plate); }
+:root #topbar #optsPop .optrow > button.tiny::before, :root #topbar #optsPop .optrow > button.tiny::after { display: none; }

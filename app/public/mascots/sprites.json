@@ -1,0 +1,5 @@
+{"height": 192, "members": {
+ "wb": {"band": "wb", "name": "WB", "w": 213, "h": 192, "frames": ["idle", "shutter1", "shutter2", "shut", "working", "done", "error"], "box": [57, 91, 967, 910], "shifts": {"shutter1": [0, 0], "shutter2": [0, 0], "shut": [0, 0], "working": [0, 0], "done": [0, 0], "error": [0, 0]}, "breath": 0.68, "idleBox": [15.9, 8.0, 197.4, 192.0]},
+ "djar": {"band": "ar", "name": "DJ AR", "w": 182, "h": 192, "frames": ["idle", "blink", "working", "done", "error"], "box": [51, 38, 973, 1012], "shifts": {"blink": [0, 0], "working": [0, 0], "done": [0, 0], "error": [0, 0]}, "breath": 0.7, "idleBox": [12.6, 0.0, 169.1, 192.0]},
+ "shizuka": {"band": "sz", "name": "SHiZUKA", "w": 174, "h": 192, "frames": ["idle", "blink", "working", "done", "error"], "box": [108, 87, 922, 983], "shifts": {"blink": [0, 0], "working": [0, 0], "done": [0, 0], "error": [0, 0]}, "breath": 0.87, "idleBox": [0.0, 0.0, 174.4, 192.0]}
+}}

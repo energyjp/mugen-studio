@@ -1,0 +1,2627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/themes.css">
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/booklet.css">
+<script src="/booklet.js"></script>
+<title>Moves</title>
+<style>
+  /* THE MOVES WINDOW, printed as the booklet's command-list page (GRAIL 3.10;
+     the booklet: $X/rd-foundation/CONTRACT.md). One window per character.
+
+     TWO PRINTINGS OF ONE PAGE. Edit off (the default) is the printed command
+     list: every attack state with its name and input when the Command List
+     reader names it, its frame data, the action frame by frame with the frame
+     bar under the sprites, and the opened move on the right page with a 2x
+     plate of its first active frame. Edit on (the band's switch, or ?edit=1)
+     is the editing UI: the three value tiers, Revert, added values, Edit
+     timing. Both are built from the same /api/char-moves read every time, and
+     the edit parts are simply not shown while Edit is off (body.editing), so
+     a hidden input is never reachable. Every number is the server's
+     (framedata.js); the page never counts a frame itself.
+
+     Colors come only from the printing tokens (themes.css), except the
+     engine's own box colors below, which are content. */
+  :root {
+    /* The engine's own debug colors, system.go:4000-4007 at 96413d2. The
+       uint32s there are 0xAABBGGRR (Pal32ToBytes lays them out little-endian
+       as R,G,B,A, image.go:588-595): Clsn1 HitDef 0xff0000ff, ReversalDef
+       0xff0040c0, Inactive 0xff000080, Clsn2 0xffff0000. */
+    --c1hit: rgb(255,0,0); --c1rev: rgb(192,64,0); --c1not: rgb(128,0,0); --c2: rgb(0,0,255);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  /* Nothing selects, nothing drags - the Studio's rule (GRAIL 3.1), restated
+     because a window shares no stylesheet. Inputs keep their text. */
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 400 var(--t-13)/1.45 var(--f-body);
+    display: flex; flex-direction: column; user-select: none; cursor: default; overflow: hidden; }
+  img { -webkit-user-drag: none; user-drag: none; }
+  input, select { user-select: text; }
+  code, .data { font-family: var(--f-data); font-size: var(--t-12); }
+
+  /* The edit parts print only with Edit on; the printed parts only with it off. */
+  body:not(.editing) .ed { display: none !important; }
+  body.editing .pr { display: none !important; }
+
+  /* ---- the band ---- */
+  #band .src { color: var(--ink2); }
+  #band .src code { color: var(--ink); }
+  #band .bk-secband-t .t { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+  /* the band's mascot (Booklet.mascot), standing on the band's rule after the title plate */
+  #band > #bandMascot { align-self: flex-end; margin-left: -6px; padding: 3px 6px 0; }
+  #band > #bandMascot .bk-sprite { height: calc(var(--secband-h) - 10px); }
+
+  #edited { display: flex; gap: 10px 12px; align-items: center; flex-wrap: wrap; margin: 14px 0 0; padding: 8px 10px; background: var(--plate); font-size: var(--t-12); }
+  /* The display above beats the UA's [hidden], which left an empty band
+     whenever nothing was edited. */
+  #edited[hidden] { display: none !important; }
+  #edited b { font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .03em; color: var(--warn); }
+  #edited .f { font-family: var(--f-data); font-size: var(--t-12); color: var(--ink); }
+  #msg { flex: 0 0 auto; padding: 6px var(--m); font-size: var(--t-12); border-bottom: 2px solid var(--ink); }
+  #msg:empty { display: none; }
+  #msg.err { color: var(--bad); } #msg.ok { color: var(--good); }
+
+  #spread { --l: 7fr; --r: 5fr; }
+  .bk-pg { padding-top: 16px; padding-bottom: 28px; }
+
+  /* the page's own buttons and selects, drawn like the booklet's */
+  button, select { font: 700 var(--t-12)/1 var(--f-disp); color: var(--ink); }
+  #left button, #right button { height: 24px; padding: 0 8px; border: 1.5px solid var(--ink); background: var(--paper); cursor: pointer; box-shadow: none; }
+  #left button:hover, #right button:hover { background: var(--plate); }
+  #left button[aria-pressed="true"], #right button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  #left button[disabled], #right button[disabled] { border-color: var(--line); color: var(--ink2); background: var(--paper); cursor: default; }
+  #right select { height: 24px; padding: 0 6px; border: 1.5px solid var(--line); background: var(--well); color: var(--ink); font: 400 var(--t-12)/1 var(--f-data); max-width: 100%; }
+  #right select:hover { border-color: var(--ink); }
+  button.warn { border-color: var(--flag) !important; }
+  button.warn:hover { background: var(--flag) !important; color: var(--onflag) !important; }
+
+  /* ---- THE COMMAND LIST (#states): one row per attack state ----
+     A row's first child is its state number (code and the suites read it
+     there); the grid places every cell in its printed column. The Hit column
+     holds the cancel stamps (100px), so the Command column takes the larger
+     share of what is left (1.1fr to the name's 1fr): at 1400 wide that is
+     181px, the widest input on Main (a MAX super's charge + X + Y, 179px)
+     whole; 1.5fr / 1.4fr cut its last chip once Hit grew (measured, merge). */
+  #states { --cols: minmax(110px, 1fr) minmax(96px, 1.1fr) 50px 40px 36px 38px 44px 100px 50px 66px; min-width: 620px; font-size: var(--t-13); }
+  #states.nonames { --cols: minmax(150px, 2.6fr) 0 50px 40px 36px 38px 44px 100px 50px 66px; }
+  #states.nonames .cm, #states.nonames .clh > span:nth-child(2) { display: none; }
+  .clh, .clg, #states .st, #states .nohit { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: 0; }
+  .clh { height: var(--bk-row); background: var(--band); color: var(--onband); font: 800 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .02em; position: sticky; top: -16px; z-index: 2; }
+  .clh > span { padding: 0 5px; white-space: nowrap; height: 100%; display: flex; align-items: center; }
+  .clh > span + span { border-left: 2px solid var(--paper); }
+  .clh > .r { justify-content: flex-end; }
+  .clh > span { grid-row: 1; }
+  .clh > :nth-child(1) { grid-column: 1; padding-left: 8px; } .clh > :nth-child(2) { grid-column: 2; } .clh > :nth-child(3) { grid-column: 3; }
+  .clh > :nth-child(4) { grid-column: 4; } .clh > :nth-child(5) { grid-column: 5; } .clh > :nth-child(6) { grid-column: 6; }
+  .clh > :nth-child(7) { grid-column: 7; } .clh > :nth-child(8) { grid-column: 8; } .clh > :nth-child(9) { grid-column: 9; } .clh > :nth-child(10) { grid-column: 10; }
+  #states.nonames .clh > :nth-child(3) { border-left: 0; }
+  .clg { padding: 12px 8px 4px; border-bottom: 2px solid var(--ink); font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; }
+  .clg > * { grid-column: 1 / -1; }
+  .clg .k { font: 700 var(--t-11)/1 var(--f-jp); margin-left: 8px; text-transform: none; color: var(--ink2); }
+  #states .st, #states .nohit { min-height: var(--bk-row); border-bottom: 1px solid var(--rule); }
+  #states .st { cursor: pointer; }
+  #states .zb { background: var(--plate); }
+  #states .st:hover { box-shadow: inset 0 -2px 0 var(--ink); }
+  #states .st:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+  #states .st > *, #states .nohit > * { grid-row: 1; padding: 2px 6px; min-width: 0; }
+  #states .no { grid-column: 3; font: 400 var(--t-12)/1 var(--f-data); }
+  #states .mv { grid-column: 1; padding-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #states .mv b { font-weight: 700; }
+  #states .mv .desc { color: var(--ink2); }
+  #states .mv small { margin-left: 6px; font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); }
+  #states .cm { grid-column: 2; overflow: hidden; }
+  #states .cm .bk-cmd .ar { width: 15px; height: 15px; }
+  #states .cm .bk-cmd .b { min-width: 15px; height: 15px; font-size: 10px; }
+  #states .n { text-align: right; font: 400 var(--t-12)/1 var(--f-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #states .su { grid-column: 4; } #states .ac { grid-column: 5; font-weight: 700; } #states .rc { grid-column: 6; } #states .tt { grid-column: 7; }
+  #states .oh { grid-column: 8; } #states .ob { grid-column: 9; } #states .dm { grid-column: 10; }
+  #states .nohit .why { grid-column: 4 / -1; font-size: var(--t-12); color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #states .kd { font: 800 var(--t-11)/1 var(--f-disp); letter-spacing: .03em; }
+  /* CANCELS (cmdlist.js THE CANCELS): SP / SU / CH printed beside the on-hit number,
+     the band's mark ink on paper (4.5:1 on paper and plate); a dashed box = through
+     a variable the state sets itself (approximate). PROXIMITY: far / close after the input. */
+  #states .n.oh { display: flex; justify-content: flex-end; align-items: center; gap: 3px; }
+  .cx { display: inline-flex; gap: 2px; margin-right: 1px; }
+  .cxm { font: 800 10px/1 var(--f-disp); font-stretch: 87.5%; letter-spacing: .02em; color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); padding: 2px 3px 1px; cursor: help; }
+  .cxm.apx { box-shadow: none; outline: 1px dashed var(--mark); outline-offset: -1px; }
+  .rng { margin-left: 6px; font: 700 var(--t-11)/1 var(--f-disp); font-stretch: 104%; color: var(--ink2); white-space: nowrap; cursor: help; }
+  .rng.close { color: var(--mark); }
+  #states .cm { display: flex; align-items: center; }
+  #states .st[aria-selected="true"] .cxm, #states .st[aria-selected="true"] .rng { color: var(--paper); box-shadow: inset 0 0 0 1px var(--paper); }
+  #states .st[aria-selected="true"] .cxm.apx { box-shadow: none; outline-color: var(--paper); }
+  #states .st[aria-selected="true"] .rng { box-shadow: none; }
+  .cxbox { margin-top: 14px; }
+  .cxbox .cxrow { display: grid; grid-template-columns: 28px 112px 1fr; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--rule); font-size: var(--t-13); }
+  .cxbox .cxrow .cxm { justify-self: start; }
+  .cxbox .cxto .sn { font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); }
+  .cxbox .cxto small { font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); }
+  .mvhead .rngline b { color: var(--ink); }
+  #states .n.plus, #states .fdsum .p { color: var(--good); } #states .n.minus, #states .fdsum .m { color: var(--bad); }
+  /* Edit on: the state's own line under the printed one */
+  #states .st .eline { grid-row: 2; grid-column: 1 / -1; display: flex; gap: 6px 12px; flex-wrap: wrap; align-items: baseline; padding: 0 8px 4px; font: 400 var(--t-11)/1.4 var(--f-data); color: var(--ink2); }
+  #states .st .eline .fdsum { color: var(--ink); }
+  .mt { display: inline-block; width: 16px; text-align: center; font: 700 var(--t-11)/14px var(--f-data); margin-right: 4px; box-shadow: inset 0 0 0 1.5px var(--line); color: var(--ink2); }
+  .mt.a { box-shadow: inset 0 0 0 1.5px var(--flag); color: var(--ink); } .mt.h { box-shadow: inset 0 0 0 1.5px var(--clsn2); color: var(--ink); }
+  /* the selected row prints in reverse */
+  #states .st[aria-selected="true"] { background: var(--ink) !important; color: var(--paper); }
+  #states .st[aria-selected="true"] .mv .desc, #states .st[aria-selected="true"] small, #states .st[aria-selected="true"] .eline,
+  #states .st[aria-selected="true"] .eline .fdsum, #states .st[aria-selected="true"] .n.plus, #states .st[aria-selected="true"] .n.minus, #states .st[aria-selected="true"] .fdsum .p, #states .st[aria-selected="true"] .fdsum .m,
+  #states .st[aria-selected="true"] .mt { color: var(--paper); }
+  #states .st[aria-selected="true"] .mt { box-shadow: inset 0 0 0 1.5px var(--paper); }
+  #states .st[aria-selected="true"] .bk-cmd .b.s { background: var(--ink); color: var(--paper); box-shadow: inset 0 0 0 1.5px var(--paper); }
+  #states .st[aria-selected="true"] .bk-cmd .txt { color: var(--paper); }
+  .dead { padding: 5px 8px; border-bottom: 1px solid var(--rule); font-size: var(--t-12); color: var(--ink2); }
+  .dead .no { font-family: var(--f-data); color: var(--ink); }
+  .deadh { margin-top: 18px; }
+  .none { padding: 10px 8px; color: var(--ink2); font-size: var(--t-13); }
+  .listfoot { margin: 8px 0 0; font-size: var(--t-12); color: var(--ink2); line-height: 1.5; max-width: 96ch; }
+  .listfoot b { color: var(--ink); }
+
+  /* ---- #frames: the action, frame by frame ---- */
+  #frames { margin-top: 20px; }
+  #plate:empty { display: none; }
+  .title { font: 800 var(--t-13)/1.3 var(--f-disp); color: var(--ink); }
+  .title .ty { color: var(--mark); }
+  .facts { color: var(--ink2); font-size: var(--t-12); margin-top: 4px; line-height: 1.55; }
+  .facts code { color: var(--ink); }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 10px 0 6px; }
+  .fire { margin: 6px 0; font-size: var(--t-12); }
+  .fire code { color: var(--ink); }
+  .fire .k { display: inline-block; font: 800 var(--t-11)/16px var(--f-disp); text-transform: uppercase; letter-spacing: .03em; padding: 0 5px; margin-right: 6px; box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .fire .k.static { background: var(--warn); color: var(--onwarn); box-shadow: none; }
+  .fire .k.cond { color: var(--ink2); box-shadow: inset 0 0 0 1.5px var(--line); }
+  .legend { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: var(--t-12); color: var(--ink2); margin: 8px 0 10px; align-items: center; }
+  .legend i { display: inline-block; width: 14px; height: 12px; margin-right: 6px; vertical-align: -2px; border: 1.5px solid; }
+  .legend i.fb { height: 8px; border: 0; }
+  .legend .warnline { color: var(--warn); }
+  .sub { margin-top: 14px; font-size: var(--t-12); color: var(--ink2); }
+  .sub .h { font: 800 var(--t-12)/1.2 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; color: var(--ink); margin-bottom: 4px; }
+  .sub li { margin: 2px 0; }
+  .sub ul { margin: 0; padding-left: 16px; }
+  .sub code { color: var(--ink); }
+
+  /* the frames: in Edit on, a card per element with its caption and badges */
+  .strip { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fr { position: relative; background: var(--paper); box-shadow: inset 0 0 0 1.5px var(--rule); width: var(--cw, 170px); }
+  .fr.active { box-shadow: inset 0 0 0 1.5px var(--clsn1); }
+  .fr.firing { box-shadow: inset 0 0 0 3px var(--warn); }
+  .fr.hidden { opacity: .6; }
+  .fr .stage { position: relative; height: var(--chh, 170px); overflow: hidden; background: var(--plate); }
+  .fr .stin { position: absolute; left: 0; top: 0; width: var(--cw, 170px); height: var(--chh, 170px); }
+  .fr .stage img { position: absolute; image-rendering: pixelated; transform-origin: 0 0; }
+  .fr .box, .plate2 .box { position: absolute; pointer-events: none; border: 1px solid; }
+  .box.c2 { border-color: var(--c2); background: rgba(0,0,255,.10); }
+  .box.c1hit { border-color: var(--c1hit); background: rgba(255,0,0,.12); }
+  .box.c1rev { border-color: var(--c1rev); background: rgba(192,64,0,.14); }
+  .box.c1not { border-color: var(--c1not); background: rgba(128,0,0,.18); }
+  .fr .ax { position: absolute; width: 0; height: 0; pointer-events: none; }
+  .fr .ax::before, .fr .ax::after { content: ""; position: absolute; background: var(--ink); }
+  .fr .ax::before { left: -4px; top: 0; width: 9px; height: 1px; }
+  .fr .ax::after { left: 0; top: -4px; width: 1px; height: 9px; }
+  .fr .cap { padding: 4px 6px 6px; font: 400 var(--t-11)/1.4 var(--f-data); color: var(--ink2); }
+  .fr .cap b { color: var(--ink); font-weight: 700; }
+  .fr .badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+  .badge { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; font: 700 var(--t-11)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; box-shadow: inset 0 0 0 1.5px var(--line); color: var(--ink2); }
+  .badge.act { box-shadow: inset 0 0 0 1.5px var(--flag); color: var(--ink); }
+  .badge.fires { background: var(--warn); color: var(--onwarn); box-shadow: none; }
+  .badge.dim { color: var(--ink2); }
+  .fr .fn, .fr .tk { display: none; }
+
+  /* Edit off: every element on one ground line, the frame bar under the
+     sprites (one cell per tick, colored by the server's frame meter), the
+     first active element underlined in the mark ink. */
+  body:not(.editing) .strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(46px, 1fr); gap: 0; overflow-x: auto; overflow-y: hidden; padding-top: 4px; }
+  body:not(.editing) .fr { width: auto; box-shadow: none; background: none; min-width: 0; }
+  body:not(.editing) .fr.hidden { opacity: .45; }
+  body:not(.editing) .fr .stage { overflow: visible; background: none; border-bottom: 2px solid var(--ink); height: var(--ph, 170px); }
+  body:not(.editing) .fr .stin, body:not(.editing) .fr .xin { left: calc(50% - var(--cw, 170px) / 2); top: calc(var(--ph, 170px) - var(--chh, 170px)); }
+  body:not(.editing) .fr .ax { display: none; }
+  body:not(.editing) .fr .box { background: none; }
+  body:not(.editing) .fr .cap { display: none; }
+  body:not(.editing) .fr .tk { display: flex; gap: 1px; height: 12px; margin: 4px 2px 0 0; }
+  body:not(.editing) .fr .fn { display: flex; gap: 5px; align-items: baseline; padding-right: 4px; margin-top: 4px; font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); white-space: nowrap; }
+  .fr .tk i { flex: 1 1 0; min-width: 1px; background: var(--rule); }
+  .fr .fn b { font: italic 800 var(--t-12)/1 var(--f-disp); color: var(--ink); }
+  body:not(.editing) .fr.kf .stage { box-shadow: inset 0 -4px 0 var(--mark); }
+  body:not(.editing) .fr.kf .fn b { color: var(--mark); }
+  /* startup is printed open (an outline), active in the hit-box red, recovery solid ink:
+     three marks that stay apart in every printing */
+  .tk i.s, .meter i.s, .legend i.s, .mkey i.s { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink2); }
+  .tk i.a, .meter i.a, .legend i.a, .mkey i.a { background: var(--clsn1); }
+  .tk i.r, .meter i.r, .legend i.r, .mkey i.r { background: var(--ink); }
+
+  /* ---- the opened move (right page) ---- */
+  .mvhead .where { font: 700 var(--t-13)/1.3 var(--f-disp); color: var(--ink); }
+  .mvhead .where .sn { font: italic 800 var(--t-16)/1 var(--f-disp); color: var(--mark); margin-right: 6px; }
+  .mvhead .bk-title { margin-top: 6px; overflow-wrap: anywhere; }
+  .mvhead .inp { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: var(--t-12); color: var(--ink2); }
+  .mvhead .from { font-size: var(--t-12); line-height: 1.45; color: var(--ink2); margin-top: 6px; }
+  .mvhead .from code { color: var(--ink); }
+
+  /* THE TRAINING-MODE READOUT: the numbers a fighting-game player looks for
+     first, printed large over the frame meter (startup, active, recovery). */
+  .fd { margin-top: 14px; }
+  .fd .fdh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .fd .fdh .t { font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .03em; color: var(--ink); }
+  .fd .fdh .tag { font-size: var(--t-12); color: var(--ink2); }
+  .fd .fdh button { margin-left: auto; }
+  .fdrow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+  .fdn { display: flex; flex-direction: column; padding: 6px 8px 7px; min-width: 0; }
+  .fdn + .fdn { border-left: 1px solid var(--rule); }
+  .fdn.sep { border-left: 2px solid var(--ink); }
+  .fdn .k { font: 700 var(--t-11)/1.2 var(--f-disp); color: var(--ink2); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  .fdn b { margin-top: 2px; font: italic 800 26px/1 var(--f-disp); font-stretch: 108%; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+  .fdn.plus b { color: var(--good); } .fdn.minus b { color: var(--bad); } .fdn.even b { color: var(--ink); }
+  .fdn.kd b { color: var(--warn); font-size: var(--t-20); }
+  .meter { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(2px, 1fr); gap: 1px; height: 12px; margin: 8px 0 4px; }
+  .meter i { display: block; }
+  .meter i.n5:not(.s) { box-shadow: inset -2px 0 0 var(--paper); }
+  .mkey { display: flex; gap: 6px 14px; font-size: var(--t-11); color: var(--ink2); flex-wrap: wrap; align-items: center; }
+  .mkey i { display: inline-block; width: 12px; height: 8px; margin-right: 5px; }
+  .fdstats { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  .fds { display: flex; flex-direction: column; gap: 2px; }
+  .fds .k { font: 700 var(--t-12)/1.3 var(--f-body); color: var(--ink); }
+  .fds .k small { color: var(--ink2); font: 400 var(--t-11)/1 var(--f-data); margin-left: 5px; }
+  .fds .in { display: flex; gap: 4px; align-items: center; }
+  .fds input { width: 60px; height: 24px; background: var(--well); color: var(--ink); border: 1.5px solid var(--ok); padding: 0 5px; font: 400 var(--t-12)/1 var(--f-data); text-align: right; }
+  .fds input.pinned { border-style: dashed; border-color: var(--line); color: var(--ink2); }
+  .fds .ro { font: 400 var(--t-13)/1 var(--f-data); color: var(--ink); }
+  .fds .ro.calc { box-shadow: inset 0 -2px 0 var(--flag); padding: 0 3px; }
+  .fds .how { font-size: var(--t-11); color: var(--ink2); }
+  .fdprops { margin-top: 10px; font-size: var(--t-12); color: var(--ink2); line-height: 1.6; }
+  .fdprops b { color: var(--ink); font-weight: 700; }
+  .fdnote { font-size: var(--t-12); color: var(--ink2); margin-top: 4px; }
+  .fderr { color: var(--bad); font-size: var(--t-12); margin-top: 4px; }
+
+  /* the 2x plate of the first active frame, with its data block */
+  .platerow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; margin-top: 18px; align-items: start; }
+  .plate2 { position: relative; width: 250px; height: 300px; overflow: hidden; }
+  .plate2 img { position: absolute; image-rendering: pixelated; transform-origin: 0 0; }
+  .plate2 .box { background: none; border-width: 2px; }
+  .plate2 .gnd { position: absolute; left: 0; right: 0; height: 2px; background: var(--ink); }
+  .plate2 .axv { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+  .plate2 .tag { position: absolute; left: 8px; top: 6px; font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); }
+  .platedl { margin-top: 2px; }
+  .platedl dd { font-family: var(--f-data); font-size: var(--t-12); }
+  .platedl dd .sw { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+  .platedl dd .sw.c1 { box-shadow: inset 0 0 0 2px var(--c1hit); }
+  .platedl dd .sw.c2 { box-shadow: inset 0 0 0 2px var(--c2); }
+  .platedl .gap { grid-column: 1 / -1; height: 8px; }
+
+  /* ---- Edit on: the block, its triggers and every value (#block) ---- */
+  #block { margin-top: 18px; }
+  .bsel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .bsel select { flex: 1 1 auto; }
+  .trig { margin: 8px 0; background: var(--plate); padding: 6px 8px; }
+  .trig div { font: 400 var(--t-12)/1.45 var(--f-data); white-space: pre-wrap; word-break: break-word; }
+  .trig .ln { color: var(--ink2); margin-right: 6px; }
+  .tierkey { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin: 12px 0 4px; font-size: var(--t-12); color: var(--ink2); }
+  table.params { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  table.params td { border-top: 1px solid var(--rule); padding: 5px 4px; vertical-align: top; }
+  table.params td.nm { font: 400 var(--t-11)/1.35 var(--f-data); color: var(--ink); width: 38%; word-break: break-all; }
+  table.params td.nm .ln { display: block; color: var(--ink2); font-size: var(--t-11); }
+  table.params td.nm .fgc { display: block; font: 700 var(--t-12)/1.3 var(--f-body); color: var(--ink); word-break: normal; }
+  table.params td.nm .mg { display: block; font: 400 var(--t-11)/1.35 var(--f-data); color: var(--ink2); }
+  table.params td.nm .ex { display: block; font: 400 var(--t-11)/1.35 var(--f-body); color: var(--ink2); word-break: normal; }
+  tr.grp td { padding-top: 14px; border-top: 0; border-bottom: 2px solid var(--ink); font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; color: var(--ink); }
+  .risk { display: inline-block; font: 700 var(--t-11)/14px var(--f-disp); text-transform: uppercase; letter-spacing: .02em; margin-left: 4px; padding: 0 4px; white-space: nowrap; }
+  .risk.careful { background: var(--warn); color: var(--onwarn); }
+  .risk.dangerous { background: var(--flag); color: var(--onflag); }
+  .vals { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+  .v input { width: 72px; height: 24px; background: var(--well); color: var(--ink); border: 1.5px solid var(--ok); padding: 0 5px; font: 400 var(--t-12)/1 var(--f-data); text-align: right; }
+  .v input:focus-visible, .fds input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .v input.busy { opacity: .5; }
+  .v.amber input { border-color: var(--tmpl); }
+  .v.xp input { border-color: var(--flag); text-align: left; }
+  .v .red { font: 400 var(--t-12)/1.3 var(--f-data); color: var(--ink); word-break: break-all; box-shadow: inset 0 -2px 0 var(--flag); }
+  .v .absent { color: var(--ink2); }
+  .expr { font: 400 var(--t-11)/1.35 var(--f-data); color: var(--ink2); margin-top: 2px; word-break: break-all; }
+  .rt { display: inline-flex; align-items: center; height: 16px; font: 700 var(--t-11)/1 var(--f-disp); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--flag); padding: 0 5px; margin-left: 4px; white-space: nowrap; }
+  .notes { font-size: var(--t-12); color: var(--ink2); margin-top: 3px; line-height: 1.45; }
+  .notes div { margin: 1px 0; }
+  .rowerr { color: var(--bad); font-size: var(--t-12); margin-top: 3px; }
+  .confirm { margin-top: 6px; padding: 6px 8px; box-shadow: inset 0 0 0 2px var(--flag); font-size: var(--t-12); }
+  .confirm .btns { display: flex; gap: 6px; margin-top: 6px; }
+  tr.derived td, tr.derived td.nm { color: var(--ink2); }
+  .dv { font: 400 var(--t-12)/1 var(--f-data); }
+  .v.xp { flex: 1 1 100%; }
+  .v.xp input { width: 100%; }
+  .reads { font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); margin-left: 4px; }
+
+  /* ---- PROJECTILES (movelib THE PROJECTILES): one row per thing a move throws,
+     at the foot of the command list, in the list's own columns; the opened entry
+     prints its own frames, its path and its numbers on the right page. ---- */
+  #states .pjh { position: static; margin-top: 0; }
+  #states .pj { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: 0; min-height: var(--bk-row); border-bottom: 1px solid var(--rule); cursor: pointer; }
+  #states .pj > * { grid-row: 1; padding: 2px 6px; min-width: 0; }
+  #states .pj:hover { box-shadow: inset 0 -2px 0 var(--ink); }
+  #states .pj:focus-visible, #states .nohit.pjt:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+  #states .pj[aria-selected="true"] { background: var(--ink) !important; color: var(--paper); }
+  #states .pj[aria-selected="true"] .mv .desc, #states .pj[aria-selected="true"] small, #states .pj[aria-selected="true"] .n.plus, #states .pj[aria-selected="true"] .n.minus { color: var(--paper); }
+  #states .pj[aria-selected="true"] .pbm, #states .st[aria-selected="true"] .pbm { color: var(--paper); box-shadow: inset 0 0 0 1px var(--paper); }
+  #states .pj[aria-selected="true"] .bk-cmd .b.s { background: var(--ink); color: var(--paper); box-shadow: inset 0 0 0 1.5px var(--paper); }
+  #states .pj[aria-selected="true"] .bk-cmd .txt { color: var(--paper); }
+  #states .nohit.pjt { cursor: pointer; }
+  #states .nohit.pjt .why b { color: var(--ink); }
+  .pbm { display: inline-block; font: 800 10px/1 var(--f-disp); font-stretch: 87.5%; letter-spacing: .02em; color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); padding: 2px 3px 1px; margin-right: 3px; cursor: help; }
+  #states .n.pbc { display: flex; justify-content: flex-end; align-items: center; }
+  .pjk { margin-left: 6px; font: 700 var(--t-11)/1 var(--f-disp); font-stretch: 104%; color: var(--ink2); white-space: nowrap; }
+  #states .pj[aria-selected="true"] .pjk { color: var(--paper); }
+  .pjlinks { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; font-size: var(--t-12); color: var(--ink2); }
+  #right button.pjlink { height: auto; min-height: 24px; padding: 3px 8px; font: 700 var(--t-12)/1.25 var(--f-disp); text-align: left; }
+  .pjdeps { margin-top: 8px; padding: 6px 8px; box-shadow: inset 0 0 0 1.5px var(--line); font-size: var(--t-12); color: var(--ink2); line-height: 1.5; }
+  .pjdeps b { color: var(--ink); }
+  /* Explod art: the switch in the frame legend (pressed = on), the readout list */
+  #right .legend button.xsw { display: inline-flex; align-items: center; gap: 6px; height: auto; min-height: 22px; padding: 1px 8px 1px 6px; font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink); }
+  #right .legend button.xsw[aria-pressed="true"] { color: var(--paper); }
+  .legend .xsw i.xsq { width: 10px; height: 10px; margin: 0; border: 1.5px solid currentColor; background: transparent; vertical-align: 0; }
+  .legend .xsw[aria-pressed="true"] i.xsq { background: currentColor; }
+  .legend .xsw .xst { font: 700 var(--t-11)/1 var(--f-data); letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
+  .legend .xnone { color: var(--ink2); }
+  .fdx { margin-top: 10px; font-size: var(--t-12); color: var(--ink2); line-height: 1.5; }
+  .fdx .h { font: 700 var(--t-12)/1.3 var(--f-disp); color: var(--ink); }
+  .fdx .h .aside { font: 400 var(--t-12)/1.3 var(--f-body); color: var(--ink2); margin-left: 8px; }
+  .fdx ul { margin: 4px 0 0; padding-left: 18px; }
+  .fdx li b { color: var(--ink); }
+  .fdx code { color: var(--ink); overflow-wrap: anywhere; }
+  .fdx .xwhy { color: var(--ink2); }
+  img.xpl { position: absolute; image-rendering: pixelated; transform-origin: 0 0; }
+  /* A strip cell's Explod art sits in its own clip layer: cut at the cell's
+     edge (Edit off: its column; Edit on: the 170px cell), never drawn into a
+     neighbor. Its inner box lines up with the cell's .stin exactly. */
+  .fr .xcl { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; }
+  .fr .xin { position: absolute; left: 0; top: 0; width: var(--cw, 170px); height: var(--chh, 170px); }
+  .pjdeps code { color: var(--ink); overflow-wrap: anywhere; }
+  .pjpath { position: relative; width: 520px; max-width: 100%; height: 190px; overflow: hidden; margin-top: 10px; }
+  .pjpath .gnd { position: absolute; left: 0; right: 0; height: 2px; background: var(--ink); }
+  .pjpath .axv { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+  .pjpath .scr { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed var(--line); }
+  .pjpath .dot, .pjpath .mk { z-index: 1; }
+  .pjpath .dot { position: absolute; width: 3px; height: 3px; margin: -1px 0 0 -1px; background: var(--ink2); }
+  .pjpath .dot.h { background: var(--clsn1); }
+  .pjpath .dot.t10 { width: 5px; height: 5px; margin: -2px 0 0 -2px; }
+  .pjpath .mk { position: absolute; width: 11px; height: 11px; margin: -5px 0 0 -5px; border: 2px solid var(--mark); transform: rotate(45deg); }
+  .pjpath .mk.end { transform: none; border-color: var(--ink); }
+  .pjpath .lab { position: absolute; font: 400 var(--t-11)/1.2 var(--f-data); color: var(--ink2); white-space: nowrap; }
+  .pjpath .lab b { color: var(--ink); font-weight: 700; }
+  .pjpath img { position: absolute; image-rendering: pixelated; transform-origin: 0 0; }
+  .pjpath .box { position: absolute; pointer-events: none; border: 1px solid; background: none; }
+  .pjpath .thr { opacity: .55; }
+  .pjpath .tag { position: absolute; left: 8px; top: 6px; font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); }
+  /* A helper followed through its states: one heading per state over its own
+     strip (every strip at one scale, on one ground line), numbered state marks
+     on the path and their key under it. */
+  .pjst { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; margin: 12px 0 4px; font: 400 var(--t-12)/1.4 var(--f-data); color: var(--ink2); }
+  .pjst:first-of-type { margin-top: 4px; }
+  body:not(.editing) .strip.pjch { grid-auto-columns: minmax(var(--colw, 46px), 1fr); }
+  .pjst .sn { font-weight: 700; color: var(--ink); }
+  .pjst .sbn, .pjkey .sbn { display: inline-block; min-width: 15px; height: 15px; padding: 0 3px; box-sizing: border-box; border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); font: 700 var(--t-11)/12px var(--f-data); text-align: center; }
+  .pjst .hd { color: var(--clsn1); font-weight: 700; }
+  .pjpath .sb { position: absolute; z-index: 3; }
+  .pjpath .sb .sbn { display: inline-block; min-width: 15px; height: 15px; padding: 0 3px; box-sizing: border-box; border: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); font: 700 var(--t-11)/12px var(--f-data); text-align: center; }
+  .pjkey { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font: 400 var(--t-11)/1.4 var(--f-data); color: var(--ink2); }
+  .pjkey > span { display: inline-flex; gap: 5px; align-items: baseline; }
+  .meter i.a.sb { box-shadow: inset 2px 0 0 var(--ink); }
+  .meter i.s.sb, .mkey i.s.sb { box-shadow: inset 2px 0 0 var(--ink), inset 0 0 0 1.5px var(--ink2); }
+
+  /* ---- the Command List section (Ikemen's pause menu) ---- */
+  #cmdl { margin-top: 28px; }
+  #cmdl p { margin: 0 0 8px; font-size: var(--t-12); color: var(--ink2); line-height: 1.5; max-width: 72ch; }
+  #cmdl p b, #cmdl p code { color: var(--ink); }
+  #cmdl .bk-tbl td { font-size: var(--t-12); }
+  /* the glyphs keep one line (.bk-cmd.nowrap); a long name wraps under them instead of running into the Name column */
+  #cmdl .tok { white-space: normal; overflow-wrap: anywhere; }
+  #cmdl .src { color: var(--ink2); }
+  /* the build's button style (paintButtons): the game's own pictures, at the chips' height */
+  #cmdl .bk-cmd img.bpic { width: auto; height: 19px; vertical-align: middle; margin: 0 1px; }
+  #cmdl .src .bk-flag { height: 18px; margin: 2px 4px 0 0; vertical-align: middle; }
+  #cmdl tr.off td:first-child { text-decoration: line-through; }
+  #cmdl .bk-inp { width: 100%; }
+  #cmdl .acts { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .ikfile { margin: 10px 0 0; padding: 8px 10px; background: var(--plate); font: 400 var(--t-12)/1.6 var(--f-data); white-space: pre; overflow-x: auto; color: var(--ink); user-select: text; }
+
+
+  @media (max-width: 1100px), (max-height: 760px) {
+    .fdn b { font-size: var(--t-20); }
+    .fdn.kd b { font-size: var(--t-16); }
+    .plate2 { width: 210px; height: 260px; }
+    .platerow { gap: 12px; }
+    #states .mv small { display: none; }
+  }
+  /* A narrow window: two even pages, the list's columns set closer. */
+  @media (max-width: 1180px) {
+    #spread { --l: 1fr; --r: 1fr; }
+    #states { min-width: 0; font-size: var(--t-12); --cols: minmax(80px, 1fr) minmax(70px, .9fr) 40px 32px 28px 30px 36px 74px 40px 46px; }
+    #states.nonames { --cols: minmax(90px, 1fr) 0 40px 32px 28px 30px 36px 74px 40px 46px; }
+    .cxm { font-size: 9px; padding: 2px 2px 1px; letter-spacing: 0; } .cx { gap: 1px; } #states .n.oh { gap: 2px; padding-left: 1px; }
+    .clh > span { padding: 0 3px; font-size: var(--t-11); }
+    #states .st > *, #states .nohit > * { padding: 2px 3px; }
+    .platerow { grid-template-columns: minmax(0, 1fr); }
+    .fdn { padding: 5px 5px 6px; }
+  }
+</style>
+</head>
+<body>
+  <header class="bk-secband" id="band">
+    <h1 class="bk-secband-t"><span class="no" id="slotNo" hidden></span><span class="t bk-nocaps" id="who">&hellip;</span><span class="k" lang="ja">コマンド表</span></h1>
+    <!-- The band's mascot (Booklet.mascot): a click deals the Moves window's tips
+         ('moves' in the Studio's tip table) through the opener's deck, as a slip
+         over the page. No opener, no mascot. -->
+    <button id="bandMascot" class="bk-bandmascot" type="button" hidden></button>
+    <div class="bk-secband-meta">
+      <span class="src" id="src"></span>
+      <span class="bk-seg sm" role="group" aria-label="Edit mode" id="editSeg">
+        <button type="button" data-edit="off" aria-pressed="true" title="The printed command list">Edit off</button>
+        <button type="button" data-edit="on" aria-pressed="false" title="Edit this character's values and timing: edits write its own files, the original is kept for Revert">Edit on</button>
+      </span>
+    </div>
+  </header>
+  <div id="msg" role="status"></div>
+  <main class="bk-spread" id="spread">
+    <section class="bk-pg l" id="left" aria-label="Command list">
+      <h2 class="bk-sh">Command list <span class="k" lang="ja">コマンド表</span><span class="aside" id="listAside"></span></h2>
+      <div id="states"><div class="none">Reading&hellip;</div></div>
+      <p class="listfoot" id="listFoot"></p>
+    </section>
+    <div class="bk-fold"></div>
+    <section class="bk-pg r" id="right" aria-label="The opened move">
+      <div id="opened"></div>
+      <div id="frames"></div>
+      <div id="plate" class="pr"></div>
+      <div id="edited" class="ed" hidden></div>
+      <div id="block" class="ed"></div>
+      <section id="cmdl" aria-label="The game's Command List"></section>
+    </section>
+  </main>
+<script>
+  // HOW THIS PAGE READS AN ATTACK (§1, §2, §8). There is no "attack" in the
+  // engine: a state holds controllers, and five controller types share the
+  // HitDef parser. The page lists each state that holds any of them, shows one
+  // ATTACK BLOCK at a time addressed as (file, state, ordinal), draws every
+  // element of the animation(s) the state may play with the boxes the engine
+  // binds to it, and marks where the block fires when that is knowable from
+  // the trigger text alone. Everything shown comes from GET /api/char-moves;
+  // every edit is one POST of one value with the raw text it replaces. Move
+  // NAMES and INPUTS come from GET /api/movelist (the Command List reader)
+  // when the Studio has it; without it, a state is listed by its number.
+  const q = new URLSearchParams(location.search);
+  const char = q.get('char') || '';
+  const name = q.get('name') || char;
+  const $ = (id) => document.getElementById(id);
+  // The suites drive this script with a stand-in document and no window, so
+  // everything that needs the real browser is reached through W.
+  const W = typeof window !== 'undefined' ? window : null;
+  const BK = typeof Booklet !== 'undefined' ? Booklet : null;
+  $('who').textContent = name || 'no character';
+  // The select slot Characters' Moves... passes (?slot=04a&of=31%20cells): the
+  // slot LABEL, "No.04a" in the band as the character page prints it (a slot
+  // group's mates share a cell and read 04a / 04b; past z, 04-27), and what the
+  // "of" counts in its tooltip. An older opener's bare numbers (?slot=8&of=17)
+  // still print. Absent (a character off the grid or not in the build): no number.
+  {
+    const no = q.get('slot'), of = q.get('of'), sn = $('slotNo');
+    if (sn && /^\d+([a-z]|-\d+)?$/.test(no || '')) {
+      sn.textContent = 'No.' + String(no).padStart(2, '0');
+      const m = /^(\d+)(?: cells)?$/.exec(of || '');
+      if (m) sn.title = 'Select screen cell ' + String(no).padStart(2, '0') + ' of ' + m[1] + ' cells';
+      sn.hidden = false;
+    }
+  }
+  document.title = (name || 'Moves') + ' — moves';
+
+  // All user and character text goes in through textContent.
+  function el(tag, props, ...kids) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === 'text') e.textContent = String(v);
+      else if (k === 'class') e.className = v;
+      else if (k.startsWith('on')) e[k] = v;
+      else if (k === 'style') e.style.cssText = v;
+      else e.setAttribute(k, v === true ? '' : String(v));
+    }
+    for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+    return e;
+  }
+  // Command glyphs: booklet.js draws [data-cmd] spans (MUGEN .cmd text or
+  // Ikemen's movelist tokens) when the page has it; the text stays readable.
+  const glyph = (text, lg, nowrap) => el('span', { 'data-cmd': text, 'data-size': lg ? 'lg' : null, 'data-nowrap': nowrap ? true : null, text: text });
+  const drawGlyphs = (root) => { if (BK && root && root.querySelectorAll) { try { BK.render(root); } catch (e) { /* the text stays */ } } };
+
+  let msgTimer = null;
+  function say(text, kind) {
+    const m = $('msg');
+    m.textContent = text || '';
+    m.className = kind || '';
+    clearTimeout(msgTimer);
+    if (text && kind !== 'err') msgTimer = setTimeout(() => { m.textContent = ''; }, 6000);
+  }
+  async function getJson(u) {
+    const r = await fetch(u, { cache: 'no-store' });
+    let j = null;
+    try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok || !j || j.error) { const e = new Error((j && j.error) || r.statusText); e.code = j && j.code; e.status = r.status; throw e; }
+    return j;
+  }
+  async function postJson(u, body) {
+    const r = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    let j = null;
+    try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok || !j || j.error) { const e = new Error((j && j.error) || r.statusText); e.code = j && j.code; e.body = j; throw e; }
+    return j;
+  }
+
+  // EDIT OFF / EDIT ON. Off is the printed command list; on shows the
+  // editing UI. ?edit=1 opens on it, and the switch keeps the address in step
+  // so a reload stays where it was.
+  let editing = q.get('edit') === '1';
+  function setEditing(on, fromUser) {
+    editing = !!on;
+    if (document.body) document.body.classList.toggle('editing', editing);
+    const seg = $('editSeg');
+    if (seg && seg.querySelectorAll) for (const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String((b.dataset.edit === 'on') === editing));
+    if (fromUser && W && W.history && W.history.replaceState) {
+      try { const u = new URL(W.location.href); if (editing) u.searchParams.set('edit', '1'); else u.searchParams.delete('edit'); W.history.replaceState(null, '', u); } catch (e) { /* the switch still works */ }
+    }
+    if (model) { renderStates(); renderSelection(); renderCmdList(); }
+  }
+  {
+    const seg = $('editSeg');
+    if (seg && seg.querySelectorAll) for (const b of seg.querySelectorAll('button')) b.onclick = () => { if ((b.dataset.edit === 'on') !== editing) setEditing(b.dataset.edit === 'on', true); };
+    if (document.body) document.body.classList.toggle('editing', editing);
+    if (seg && seg.querySelectorAll) for (const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String((b.dataset.edit === 'on') === editing));
+  }
+
+  // THE BAND'S MASCOT in the band (Booklet.mascot): the Moves window's tips
+  // first ('moves' in the Studio's TIP_PAGES), then the general ones, dealt from
+  // the Studio's own deck through the window that opened this one, as a slip
+  // laid over the page - never a box in it. No opener, no mascot.
+  {
+    const b = $('bandMascot');
+    if (BK && typeof BK.mascot === 'function' && b && b.setAttribute) {
+      BK.mascot(b, { page: 'moves' });
+    }
+  }
+
+  let model = null;
+  // The Command List reader's answer (GET /api/movelist), or null with why.
+  let cl = null, clWhy = 'reading';
+  // proj: the id of the opened PROJECTILES entry (null: a state is open).
+  const sel = { key: null, ordinal: 0, action: null, proj: null };
+  const stateKey = (s) => s.file + '|' + s.no;
+  // Negative states with attack blocks are listed too: a HitDef in a -3 is how
+  // a pose with no HitDef of its own gets one (the animation editor writes
+  // those), and its damage is edited like any other.
+  const attackStates = () => (model ? [...model.states, ...(model.negativeStates || [])].filter((s) => s.blocks.length) : []);
+  const curState = () => attackStates().find((s) => stateKey(s) === sel.key) || null;
+  const MT_NAME = { a: 'attack', i: 'idle', h: 'being hit', u: 'unchanged' };
+  // The block a printed row reads: the first one that can hit (the server
+  // found its startup), else the first.
+  const shownBlock = (s) => { const i = s.blocks.findIndex((b) => b.frame && b.frame.startup); return i < 0 ? 0 : i; };
+  // One Command List line can stand for a move's strength versions (Light,
+  // Medium, Strong: `merged`). This page lists STATES, so such a line is read
+  // back as one row per version, each with its own name and input; `partOf`
+  // is the line it prints as.
+  const clRows = () => (cl && Array.isArray(cl.rows) ? cl.rows.flatMap((r) => (Array.isArray(r.merged) && r.merged.length
+    ? r.merged.map((m) => Object.assign({}, r, { state: m.state, name: m.name, nameFrom: m.nameFrom || r.nameFrom, input: m.input, glyphs: m.glyphs, merged: undefined, partOf: { state: r.state, name: r.name, glyphs: r.glyphs, of: r.merged.length } }))
+    : [r])) : []);
+  const clRow = (no) => clRows().find((r) => r.state === no) || null;
+  // A state's input: its Command List line's, else the reader's `inputs` (every
+  // state the [State -1] reaches by a command: plain normals with their stance,
+  // throws, a character's own list) - so every attack shows what to press.
+  const inputOf = (no) => clRow(no) || (cl && Array.isArray(cl.inputs) ? cl.inputs.find((x) => x.state === no) || null : null);
+  // PROXIMITY: the reader's input for a state carries its distance (one button,
+  // a close and a far move: Balrog's 220 + (Abs(P2bodydist X) <= 25) * 5).
+  const rawInput = (no) => (cl && Array.isArray(cl.inputs) ? cl.inputs.find((x) => x.state === no) || null : null);
+  const rangeOf = (no) => { const x = rawInput(no); return x && x.range ? x.range : null; };
+  // 'within 25 of the opponent (P2BodyDist X <= 25)' / 'farther than 25 from the opponent (P2BodyDist X > 25)'
+  const rangeDesc = (r) => (r.kind === 'close'
+    ? (r.op === '<' ? 'under ' : 'within ') + r.dist + ' of the opponent (' + r.by + ' ' + r.op + ' ' + r.dist + ')'
+    : 'farther than ' + (r.op === '<' ? r.dist - 1 : r.dist) + ' from the opponent (' + r.by + ' ' + (r.op === '<' ? '>=' : '>') + ' ' + r.dist + ')');
+  const rangeTag = (no) => { const r = rangeOf(no); return r ? el('span', { class: 'rng ' + r.kind, title: (r.kind === 'close' ? 'Close: ' : 'Far: ') + rangeDesc(r) }, r.kind === 'close' ? 'close' : 'far') : null; };
+  // THE CANCELS (GET /api/movelist cancels): which specials, supers and normals
+  // can cancel this state, read from the [State -1] (cmdlist.js THE CANCELS).
+  const KIND = { SP: 'Special cancel', SU: 'Super cancel', CH: 'Chain' };
+  const cancelsTo = (no) => (cl && Array.isArray(cl.cancels) ? ((cl.cancels.find((c) => c.state === no) || {}).to || []) : []);
+  const moveName = (no) => {
+    const r = clRow(no);
+    if (r && r.name) return r.name;
+    const s = model && model.states.find((x) => x.no === no);
+    const b = s && s.blocks[shownBlock(s)], f = b && b.frame;
+    return f && f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : 'State ' + no;
+  };
+  const cancelTitle = (k, ts) => KIND[k] + (ts.every((x) => x.hit && x.block) ? ' on hit and block' : ' on hit') + ' into: '
+    + ts.map((x) => moveName(x.state) + ' (' + x.state + ')' + (x.exact ? '' : ' ≈')).join(', ')
+    + (ts.some((x) => !x.exact) ? '. ≈ = through ' + [...new Set(ts.filter((x) => !x.exact).flatMap((x) => x.via))].join(', ') + ', which this state sets itself.' : '.');
+  // the marks beside the on-hit number: only what can cancel it ON HIT
+  function cancelMarks(no) {
+    const to = cancelsTo(no).filter((x) => x.hit);
+    if (!to.length) return null;
+    const box = el('span', { class: 'cx' });
+    for (const k of ['SP', 'SU', 'CH']) {
+      const ts = to.filter((x) => x.kind === k);
+      if (!ts.length) continue;
+      const tip = cancelTitle(k, ts);
+      box.append(el('span', { class: 'cxm ' + k.toLowerCase() + (ts.every((x) => !x.exact) ? ' apx' : ''), title: tip, 'aria-label': tip }, k));
+    }
+    return box;
+  }
+
+  // PROJECTILES (GET /api/char-moves projectiles, movelib THE PROJECTILES): what
+  // each move throws - a Projectile controller, a helper that flies, or a blank
+  // helper drawn by an Explod - with its own frames, path and numbers. A helper's
+  // hit state that an entry stands for is listed there, not under "Other attack
+  // states" (its own row read it as if the helper were the player).
+  const projs = () => (model && Array.isArray(model.projectiles) ? model.projectiles : []);
+  const projById = (id) => projs().find((e) => e.id === id) || null;
+  const projAnim = (n) => (model && Array.isArray(model.projAnims) ? model.projAnims.find((a) => a.action === n) : null) || null;
+  const projsOf = (no) => projs().filter((e) => e.thrower.state === no || (e.throwers || []).some((t) => t.state === no));
+
+  // ---- EXPLOD ART (movelib THE EXPLODS) -------------------------------------
+  // Each attack state's own Explods, drawn in its frames and its plate, always
+  // UNDER the Clsn boxes ("They explain the hitboxes. They should render
+  // behind the hit box."). The server says where each one is on every tick
+  // (x, y from the character's axis, in the character's units) and which of
+  // its elements shows; the page only picks the tick a picture shows. On by
+  // default; the switch is remembered. Off = master's view exactly: the strip
+  // never fits around the art (each cell cuts it at its own edge), the plate
+  // fits around it only while it is drawn, and an Explod-drawn projectile
+  // entry's own look (spriteAt) is not the switch's.
+  const XPL_KEY = 'studio.moves.explodArt';
+  let explodArt = true;
+  try { if (W && W.localStorage && W.localStorage.getItem(XPL_KEY) === '0') explodArt = false; } catch (e) { /* private mode: on */ }
+  function setExplodArt(on) {
+    // The selection is drawn again, switch included: a keyboard user's focus
+    // goes back to the new switch instead of falling to the page.
+    let refocus = false;
+    try { const ae = document.activeElement; refocus = !!(ae && ae.classList && ae.classList.contains('xsw')); } catch (e) { /* no focus to keep */ }
+    explodArt = !!on;
+    try { if (W && W.localStorage) W.localStorage.setItem(XPL_KEY, explodArt ? '1' : '0'); } catch (e) { /* not remembered */ }
+    renderSelection();
+    if (refocus) { try { const b = document.querySelector('.xsw'); if (b) b.focus(); } catch (e) { /* stays where it is */ } }
+  }
+  const xplSwitch = () => el('button', { type: 'button', class: 'xsw', 'aria-pressed': explodArt ? 'true' : 'false',
+    title: 'Explod art: the effects this move\'s own state spawns (Explod controllers), drawn under the boxes. ' + (explodArt ? 'Click to hide them.' : 'Click to show them.'),
+    onclick: () => setExplodArt(!explodArt) }, el('i', { class: 'xsq', 'aria-hidden': 'true' }), 'Explod art', el('span', { class: 'xst', text: explodArt ? 'on' : 'off' }));
+  // An animation by number: the shared list (projectiles' and Explods'), else
+  // any attack state's own (an action the server sends once).
+  const anyAnim = (n) => projAnim(n) || (model ? [...model.states, ...(model.negativeStates || [])].map((s) => (s.anims || []).find((a) => a.action === n)).find(Boolean) : null) || null;
+  // The drawn Explods alive on `tick` of action `action`: { e, A, pt }.
+  function explodsAt(s, action, tick) {
+    const out = [];
+    for (const e of (s.explods || [])) {
+      if (!e.drawn) continue;
+      const A = anyAnim(e.anim.action);
+      if (!A || !A.exists) continue;
+      for (const sp of ((e.spawns || {})[action] || [])) {
+        const k = tick - sp.T;
+        const pt = k >= 0 && sp.pts ? sp.pts[k] : null;
+        if (pt && pt[1] !== null && pt[2] !== null) out.push({ e, A, pt });
+      }
+    }
+    return out;
+  }
+  // One sprite with its axis anchored at (ax, ay): the element's offset and
+  // its H / V flags as the engine reads them, at signed scales kx / ky (screen
+  // px per sprite px; negative = mirrored by the drawer's own facing, which
+  // mirrors the offset too). The same code draws an Explod in a move's frames,
+  // its plate and an Explod-drawn projectile.
+  function spriteAt(f, ax, ay, kx, ky, cls, title) {
+    if (!f || !f.w || !f.h) return null;
+    const [fx, fy] = axisAt(f);
+    const px = ax + fx * kx, py = ay + fy * ky, sx = Math.abs(kx), sy = Math.abs(ky);
+    const img = el('img', { alt: '', class: cls || null, title: title || null, src: '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + f.group + '&index=' + f.number });
+    img.onerror = () => { img.style.visibility = 'hidden'; };
+    img.style.width = Math.max(1, Math.round(f.w * sx)) + 'px';
+    img.style.height = Math.max(1, Math.round(f.h * sy)) + 'px';
+    img.style.left = Math.round(px - f.axisX * sx) + 'px';
+    img.style.top = Math.round(py - f.axisY * sy) + 'px';
+    const mh = hFlip(f) !== (kx < 0), mv = vFlip(f) !== (ky < 0);
+    if (mh || mv) { img.style.transformOrigin = (f.axisX * sx) + 'px ' + (f.axisY * sy) + 'px'; img.style.transform = 'scale(' + (mh ? -1 : 1) + ',' + (mv ? -1 : 1) + ')'; }
+    return img;
+  }
+  function spriteRect(f, ax, ay, kx, ky) {
+    if (!f || !f.w || !f.h) return null;
+    const [fx, fy] = axisAt(f);
+    const px = ax + fx * kx, py = ay + fy * ky, sx = Math.abs(kx), sy = Math.abs(ky);
+    const mh = hFlip(f) !== (kx < 0), mv = vFlip(f) !== (ky < 0);
+    const l = mh ? px - (f.w - f.axisX) * sx : px - f.axisX * sx, t = mv ? py - (f.h - f.axisY) * sy : py - f.axisY * sy;
+    return [l, t, l + f.w * sx, t + f.h * sy];
+  }
+  // An Explod's scale in the move's own drawing units (the character's sprite
+  // pixels): its scale over the character's [Size] (cueDraw draws an Explod at
+  // its scale, a character at its [Size]); its facing mirrors it.
+  const xplK = (e) => { const sz = model.size || { xscale: 1, yscale: 1 }; return [(e.scale[0] / (sz.xscale || 1)) * (e.facing || 1), (e.scale[1] / (sz.yscale || 1)) * (e.vfacing || 1)]; };
+  const xplAxis = (pt) => { const sz = model.size || { xscale: 1, yscale: 1 }; return [pt[1] / (sz.xscale || 1), pt[2] / (sz.yscale || 1)]; };
+  // Where the Explods alive on `tick` are, in drawing units at zoom 1 with the
+  // character's axis at 0, 0 (for fitting a cell around them).
+  function explodRects(s, action, tick) {
+    return explodsAt(s, action, tick).map(({ e, A, pt }) => { const [k1, k2] = xplK(e), [x, y] = xplAxis(pt); return spriteRect(A.frames[pt[0]], x, y, k1, k2); }).filter(Boolean);
+  }
+  // Draw them into `host` around the character's sprite: `under` first (call
+  // before the sprite), the rest after; the boxes come after both.
+  function drawExplods(host, s, action, tick, ox, oy, z, front) {
+    if (!explodArt) return;
+    for (const { e, A, pt } of explodsAt(s, action, tick)) {
+      if (!!e.layer.front !== front) continue;
+      const [k1, k2] = xplK(e), [x, y] = xplAxis(pt);
+      const img = spriteAt(A.frames[pt[0]], ox + x * z, oy + y * z, k1 * z, k2 * z, 'xpl', 'Explod: action ' + e.anim.action + ' element ' + (pt[0] + 1) + ' (' + e.file + ' line ' + e.line + ')' + (pt[3] ? ', bound to the character' : ', no longer bound'));
+      if (img) host.append(img);
+    }
+  }
+  const hasDrawnExplods = (s) => (s.explods || []).some((e) => e.drawn);
+  // THE READOUT: every Explod of the state, drawn or not, in words - its
+  // animation, the frame it appears on, how long it rides with the character,
+  // its own motion, its layer against the character, and why one is not drawn.
+  function renderExplodList(host, s) {
+    const xs = s.explods || [];
+    if (!xs.length) return;
+    const action = sel.action !== null && sel.action !== undefined ? sel.action : ((s.anims || [])[0] || {}).action;
+    const r = (v) => String(Math.round(v * 100) / 100);
+    const box = el('div', { class: 'fdx' }, el('div', { class: 'h' }, 'Explod art',
+      el('span', { class: 'aside', text: xs.length + (xs.length === 1 ? ' Explod' : ' Explods') + ' in this state' + (hasDrawnExplods(s) ? (explodArt ? ', drawn under the boxes' : ', hidden: the switch is off') : '') })));
+    const ul = el('ul');
+    let assumed = null, unknown = null;
+    for (const e of xs) {
+      const spawns = (e.spawns || {})[action] || [];
+      for (const sp of spawns) { if (sp.assumed && e.drawn && e.bindtime >= 0) assumed = sp.assumed; if (sp.unknownWhy && e.drawn && sp.pts.some((p) => p[1] === null)) unknown = sp.unknownWhy; }
+      const parts = [];
+      const fr = spawns.filter((sp) => !sp.after).map((sp) => sp.T + 1);
+      if (fr.length) parts.push('from frame ' + fr.join(', '));
+      else if (spawns.some((sp) => sp.after)) parts.push('made after this animation ends');
+      if (e.conditional && e.conditional.length) parts.push('when ' + e.conditional.join(' or '));
+      if (!spawns.length && !(e.conditional && e.conditional.length)) parts.push('no frame its triggers settle (' + (e.triggers || 'no trigger') + ')');
+      if (e.drawn) {
+        // Its life and binding as the server walked them tick by tick (one
+        // point per frame it lives, [elem, x, y, bound]): an Explod removed
+        // before its bindtime runs out is bound for its whole life, and its
+        // own vel never applies (while bound, char.go 1987-1992 sets its
+        // place every frame; removetime -2 ends it with its animation, 1955-1960).
+        const walked = spawns.filter((sp) => sp.pts && sp.pts.length);
+        const life = walked.length ? Math.max(...walked.map((sp) => sp.pts.length)) : null;
+        const outlives = walked.some((sp) => sp.outlives);
+        const freed = walked.some((sp) => sp.pts.some((p) => !p[3]));
+        const nf = (n) => n + (n === 1 ? ' frame' : ' frames');
+        const boundAll = e.bindtime > 0 && walked.length > 0 && !freed;
+        parts.push(e.bindtime < 0 ? 'bound to the character for its whole life' : e.bindtime === 0 ? 'not bound: it stays where it appears'
+          : boundAll ? (outlives ? 'bound for ' + nf(e.bindtime) + ': still bound when this animation ends' : 'bound for its whole life (removed before its bindtime of ' + e.bindtime + ' runs out)')
+          : 'bound for ' + nf(e.bindtime) + ', then on its own');
+        const still = e.vel.every((v) => v === 0) && e.accel.every((v) => v === 0);
+        const more = (e.accel.some((v) => v !== 0) ? ', accel ' + r(e.accel[0]) + ', ' + r(e.accel[1]) : '') + (e.friction.some((v) => v !== 1) ? ', friction ' + e.friction.map(r).join(', ') : '');
+        parts.push(still ? 'no motion of its own'
+          : e.bindtime < 0 || boundAll ? 'its own motion (vel ' + r(e.vel[0]) + ', ' + r(e.vel[1]) + more + ') never applies: it is bound while it lives'
+          : 'moves ' + r(e.vel[0]) + ', ' + r(e.vel[1]) + ' game units a frame once free' + more);
+        parts.push('at ' + r(e.pos[0]) + ', ' + r(e.pos[1]) + ' game units from the axis');
+        if (e.scale[0] !== 1 || e.scale[1] !== 1) parts.push('scale ' + e.scale.map(r).join(' × '));
+        if (e.facing < 0 || e.vfacing < 0) parts.push('mirrored' + (e.facing < 0 ? ' (facing -1)' : '') + (e.vfacing < 0 ? ' (vfacing -1)' : ''));
+        const ends = life === null ? '' : outlives ? ' (it outlives this animation)' : ', after ' + nf(life);
+        parts.push(e.removetime === -1 ? 'never removed on its own' : e.removetime >= 0 ? 'removed after ' + nf(e.removetime) : 'removed when its animation ends' + ends);
+      }
+      parts.push((e.layer.front === null ? 'layer unknown' : e.layer.front ? 'over the character' : 'under the character') + ': ' + e.layer.why);
+      const name = e.anim.action !== null ? 'action ' + e.anim.action : e.anim.how === 'fightfx' ? 'common effect ' + e.anim.raw : 'animation ' + (e.anim.raw || '?');
+      const li = el('li', {}, el('b', { text: name }), ' · ' + parts.join(' · ') + ' · ', el('code', { text: e.file + ':' + e.line }));
+      if (!e.drawn) li.append(el('div', { class: 'xwhy', text: 'Not drawn: ' + e.why + '.' }));
+      for (const n of (e.notes || [])) li.append(el('div', { class: 'xwhy', text: n }));
+      ul.append(li);
+    }
+    box.append(ul);
+    if (assumed) box.append(el('div', { class: 'fdnote', text: 'An Explod no longer bound stays where it was while the character moves on, so it is drawn against the character\'s own motion in this move (the move whiffs: contact reads 0); ' + assumed + '.' }));
+    if (unknown) box.append(el('div', { class: 'fdnote', text: 'Not drawn where it is no longer bound: ' + unknown + '.' }));
+    for (const n of (model.explodNotes || [])) box.append(el('div', { class: 'fdnote', text: n }));
+    host.append(box);
+  }
+  // (A helper whose hit is in a LATER state keeps that state's row: its entry
+  // cannot count those frames - `stands` false.)
+  const shownAsProj = (s) => !!(s.thrownBy && s.thrownBy.stands !== false && projById(s.thrownBy.id) && !clRow(s.no));
+  const PJ_KIND = { projectile: 'a Projectile', helper: 'a helper', explod: 'a helper drawn by an Explod' };
+  const nFrames = (n) => n + (n === 1 || n === -1 ? ' frame' : ' frames');
+  // The frame it appears on, counted on the PLAYER's frames (frame 1 = the
+  // throw's first): a helper's state that throws counts on its maker's move.
+  const pjAppears = (e) => {
+    const via = e.thrower.via;
+    if (via) return via.frame || null;
+    return e.thrower.timing && e.thrower.timing.frame ? e.thrower.timing.frame : null;
+  };
+  const pjAppearsTip = (e) => {
+    const via = e.thrower.via, tm = e.thrower.timing;
+    if (via && via.frame) return 'the frame of state ' + via.state + ' it appears on: that move makes the helper, which throws on its own frame ' + via.helperFrame;
+    if (via) return 'unknown: ' + via.why;
+    return 'the frame it appears on, counted on the throw' + (tm && tm.how !== 'file' ? ' (' + tm.how + ')' : '');
+  };
+  // Ticks its hit box is out while it flies; '→' when it flies on until it hits
+  // or leaves the screen; '?' when its path depends on something the files do
+  // not settle, or its hit box is unknown (its animation is not read).
+  function pjActive(e) {
+    const p = e.path;
+    if (!p) return { text: '?', tip: 'its path depends on a value the files do not settle' };
+    if (p.hitUnknown) return { text: '?', tip: 'its hit box is unknown: ' + p.hitUnknown };
+    if (p.end.why === 'cap' && chainOf(e)) return { text: p.activeTicks + '+', tip: 'frames its hit box is out in its first ' + p.end.tick + ' frames, where the walk stops: it is still going in state ' + chainOf(e)[chainOf(e).length - 1].state };
+    if (p.end.why === 'cap') return { text: '→', tip: 'out until it hits' + (e.kind === 'projectile' ? ' or leaves the screen' : '') };
+    if (p.end.why === 'depends') return { text: p.end.tick && p.activeTicks ? p.activeTicks + '+' : '?', tip: (p.end.tick ? 'what it does after frame ' + p.end.tick : 'how it moves') + ' depends on ' + p.end.text };
+    return { text: String(p.activeTicks), tip: 'frames its hit box is out before it ' + pjEndWords(e) + (p.cut && e.kind === 'projectile' ? ', unless it leaves the screen first' : '') };
+  }
+  function pjLife(e) {
+    const p = e.path;
+    if (!p) return { text: '?', tip: 'its path depends on a value the files do not settle' };
+    if (e.hitLater) return { text: '?', tip: 'it goes on in state ' + e.hitState + ', where it hits; its time there is not worked out (see that state\'s own row)' };
+    if (p.end.why === 'cap' && chainOf(e)) return { text: p.end.tick + '+', tip: 'still going after ' + p.end.tick + ' frames (in state ' + chainOf(e)[chainOf(e).length - 1].state + '), where the walk through its states stops' };
+    if (p.end.why === 'cap') return { text: '∞', tip: 'it never ends on its own: it flies until it hits' + (e.kind === 'projectile' ? ' or leaves the screen' : '') };
+    if (p.end.why === 'depends') return { text: p.end.tick ? p.end.tick + '+' : '?', tip: (p.end.tick ? 'after frame ' + p.end.tick + ' it' : 'how it moves') + ' depends on ' + p.end.text };
+    return { text: String(p.end.tick), tip: 'frames before it ' + pjEndWords(e) + (p.cut && e.kind === 'projectile' ? ', unless it leaves the screen first' : '') };
+  }
+  function pjEndWords(e) {
+    const end = e.path && e.path.end;
+    if (!end) return 'ends';
+    return ({ removetime: 'times out (projremovetime)', 'anim end': 'times out at the end of its animation', 'below heightbound': 'falls below its height bound (y ' + end.bound + ')',
+      'above heightbound': 'rises above its height bound (y ' + end.bound + ')', destroyself: 'destroys itself', changestate: 'changes to state ' + (end.to || '?'), lands: 'lands' })[end.why] || 'ends';
+  }
+  const pbStamp = (tip) => el('span', { class: 'pbm', title: tip, 'aria-label': tip }, 'PB');
+  const PB_TIP = 'point blank: if the projectile connects on the first frame it can, right in front of the thrower (its hitstop freezes the projectile, not the thrower). Later hits leave the thrower further ahead.';
+  // the thrower's row: its projectile's numbers, labeled, where its own are unknown
+  function pbCell(cls, n, approx) {
+    if (n === null || n === undefined) return el('span', { class: 'n ' + cls, title: 'point blank: unknown' }, '—');
+    return el('span', { class: 'n ' + cls + ' pbc' + (n > 0 ? ' plus' : n < 0 ? ' minus' : ''), title: PB_TIP }, pbStamp(PB_TIP), (approx ? '≈' : '') + signed(n));
+  }
+  function openProj(id) { sel.proj = id; renderStates(); renderSelection(); const rp = $('right'); if (rp) rp.scrollTop = 0; }
+  function openState(s, ordinal) { sel.proj = null; sel.key = stateKey(s); sel.ordinal = ordinal === undefined ? shownBlock(s) : ordinal; sel.action = null; renderStates(); renderSelection(); const rp = $('right'); if (rp) rp.scrollTop = 0; }
+
+  async function loadMovelist() {
+    try {
+      const j = await getJson('/api/movelist?char=' + encodeURIComponent(char));
+      if (!j || !Array.isArray(j.rows)) { cl = null; clWhy = 'absent'; return; }
+      cl = j; clWhy = null;
+    } catch (e) { cl = null; clWhy = e.status === 404 || e.status === 405 ? 'absent' : 'error:' + e.message; }
+  }
+
+  let firstLoad = true;
+  async function load(keepSel) {
+    try {
+      model = await getJson('/api/char-moves?char=' + encodeURIComponent(char));
+    } catch (e) {
+      $('states').textContent = '';
+      $('states').append(el('div', { class: 'none', text: 'Could not read this character: ' + e.message }));
+      return;
+    }
+    if (firstLoad) await loadMovelist();
+    const list = attackStates();
+    if (!keepSel || !curState()) {
+      // ?state=N opens on that state (the animation editor links here).
+      const want = firstLoad && q.get('state') !== null ? list.find((s) => String(s.no) === q.get('state')) : null;
+      const first = want || listOrder()[0] || list[0] || null;
+      sel.key = first ? stateKey(first) : null;
+      sel.ordinal = first ? shownBlock(first) : 0; sel.action = null;
+    }
+    firstLoad = false;
+    renderSource();
+    renderEdited();
+    renderStates();
+    renderSelection();
+    renderCmdList();
+  }
+
+  // "read from kfm.cmd, frames from kfm.air", in the band.
+  function renderSource() {
+    const src = $('src');
+    if (!src) return;
+    src.textContent = '';
+    const cmd = (model.files || []).find((f) => f.key === 'cmd' && f.found);
+    const air = model.air && model.air.path ? String(model.air.path).split(/[\\/]/).pop() : null;
+    if (cmd) src.append('read from ', el('code', { text: cmd.rel }));
+    if (air) src.append(cmd ? ', frames from ' : 'frames from ', el('code', { text: air }));
+  }
+
+  // "Edited: kfm.cns · Revert". Revert puts the pristine backup back byte for
+  // byte and drops it; it asks twice because it throws away every edit to
+  // that file, not just the last one.
+  function renderEdited() {
+    const box = $('edited');
+    box.textContent = '';
+    const ed = (model && model.edited) || [];
+    box.hidden = !ed.length;
+    if (!ed.length) return;
+    box.append(el('b', { text: 'Edited' }));
+    for (const f of ed) {
+      const btn = el('button', { class: 'warn', text: 'Revert', title: 'Put back the original ' + f.file + ' (every edit to it is discarded)' });
+      let armed = null;
+      btn.onclick = async () => {
+        if (!armed) {
+          btn.textContent = 'Revert ' + f.file + '? click again';
+          armed = setTimeout(() => { armed = null; btn.textContent = 'Revert'; }, 4000);
+          return;
+        }
+        clearTimeout(armed); armed = null;
+        btn.disabled = true;
+        try {
+          await postJson('/api/char-edit-revert', { char, file: f.file });
+          say(f.file + ' is back to the original.', 'ok');
+        } catch (e) { say('Revert failed: ' + e.message, 'err'); }
+        await load(true);
+      };
+      box.append(el('span', { class: 'f', text: f.file + (f.exists === false ? ' (missing)' : '') }), btn);
+    }
+    box.append(el('span', { class: 'fx', text: 'the original is kept beside each as .edit.bak' }));
+  }
+
+  function animLabel(s) {
+    if (s.negative) return 'every tick' + ((s.anims || []).length ? ' · anim ' + s.anims.map((a) => a.action).join('/') : '');
+    if (!s.anim) return 'no anim';
+    const c = s.anim.candidates || [];
+    if (s.anim.literal) return 'anim ' + s.anim.raw;
+    return c.length ? 'anim ' + c.join('/') + ' (expr)' : 'anim: expression';
+  }
+
+  // "5f · +3 / +2": startup of the first block that can hit, and the last
+  // hit's advantage on hit and on block - a frame data table down the side.
+  const signed = (n) => (n > 0 ? '+' + n : String(n));
+  function stateSummary(s) {
+    const fr = s.blocks.map((b) => b.frame).filter((f) => f && f.startup);
+    if (!fr.length) return null;
+    const last = fr[fr.length - 1];
+    const out = el('span', { class: 'fdsum' }, fr[0].startup + 'f');
+    const adv = (n) => el('span', { class: n > 0 ? 'p' : n < 0 ? 'm' : '', text: (last.approx ? '≈' : '') + signed(n) });
+    if (last.knockdown) out.append(' · KD');
+    else if (last.onHit !== undefined && last.onHit !== null) out.append(' · ', adv(last.onHit));
+    if (last.onBlock !== undefined && last.onBlock !== null) out.append(' / ', adv(last.onBlock));
+    return out;
+  }
+
+  // The printed order: the Command List's groups (specials, supers, others)
+  // in its own order, then every attack state it does not name, by number.
+  // (`other` = command normals and system moves: "Unique Attacks", as KFM's own list and the file head them)
+  const GROUP_NAME = { special: ['Special moves', '必殺技'], super: ['Super moves', '超必殺技'], other: ['Unique attacks', '特殊技'] };
+  function listOrder() {
+    const list = attackStates().filter((s) => !shownAsProj(s)).sort((a, b) => a.no - b.no || (a.file < b.file ? -1 : 1));
+    if (!cl || !Array.isArray(cl.rows)) return list;
+    const named = [];
+    for (const g of ['special', 'super', 'other']) for (const r of clRows().filter((x) => (x.group || 'other') === g)) { const s = list.find((x) => x.no === r.state); if (s && !named.includes(s)) named.push(s); }
+    return named.concat(list.filter((s) => !named.includes(s)));
+  }
+
+  function renderStates() {
+    const host = $('states');
+    host.textContent = '';
+    host.className = cl && Array.isArray(cl.rows) ? '' : 'nonames';
+    const list = attackStates().slice().sort((a, b) => a.no - b.no || (a.file < b.file ? -1 : 1));
+    const files = new Set(list.map((s) => s.file));
+    $('listAside') && ($('listAside').textContent = list.length ? list.length + (list.length === 1 ? ' attack state' : ' attack states') + (cl && cl.rows ? '' : ', listed by state') : '');
+    if (!list.length) host.append(el('div', { class: 'none', text: 'No state of this character holds a HitDef, ReversalDef, Projectile or a Modify of one.' }));
+    // MOVES THAT CANNOT BE CHARTED (modlib charMovesIn blankAttacks): not one
+    // animation the attack states name draws a sprite, so the frame data below
+    // is counted on blank frames. Said only when the server found it true, and
+    // the helper part only as far as the files show a helper entering the
+    // states (movelib helperRunStates): all of them, or how many.
+    const ba = model && model.blankAttacks;
+    if (list.length && ba && ba.states) {
+      const absent = ba.absent ? ' (' + ba.absent + ' of them are not in its .air)' : '';
+      const who = !ba.inHelpers ? ''
+        : ba.inHelpers === ba.states ? ' The files show a helper entering every one of those states.'
+          : ' The files show a helper entering ' + ba.inHelpers + ' of those ' + ba.states + ' states.';
+      host.append(el('div', { class: 'none blanknote', role: 'note', text: 'None of the ' + ba.named + ' animations this character’s '
+        + ba.states + ' attack states name draws a sprite' + absent + ', so its moves cannot be charted from its files.' + who }));
+    }
+    if (list.length) host.append(el('div', { class: 'clh', role: 'row' },
+      el('span', { text: 'Move' }), el('span', { text: 'Command' }), el('span', { text: 'State' }),
+      el('span', { class: 'r', text: 'Start', title: 'startup: the first frame the attack can hit' }), el('span', { class: 'r', text: 'Act.', title: 'active frames' }),
+      el('span', { class: 'r', text: 'Rec.', title: 'recovery frames' }), el('span', { class: 'r', text: 'Total', title: 'frames you cannot act' }),
+      el('span', { class: 'r', text: 'Hit', title: 'frame advantage on hit' }), el('span', { class: 'r', text: 'Block', title: 'frame advantage on block' }),
+      el('span', { class: 'r', text: 'Damage' })));
+
+    let zi = 0;
+    const rowOf = (s) => {
+      const k = shownBlock(s), b = s.blocks[k], f = (b && b.frame) || {};
+      const r = clRow(s.no), inp = inputOf(s.no);
+      const tilde = f.approx ? '≈' : '';
+      const num = (cls, v, title) => el('span', { class: 'n ' + cls, title: title || null }, v === null || v === undefined ? '—' : v);
+      const adv = (cls, n) => (n === null || n === undefined ? num(cls, null) : el('span', { class: 'n ' + cls + (n > 0 ? ' plus' : n < 0 ? ' minus' : '') }, tilde + signed(n)));
+      const dmg = f.values && f.values.damage;
+      const dmgText = !dmg || dmg.value === null || dmg.value === undefined ? null : (dmg.how === 'computed' ? '≈' : '') + dmg.value;
+      const dmgCell = num('dm', dmgText, dmg && dmg.text ? 'a formula: ' + dmg.text : null);
+      if (editing) {
+        // Edit on: the damage printed with its tier (GRAIL 3.10's three kinds).
+        const p = b && b.params.find((x) => x.name === 'damage');
+        const v = p && p.values[0];
+        const tier = v ? ({ green: 'plain', amber: 'tmpl', red: 'verb' })[v.tier] : null;
+        if (tier) dmgCell.className += ' bk-tier ' + tier;
+      }
+      const mvCell = el('span', { class: 'mv' });
+      if (r && r.name) { mvCell.append(el('b', { text: r.name })); if (r.hidden) mvCell.append(el('small', { text: 'hidden in the game' })); }
+      else mvCell.append(el('span', { class: 'desc', text: f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : (b ? b.type : 'State ' + s.no) }));
+      // A row that throws a projectile: its own Active / On hit / On block are
+      // the projectile's, read from its entry and labeled (PB = point blank).
+      const pj = f.proj && projById(f.proj.id) ? f.proj : null;
+      const pje = pj ? projById(pj.id) : null;
+      const isSel = !sel.proj && stateKey(s) === sel.key;
+      const row = el('div', { class: 'st' + (isSel ? ' on' : '') + (zi++ % 2 ? ' zb' : ''), role: 'row', tabindex: '0', 'aria-selected': isSel ? 'true' : 'false', title: s.file + ':' + s.line },
+        el('span', { class: 'no', text: s.no }),
+        mvCell,
+        el('span', { class: 'cm' }, inp && (inp.glyphs || inp.input) ? glyph(inp.glyphs || inp.input, false, true) : null, rangeTag(s.no)),
+        num('su', f.startup),
+        pje && (f.active === null || f.active === undefined) ? num('ac', pjActive(pje).text, 'the projectile\'s hit box: ' + pjActive(pje).tip + ' (see Projectiles)') : num('ac', f.active),
+        num('rc', f.recovery), num('tt', f.total),
+        (() => {
+          const c = f.knockdown ? el('span', { class: 'n oh kd', title: 'knockdown' }, 'KD')
+            : pj && (f.onHit === null || f.onHit === undefined) ? pbCell('oh', pj.onHit, pj.approx) : adv('oh', f.onHit);
+          const m = cancelMarks(s.no); if (m) c.prepend(m); return c;
+        })(),
+        pj && (f.onBlock === null || f.onBlock === undefined) ? pbCell('ob', pj.onBlock, pj.approx) : adv('ob', f.onBlock),
+        dmgCell,
+        el('span', { class: 'eline ed' },
+          el('span', { class: 'an' }, el('span', { class: 'mt ' + (s.movetype || ''), text: (s.movetype || '-').toUpperCase(), title: 'movetype ' + (MT_NAME[s.movetype] || 'not set (I)') }), animLabel(s)),
+          el('span', { class: 'n', text: s.blocks.length + (s.blocks.length === 1 ? ' blk' : ' blks') }),
+          stateSummary(s),
+          files.size > 1 ? el('span', { class: 'fl', text: s.file }) : null));
+      row.onclick = () => { sel.proj = null; sel.key = stateKey(s); sel.ordinal = shownBlock(s); sel.action = null; renderStates(); renderSelection(); const rp = $('right'); if (rp) rp.scrollTop = 0; };
+      row.onkeydown = (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); row.onclick(); focusRow(stateKey(s)); }
+        else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+          ev.preventDefault();
+          const order = listOrder(), i = order.indexOf(s), n = order[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+          if (n) { sel.proj = null; sel.key = stateKey(n); sel.ordinal = shownBlock(n); sel.action = null; renderStates(); renderSelection(); focusRow(stateKey(n)); }
+        }
+      };
+      row.dataset && (row.dataset.key = stateKey(s));
+      return row;
+    };
+
+    // With the Command List's names: grouped like a manual's command list,
+    // named moves whose state holds no attack block printed as such.
+    if (cl && Array.isArray(cl.rows) && list.length) {
+      const placed = new Set();
+      for (const g of ['special', 'super', 'other']) {
+        const rows = clRows().filter((r) => (r.group || 'other') === g);
+        if (!rows.length) continue;
+        zi = 0;
+        host.append(el('div', { class: 'clg', role: 'row' }, el('span', {}, GROUP_NAME[g][0], el('span', { class: 'k', lang: 'ja', text: GROUP_NAME[g][1] }))));
+        for (const r of rows) {
+          const s = list.find((x) => x.no === r.state);
+          if (s && !placed.has(s)) { placed.add(s); host.append(rowOf(s)); continue; }
+          if (s) continue;
+          const plain = model.states.find((x) => x.no === r.state);
+          // A named move whose state only makes a helper: it throws, and its
+          // projectile is a row of the PROJECTILES section (a click opens it).
+          const thrown = projsOf(r.state);
+          const nh = el('div', { class: 'nohit' + (thrown.length ? ' pjt' : '') + (zi++ % 2 ? ' zb' : ''), role: 'row', tabindex: thrown.length ? '0' : null },
+            el('span', { class: 'no', text: r.state }),
+            el('span', { class: 'mv' }, el('b', { text: r.name || '' })),
+            el('span', { class: 'cm' }, r.glyphs || r.input ? glyph(r.glyphs || r.input, false, true) : null),
+            thrown.length ? el('span', { class: 'why' }, 'throws ' + PJ_KIND[thrown[0].kind] + ': ', el('b', { text: 'see Projectiles' }),
+              thrown[0].pointBlank && thrown[0].pointBlank.onHit !== null ? ' (point blank ' + signed(thrown[0].pointBlank.onHit) + (thrown[0].pointBlank.onBlock !== null ? ' / ' + signed(thrown[0].pointBlank.onBlock) : '') + ')' : '')
+              : el('span', { class: 'why', text: plain ? 'no attack block in this state' : 'no state ' + r.state + ' in the files the engine loads' }));
+          if (thrown.length) { nh.onclick = () => openProj(thrown[0].id); nh.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openProj(thrown[0].id); } }; }
+          host.append(nh);
+        }
+      }
+      const rest = list.filter((s) => !placed.has(s) && !shownAsProj(s));
+      if (rest.length) {
+        zi = 0;
+        host.append(el('div', { class: 'clg', role: 'row' }, el('span', {}, 'Other attack states', el('span', { class: 'k', text: 'not in the Command List' }))));
+        for (const s of rest) host.append(rowOf(s));
+      }
+    } else {
+      for (const s of list) if (!shownAsProj(s)) host.append(rowOf(s));
+    }
+    renderProjList(host);
+    drawGlyphs(host);
+
+    const foot = $('listFoot');
+    if (foot) {
+      foot.textContent = '';
+      if (list.length) {
+        foot.append(el('b', { text: 'Frames' }), ' follow GRAIL 3.10: frame 1 is the first frame of the move; startup is the first frame the block is armed on an element with a hit box; total runs to the end trigger plus one. ',
+          el('b', { text: '≈' }), ' marks a number that rests on a formula read as a fresh first hit, or on an armed or end frame the files do not settle. ');
+        if (!cl) foot.append(el('b', { text: 'Names' }), ' come from the Command List reader, which this build does not have: each attack state is described by its attack type.');
+        else foot.append(el('b', { text: 'Names' }), ' are the Command List\'s (where each came from is listed under it).');
+      }
+    }
+
+    // DEAD CODE (§6): attack blocks the engine never compiles - a statedef an
+    // earlier file already defined, a dropped negative statedef, or text after
+    // a bracket line that ends the statedef. Listed so nobody edits them.
+    const dead = (model && model.dead) || [];
+    if (dead.length) {
+      host.append(el('h3', { class: 'bk-sh deadh', text: 'Dead (never compiled)' }));
+      for (const d of dead) {
+        host.append(el('div', { class: 'dead', title: d.reason },
+          el('span', { class: 'no', text: (d.state === null ? '?' : d.state) + ' ' }), d.type + ' · ' + d.file + ':' + d.line,
+          el('div', { text: d.reason })));
+      }
+    }
+    const ns = (model && model.notScanned) || [];
+    if (ns.length) host.append(el('div', { class: 'dead', text: 'Not scanned (ZSS): ' + ns.join(', ') }));
+  }
+  // THE PROJECTILES SECTION, at the foot of the list: one row per projectile,
+  // in the order the list prints their throwers. Columns: its name (the
+  // throwing move's), command, the throwing state, the frame it appears on,
+  // the frames its hit box is out, its hits, its life, point blank on hit / on
+  // block, damage. Every number is the server's.
+  function renderProjList(host) {
+    const pl = projs();
+    if (!pl.length) return;
+    // The Command List's order for the throws it names, then the rest by state.
+    const named = [];
+    for (const g of ['special', 'super', 'other']) for (const r of clRows().filter((x) => (x.group || 'other') === g)) if (!named.includes(r.state)) named.push(r.state);
+    const rank = (e) => { const no = e.thrower.state; const j = named.indexOf(no); return j >= 0 ? j : 1e5 + no; };
+    const sorted = pl.slice().sort((a, b) => rank(a) - rank(b) || a.thrower.line - b.thrower.line);
+    host.append(el('div', { class: 'clg', role: 'row' }, el('span', {}, 'Projectiles', el('span', { class: 'k', lang: 'ja', text: '飛び道具' }))));
+    host.append(el('div', { class: 'clh pjh', role: 'row' },
+      el('span', { text: 'Projectile' }), el('span', { text: 'Command' }), el('span', { text: 'State', title: 'the state that throws it' }),
+      el('span', { class: 'r', text: 'Out', title: 'the frame it appears on, counted on the throw' }), el('span', { class: 'r', text: 'Act.', title: 'frames its hit box is out while it flies' }),
+      el('span', { class: 'r', text: 'Hits', title: 'hits before it is gone (projhits)' }), el('span', { class: 'r', text: 'Life', title: 'frames before it ends on its own' }),
+      el('span', { class: 'r', text: 'PB hit', title: PB_TIP }), el('span', { class: 'r', text: 'PB blk', title: PB_TIP }),
+      el('span', { class: 'r', text: 'Damage' })));
+    let zi = 0;
+    for (const e of sorted) {
+      const th = e.thrower, inp = inputOf(th.state);
+      const pb = e.pointBlank || {};
+      const v = e.values || {};
+      const dm = v.damage && v.damage.value !== null && v.damage.value !== undefined ? (v.damage.how === 'computed' ? '≈' : '') + v.damage.value : null;
+      const hitsN = e.life && e.life.hits ? e.life.hits.value : null;
+      const n = (cls, val, tip) => el('span', { class: 'n ' + cls, title: tip || null }, val === null || val === undefined ? '—' : val);
+      const adv = (cls, x) => (x === null || x === undefined ? n(cls, null, 'point blank: unknown') : el('span', { class: 'n ' + cls + (x > 0 ? ' plus' : x < 0 ? ' minus' : ''), title: PB_TIP }, (pb.approx ? '≈' : '') + signed(x)));
+      const look = e.kind === 'explod' ? 'Explod' : e.kind === 'helper' ? 'helper' : null;
+      const invisible = e.look && (e.look.blank || (projAnim(e.look.action) || {}).noSprite) && e.kind === 'projectile';
+      const mv = el('span', { class: 'mv' }, el('b', { text: moveName(th.state) }),
+        look ? el('span', { class: 'pjk', text: look, title: PJ_KIND[e.kind] }) : null,
+        invisible ? el('span', { class: 'pjk', text: 'invisible', title: 'its animation draws nothing' }) : null);
+      const act = pjActive(e), life = pjLife(e);
+      const isSel = sel.proj === e.id;
+      const row = el('div', { class: 'pj' + (zi++ % 2 ? ' zb' : ''), role: 'row', tabindex: '0', 'aria-selected': isSel ? 'true' : 'false', title: e.kind === 'projectile' ? th.file + ':' + th.line : e.block.file + ':' + e.block.state },
+        el('span', { class: 'no', text: th.state }), mv,
+        el('span', { class: 'cm' }, inp && (inp.glyphs || inp.input) ? glyph(inp.glyphs || inp.input, false, true) : null),
+        n('su', pjAppears(e), pjAppearsTip(e)),
+        n('ac', act.text, act.tip), n('rc', hitsN, e.kind === 'projectile' ? (hitsN === null ? 'projhits depends on a formula' : 'projhits: hits before it is gone') : 'a helper hits as often as its own code lets it'),
+        n('tt', life.text, life.tip), adv('oh', pb.onHit), adv('ob', pb.onBlock),
+        n('dm', dm, v.damage && v.damage.text ? 'a formula: ' + v.damage.text : null));
+      row.onclick = () => openProj(e.id);
+      row.onkeydown = (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openProj(e.id); }
+        else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+          ev.preventDefault();
+          const nx = sorted[sorted.indexOf(e) + (ev.key === 'ArrowDown' ? 1 : -1)];
+          if (nx) openProj(nx.id);
+        }
+      };
+      if (row.dataset) row.dataset.proj = e.id;
+      host.append(row);
+    }
+    const notes = (model.projNotes || []);
+    if (notes.length) host.append(el('div', { class: 'dead', text: notes.join('; ') }));
+  }
+
+  function focusRow(key) {
+    const host = $('states');
+    if (!host || !host.querySelectorAll) return;
+    for (const r of host.querySelectorAll('.st')) if (r.dataset.key === key) { r.focus(); if (r.scrollIntoView) r.scrollIntoView({ block: 'nearest' }); }
+  }
+
+  function renderSelection() {
+    const fr = $('frames'), bk = $('block'), op = $('opened'), pl = $('plate');
+    fr.textContent = ''; bk.textContent = ''; if (op) op.textContent = ''; if (pl) pl.textContent = '';
+    if (sel.proj) {
+      const e = projById(sel.proj);
+      if (e) { renderProjectile(e); return; }
+      sel.proj = null;
+    }
+    const s = curState();
+    if (!s) { fr.append(el('div', { class: 'none', text: model ? 'Pick a state in the list.' : '' })); return; }
+    if (sel.ordinal >= s.blocks.length) sel.ordinal = 0;
+    const b = s.blocks[sel.ordinal];
+    if (op) renderOpened(op, s, b);
+    renderFrameData(op || fr, s, b);
+    if (op) renderCancels(op, s);
+    renderFrames(fr, s, b);
+    if (pl) renderPlate(pl, s, b);
+    renderBlock(bk, s, b);
+    if (op) drawGlyphs(op);
+  }
+
+  // ---- the opened move: where it is, its name and input -------------------
+  function renderOpened(host, s, b) {
+    const r = clRow(s.no), inp = r || inputOf(s.no);
+    const k = s.blocks.indexOf(b);
+    const head = el('div', { class: 'mvhead' },
+      el('div', { class: 'where' }, el('span', { class: 'sn', text: 'State ' + s.no }),
+        b.type + ', block ' + (k + 1) + ' of ' + s.blocks.length + ', ' + b.file + ' line ' + b.line));
+    const f = b.frame || {};
+    head.append(el('h2', { class: 'bk-title bk-nocaps', text: r && r.name ? r.name : (f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : 'State ' + s.no) }));
+    // the input as the game's Command List draws it (the writer's tokens), its .cmd text beside it
+    if (inp && (inp.glyphs || inp.input)) head.append(el('div', { class: 'inp' }, glyph(inp.glyphs || inp.input, true), el('code', { text: inp.input || inp.glyphs })));
+    const rg = rangeOf(s.no);
+    if (rg) {
+      // its twin: the other state the same button enters at the other distance
+      const mine = rawInput(s.no) || {};
+      const twin = cl.inputs.find((x) => x.state !== s.no && x.range && x.range.kind !== rg.kind && x.glyphs === mine.glyphs && x.range.dist === rg.dist);
+      head.append(el('div', { class: 'from rngline' }, el('b', { text: rg.kind === 'close' ? 'Close version' : 'Far version' }), ': ' + rangeDesc(rg) + '.',
+        twin ? ' ' + (twin.range.kind === 'close' ? 'Up close' : 'Farther out') + ', the same button is state ' + twin.state + ' (' + moveName(twin.state) + ').' : ''));
+    }
+    if (r) {
+      const FROM = { owner: 'the name you gave it', label: 'its [State -1] label', command: 'its command name', comment: 'the comment above its block', readme: 'the character\'s readme' };
+      const raw = r.raw || {};
+      head.append(el('div', { class: 'from' }, 'Name from ' + (FROM[r.nameFrom] || r.nameFrom || 'the files'),
+        raw.label ? [' (', el('code', { text: raw.label }), ')'] : null,
+        raw.command ? ['; command ', el('code', { text: raw.command })] : null, '.'));
+      if (r.partOf) head.append(el('div', { class: 'from' }, 'In the game\'s Command List it is one line with its other ' + (r.partOf.of - 1 === 1 ? 'strength' : r.partOf.of - 1 + ' strengths') + ': ',
+        el('b', { text: r.partOf.name }), ' ', glyph(r.partOf.glyphs), '.'));
+    } else if (inp) {
+      head.append(el('div', { class: 'from' }, 'Input from its [State -1] block, ' + inp.file + ' line ' + inp.line + '. ',
+        inp.listed ? 'The game\'s Command List prints it on another state\'s line. ' : (cl && cl.own ? 'This character ships a Command List of its own. ' : s.no < 1000 ? 'Plain normals stay out of the game\'s Command List. ' : 'Not a line of the game\'s Command List: its block can enter more than one state, and the list prints the one it enters by default. '),
+        animLabel(s) + '.'));
+    } else if (cl === null && clWhy === 'absent') {
+      head.append(el('div', { class: 'from' }, 'No name: the Command List reader is not in this build. ', animLabel(s) + '.'));
+    } else head.append(el('div', { class: 'from', text: 'The Command List does not name this state. ' + animLabel(s) + '.' }));
+    // What it throws: each projectile's entry, one click away.
+    const thrown = projsOf(s.no);
+    if (thrown.length) {
+      const links = el('div', { class: 'pjlinks' }, el('b', { text: 'Throws' }));
+      // A WinMUGEN-era state can throw dozens: the first 6, the rest counted.
+      for (const e of thrown.slice(0, 6)) {
+        const pb = e.pointBlank || {};
+        links.append(el('button', { class: 'pjlink', type: 'button', title: 'Open the projectile\'s own frames, path and numbers',
+          onclick: () => openProj(e.id) }, 'Projectile' + (e.kind === 'explod' ? ' (drawn by an Explod)' : e.kind === 'helper' ? ' (a helper)' : '')
+          + (pjAppears(e) ? ', appears frame ' + pjAppears(e) : ', line ' + e.thrower.line)
+          + (pb.onHit !== null && pb.onHit !== undefined ? ', point blank ' + signed(pb.onHit) + (pb.onBlock !== null && pb.onBlock !== undefined ? ' / ' + signed(pb.onBlock) : '') : '') + ' →'));
+      }
+      if (thrown.length > 6) links.append(el('span', { text: 'and ' + (thrown.length - 6) + ' more under Projectiles' }));
+      head.append(links);
+    }
+    if (s.thrownBy && projById(s.thrownBy.id)) {
+      const e = projById(s.thrownBy.id);
+      head.append(el('div', { class: 'pjlinks' }, el('b', { text: 'A projectile' }), 'this state is a helper\'s, thrown by state ' + s.thrownBy.states.join(', ') + ':',
+        el('button', { class: 'pjlink', type: 'button', onclick: () => openProj(e.id) }, 'its projectile entry →')));
+    }
+    host.append(head);
+  }
+
+  // ---- an opened PROJECTILES entry ------------------------------------------
+  // Its head (what throws it, how it is made), the readout (the frame it appears
+  // on, active frames, life, hits, point blank on hit / on block), its own frames
+  // at their real scale with their boxes, its path, and the numbers behind it.
+  // Every number is the server's (movelib THE PROJECTILES, framedata.js).
+  const fmt = (x) => (x === null || x === undefined ? '?' : String(Math.round(x * 100) / 100));
+  const pairText = (p) => (Array.isArray(p) ? p.map(fmt).join(', ') : '?');
+  function renderProjectile(e) {
+    const fr = $('frames'), op = $('opened'), pl = $('plate'), bk = $('block');
+    const host = op || fr;
+    const th = e.thrower;
+    const head = el('div', { class: 'mvhead' },
+      el('div', { class: 'where' }, el('span', { class: 'sn', text: 'Projectile' }),
+        (e.kind === 'projectile' ? 'a Projectile controller' : PJ_KIND[e.kind]) + ', thrown by state ' + th.state + ', ' + th.file + ' line ' + th.line));
+    head.append(el('h2', { class: 'bk-title bk-nocaps', text: moveName(th.state) }));
+    const inp = inputOf(th.state);
+    if (inp && (inp.glyphs || inp.input)) head.append(el('div', { class: 'inp' }, glyph(inp.glyphs || inp.input, true), el('code', { text: inp.input || inp.glyphs })));
+    // Back to the move(s) that throw it.
+    const links = el('div', { class: 'pjlinks' }, el('b', { text: 'Thrown by' }));
+    for (const t of (e.throwers || [th])) {
+      const ts = attackStates().find((x) => x.no === t.state) || null;
+      const label = moveName(t.state) + ' (state ' + t.state + ')' + (t.timing && t.timing.frame ? ', frame ' + t.timing.frame : '');
+      if (ts) links.append(el('button', { class: 'pjlink', type: 'button', onclick: () => openState(ts) }, '← ' + label));
+      else links.append(el('span', { text: label + ' (no attack of its own)' }));
+    }
+    head.append(links);
+    if (th.helper) {
+      const via = th.via;
+      head.append(el('div', { class: 'from' }, 'The state that ' + (e.kind === 'projectile' ? 'throws it' : 'makes it') + ' is itself a helper\'s, made by state ' + [...new Set(th.helper.flatMap((h) => h.by))].join(', ') + '. '
+        + (via && via.frame ? 'It appears on frame ' + via.frame + ' of state ' + via.state + ' (the helper\'s own frame ' + via.helperFrame + '), and point blank is counted on state ' + via.state + '\'s frames: the player\'s, not the helper\'s.'
+          : 'Point blank is the player\'s advantage, and ' + ((via && via.why) || 'the player\'s frames are not settled') + ', so it is left out.')));
+    }
+    if (e.kind !== 'projectile') {
+      head.append(el('div', { class: 'from' }, 'A helper in state ' + e.entryState + (e.hitState !== e.entryState ? ', its hit in state ' + e.hitState : '') + ' (' + e.block.file + '). '
+        + 'Its frames are counted from the frame it appears, and its advantage is the thrower\'s, not its own.'));
+      // A hit in a later state: that state's own row is where its frames are counted.
+      const hs = e.hitLater ? attackStates().find((x) => x.no === e.hitState) : null;
+      if (hs) head.append(el('div', { class: 'pjlinks' }, el('b', { text: 'Its hit' }), 'the helper changes to state ' + e.hitState + ' before it hits, at a time the files do not settle:',
+        el('button', { class: 'pjlink', type: 'button', onclick: () => openState(hs) }, 'state ' + e.hitState + '\'s own frames →')));
+    }
+    if (e.kind === 'explod' && e.explod) {
+      const x = e.explod;
+      head.append(el('div', { class: 'from' }, el('b', { text: 'Drawn by an Explod' }), ': ' + x.file + ' line ' + x.line + ' in ' + x.where
+        + (x.anim.foreign ? ', animation ' + x.anim.raw + ' from the common effects (not drawn here)' : ', action ' + x.anim.action + (x.anim.candidates ? ' (one of ' + x.anim.candidates.join(', ') + ')' : ''))
+        + ', scale ' + pairText(x.scale) + (x.bindtime !== null ? ', bindtime ' + x.bindtime : '') + '. The helper that hits plays a blank animation (action ' + e.look.action + '), so its boxes are drawn on the Explod\'s frames. Matched by state, not by ID.'));
+    }
+    host.append(head);
+    renderProjData(host, e);
+    renderProjFrames(fr, e);
+    renderProjPath(pl || fr, e);
+    // Edit on: its values are the block's, edited where the block lives.
+    const hs = attackStates().find((x) => x.no === e.block.state && x.blocks.some((b) => b.file === e.block.file && b.ordinal === e.block.ordinal));
+    if (bk && hs) {
+      bk.append(el('h2', { class: 'bk-sh' }, 'Values', el('span', { class: 'k', lang: 'ja', text: '数値' }), el('span', { class: 'aside', text: (e.kind === 'projectile' ? 'its Projectile block' : 'its helper\'s HitDef') + ', state ' + hs.no })),
+        el('div', { class: 'pjlinks' }, el('button', { class: 'pjlink', type: 'button', onclick: () => openState(hs, e.block.ordinal) }, 'Edit its values in state ' + hs.no + ' →')));
+    }
+    drawGlyphs(host);
+  }
+
+  function renderProjData(host, e) {
+    const pb = e.pointBlank || {};
+    const v = e.values || {};
+    const tilde = pb.approx ? '≈' : '';
+    const card = el('div', { class: 'fd' });
+    card.append(el('div', { class: 'fdh' }, el('span', { class: 't', text: 'Frame data' }),
+      el('span', { class: 'tag', text: [v.attr ? v.attr[0].toUpperCase() + v.attr.slice(1) : null, v.guard ? v.guard.level : null, 'advantage at point blank'].filter(Boolean).join(' · ') })));
+    const n = (label, value, tip, cls) => el('div', { class: 'fdn' + (cls ? ' ' + cls : ''), title: tip }, el('span', { class: 'k', text: label }), el('b', { text: value === null || value === undefined ? '—' : String(value) }));
+    const advCls = (x) => (x === null || x === undefined ? '' : x > 0 ? 'plus' : x < 0 ? 'minus' : 'even');
+    const act = pjActive(e), life = pjLife(e);
+    card.append(el('div', { class: 'fdrow' },
+      n('Appears', pjAppears(e), pjAppearsTip(e) + ' (frame 1 = the throw\'s first)'),
+      n('Active', act.text, act.tip),
+      n('Life', life.text, life.tip),
+      n('Hits', e.kind === 'projectile' && e.life ? e.life.hits.value : null, e.kind === 'projectile' ? 'projhits' : 'a helper hits as often as its own code lets it'),
+      n('PB hit', pb.onHit === null || pb.onHit === undefined ? null : tilde + signed(pb.onHit), PB_TIP, 'sep ' + advCls(pb.onHit)),
+      n('PB block', pb.onBlock === null || pb.onBlock === undefined ? null : tilde + signed(pb.onBlock), PB_TIP, advCls(pb.onBlock))));
+    // One cell per frame it flies: its hit box out (red) or not (open). Not
+    // drawn when its hit box is unknown (an empty meter would say "none").
+    if (e.path && e.path.hitUnknown) card.append(el('div', { class: 'fdnote', text: 'Its hit box frame by frame: unknown, because ' + e.path.hitUnknown + '.' }));
+    else if (e.path && e.path.pts.length && chainOf(e)) {
+      // A chain: 180 frames from the state its hit is in (or its first), a
+      // dark edge where it enters a state.
+      const ch2 = chainOf(e);
+      const from = e.path.firstHit !== null && e.path.firstHit !== undefined && e.path.firstHit >= 150 ? ch2[e.path.pts[e.path.firstHit][5]].from : 0;
+      const meter = el('div', { class: 'meter', title: 'one cell per frame of its life' });
+      e.path.pts.slice(from, from + 180).forEach((p, j) => {
+        const i = from + j, sb = i > 0 && e.path.pts[i - 1] && e.path.pts[i - 1][5] !== p[5];
+        meter.append(el('i', { class: (p[3] ? 'a' : 's') + ((i + 1) % 5 === 0 ? ' n5' : '') + (sb ? ' sb' : ''), title: 'frame ' + (i + 1) + ' of its life, state ' + (ch2[p[5]] ? ch2[p[5]].state : '?') + ': ' + (p[3] ? 'hit box out' : 'no hit box') }));
+      });
+      const n = Math.min(180, e.path.pts.length - from);
+      card.append(meter, el('div', { class: 'mkey' }, el('span', {}, el('i', { class: 'a' }), 'its hit box out'), el('span', {}, el('i', { class: 's' }), 'no hit box'),
+        el('span', {}, el('i', { class: 's sb' }), 'it enters a state'),
+        el('span', { text: 'one cell per frame of its life, frames ' + (from + 1) + '–' + (from + n) + (from ? ' (from state ' + ch2[e.path.pts[from][5]].state + ', where it hits)' : '') })));
+    }
+    else if (e.path && e.path.pts.length) {
+      const meter = el('div', { class: 'meter', title: 'one cell per frame it flies' });
+      e.path.pts.slice(0, 180).forEach((p, i) => meter.append(el('i', { class: (p[3] ? 'a' : 's') + ((i + 1) % 5 === 0 ? ' n5' : ''), title: 'frame ' + (i + 1) + ' of its flight: ' + (p[3] ? 'hit box out' : 'no hit box') })));
+      card.append(meter, el('div', { class: 'mkey' }, el('span', {}, el('i', { class: 'a' }), 'its hit box out'), el('span', {}, el('i', { class: 's' }), 'no hit box'),
+        el('span', { text: 'one cell per frame of its flight' + (e.path.pts.length > 180 ? ', the first 180' : '') })));
+    }
+    const props = el('div', { class: 'fdprops' });
+    const prop = (k, val) => { if (val !== null && val !== undefined && val !== '') props.append(el('div', {}, el('b', { text: k + ': ' }), String(val))); };
+    const val = (x) => (!x || x.value === null || x.value === undefined ? (x && x.text ? 'depends on ' + x.text : '—') : (x.how === 'computed' ? '≈' + x.value + ' (depends on ' + x.text + ')' : String(x.value)));
+    const via = e.thrower.via;
+    if (pb.frame !== null && pb.frame !== undefined) prop('Point blank', 'it can connect on frame ' + pb.frame + ' of ' + (via && via.frame ? 'state ' + via.state + ' (the move that makes the helper that throws it)' : 'the throw') + '; ' + (pb.after < 0 ? 'the player has been able to act for ' + nFrames(-pb.after) + ' by then' : 'the player acts ' + nFrames(pb.after) + ' later') + '. On hit: hitstun ' + val(v.hitstun) + ' + 2 + their hitstop ' + val(v.hitstopP2) + (pb.after < 0 ? ' + ' + (-pb.after) : ' - ' + pb.after) + '. On block: blockstun ' + val(v.blockstun) + ' + 1 + their blockstop ' + val(v.blockstopP2) + (pb.after < 0 ? ' + ' + (-pb.after) : ' - ' + pb.after) + '. Its own hitstop freezes the projectile, not the player.');
+    else prop('Point blank', 'unknown: ' + (pb.why || (e.firstHit === null || e.firstHit === undefined ? 'the frame it first shows a hit box is not settled' : 'the thrower\'s frames are not settled')));
+    prop('Damage', val(v.damage) + (v.chip ? ', chip ' + val(v.chip) : ''));
+    prop('Hitstun / blockstun', val(v.hitstun) + ' / ' + val(v.blockstun));
+    prop('Their hitstop / blockstop', val(v.hitstopP2) + ' / ' + val(v.blockstopP2));
+    if (e.freeze !== null && e.freeze !== undefined) prop('It freezes on contact', nFrames(e.freeze) + ' (its pausetime' + (e.kind === 'projectile' && model.projMugen && model.projMugen.win ? ' less one: a WinMUGEN character\'s projectile, char.go 13963' : '') + '); the thrower does not freeze');
+    if (v.guard) prop('Blocked', v.guard.text);
+    prop('Knockdown', v.knockdown === true ? 'yes' : v.knockdown === false ? 'no' : 'depends on a formula');
+    if (v.juggle !== null && v.juggle !== undefined) prop('Juggle cost', v.juggle + (e.kind === 'projectile' ? ' (air.juggle is read for projectiles)' : ''));
+    // Where and how it flies.
+    const sp = e.spawn || {};
+    const POS = { p1: 'ahead of the thrower\'s axis', p2: 'around the opponent (P2), along their facing', front: 'from the screen edge in front of the thrower', back: 'from the screen edge behind the thrower', left: 'from the screen\'s left edge', right: 'from the screen\'s right edge', none: 'at that place on the stage' };
+    prop('Appears at', 'x ' + fmt(sp.offset && sp.offset[0]) + ', y ' + fmt(sp.offset && sp.offset[1]) + ' ' + (POS[sp.postype] || sp.postype) + ' (postype ' + sp.postype + ')' + (sp.postype === 'p1' ? '; y from the ground with the thrower standing' : ''));
+    if (e.kind === 'projectile') {
+      const m = e.motion || {};
+      prop('Speed', 'velocity ' + pairText(m.velocity) + ', accel ' + pairText(m.accel) + (m.velmul && (m.velmul[0] !== 1 || m.velmul[1] !== 1) ? ', velmul ' + pairText(m.velmul) : '') + ' per frame');
+      const L2 = e.life || {};
+      prop('Ends', (L2.removetime ? (L2.removetime.value === -1 ? 'no timer (projremovetime -1)' : 'projremovetime ' + fmt(L2.removetime.value)) : '') + '; height bound ' + pairText(L2.heightbound) + '; edge bound ' + fmt(L2.edgebound && L2.edgebound.value) + ' past the screen');
+      prop('Hits', 'projhits ' + fmt(L2.hits && L2.hits.value) + ', projmisstime ' + fmt(L2.misstime && L2.misstime.value) + ', projpriority ' + fmt(L2.priority && L2.priority.value));
+      const an = (x) => (!x ? '?' : x.foreign ? x.foreign + ' (common effects)' : x.depends ? 'depends on ' + x.depends : x.action === -1 ? 'none (-1)' : 'action ' + x.action) + (x && x.how && x.how !== 'file' ? ' (' + x.how + ')' : '');
+      prop('Animations', 'flying ' + (e.look.action === null ? (e.look.raw || '?') : 'action ' + e.look.action) + (e.look.how === 'default' ? ' (projanim not set: 0)' : '') + '; on hit ' + an(e.hitAnim) + '; vanishing ' + an(e.remAnim) + '; cancelled ' + an(e.cancelAnim));
+    } else {
+      const m = e.motion || {};
+      prop('Speed', (m.headerVel ? 'velset ' + pairText(m.headerVel) + ' at its state\'s start' : 'no velset on its state') + '; then its own VelSet / VelAdd / PosAdd, physics ' + (m.physics || 'n').toUpperCase());
+    }
+    const sc = e.scale || {};
+    prop('Scale', 'drawn at ' + pairText(sc.draw) + ' (' + sc.drawHow + '); boxes at ' + pairText(sc.clsn) + ' (' + sc.clsnHow + ')');
+    if (e.path) prop('Its path', pathWords(e));
+    if (e.screen && (e.screen.middle !== null || e.screen.corner !== null)) prop('Off screen', 'with the camera still, it passes the screen edge + ' + e.screen.edgebound + ' after ' + (e.screen.middle !== null ? e.screen.middle + ' frames thrown from the middle of the screen' : '') + (e.screen.corner !== null ? (e.screen.middle !== null ? ', ' : '') + e.screen.corner + ' frames thrown from one corner to the other' : '') + ' (' + e.screen.width + ' wide)');
+    if (e.path && e.path.mayEnd && e.path.mayEnd.length) prop('May end sooner', e.path.mayEnd.map((m) => m.type + ' at ' + m.file + ' line ' + m.line + ' when ' + m.text).join('; '));
+    card.append(props);
+    if (e.depends && e.depends.length) {
+      const box = el('div', { class: 'pjdeps' }, el('b', { text: 'Depends on the game: ' }), 'these are written as formulas, so the numbers they decide are left out: ');
+      e.depends.forEach((d, i) => { if (i) box.append('; '); box.append(d.what + ' = ', el('code', { text: d.expr }), d.line ? ' (' + d.file + ' line ' + d.line + ')' : ''); });
+      card.append(box);
+    }
+    for (const x of (e.notes || [])) card.append(el('div', { class: 'fdnote', text: x }));
+    host.append(card);
+  }
+  function pathWords(e) {
+    const p = e.path, end = p.end;
+    const ptxt = (k) => { const q = p.pts[k]; return q ? 'x ' + fmt(q[0]) + ', y ' + fmt(q[1]) : '?'; };
+    const parts = [];
+    if (e.firstHit !== null && e.firstHit !== undefined && p.pts[e.firstHit]) parts.push('first hit box on its frame ' + (e.firstHit + 1) + ' at ' + ptxt(e.firstHit));
+    if (end.why === 'cap') parts.push('still flying after ' + end.tick + ' frames');
+    else if (end.why === 'depends') parts.push('after frame ' + end.tick + ' it depends on ' + end.text + (end.line ? ' (' + end.file + ' line ' + end.line + ')' : ''));
+    else parts.push('it ' + pjEndWords(e) + ' after ' + end.tick + ' frames' + (p.pts.length ? ', last at ' + ptxt(p.pts.length - 1) : ''));
+    if (p.turns && p.turns.length) parts.push('turns around on frame ' + p.turns.map((t) => t + 1).join(', '));
+    if (p.cut) parts.push('drawn for its first ' + p.pts.length + ' frames: past that it is beyond any screen' + (e.kind === 'projectile' ? ', where the engine removes a projectile' : ' (a helper flies on off screen)'));
+    return parts.join('; ');
+  }
+
+  // Its own frames, at the size the game draws them (the projectile's scale for
+  // the sprite, its box scale for the boxes - projscale does not scale boxes),
+  // magnified by a whole number. An Explod-drawn one shows the Explod's frames
+  // and the blank helper's boxes beside them.
+  // The scale its sprite is drawn at: an Explod's own scale; a helper's own
+  // size (its maker's [Size] where a formula sets it); a Projectile's
+  // projscale (1 where a formula sets it).
+  function pjDrawScale(e) {
+    if (e.kind === 'explod' && e.explod) return (e.explod.scale || [1, 1]).map((v) => (v === null ? 1 : v));
+    const d = (e.scale && e.scale.draw) || [1, 1], sz = model.size || { xscale: 1, yscale: 1 };
+    return d.map((v, k) => (v !== null ? v : e.kind === 'projectile' ? 1 : (k ? sz.yscale : sz.xscale)));
+  }
+  // A HELPER FOLLOWED THROUGH ITS STATES (THE PROJECTILES): what it does in
+  // one state, from the walk's own numbers (its motion there, a pause it
+  // calls, its HitDef) - never prose the files do not say.
+  function chainWords(e, sg) {
+    const n = Math.max(1, (sg.to === null || sg.to === undefined ? sg.from + 1 : sg.to) - sg.from);
+    const y0 = sg.y0 || 0, y1 = sg.y1 || 0;
+    const dx = (sg.x1 || 0) - (sg.x0 || 0), dy = y1 - y0;
+    const parts = [];
+    // An arc reads as one: its highest (or lowest) point from the walk's own
+    // frames in this state, when it passes beyond both ends by half a unit.
+    const k = e.path.chain.indexOf(sg);
+    const ys = e.path.pts.filter((p) => p[5] === k).map((p) => p[1]);
+    const top = ys.length ? Math.min(y0, ...ys) : y0, low = ys.length ? Math.max(y0, ...ys) : y0;
+    const ground = (a, b) => (b >= 0 && a < 0 ? ' to the ground' : '');
+    if (top <= Math.min(y0, y1) - 0.5) parts.push('rises ' + fmt(y0 - top) + ', then falls ' + fmt(y1 - top) + ground(top, y1));
+    else if (low >= Math.max(y0, y1) + 0.5) parts.push('falls ' + fmt(low - y0) + ground(y0, low) + ', then rises ' + fmt(low - y1));
+    else if (Math.abs(dy) >= 0.5) parts.push((dy > 0 ? 'falls ' : 'rises ') + fmt(Math.abs(dy)) + (dy > 0 ? ground(y0, y1) : ''));
+    if (Math.abs(dx) >= 0.5) parts.push('moves ' + (dx > 0 ? 'forward' : 'back') + ' ' + fmt(Math.abs(dx) / n) + ' a frame');
+    if (!parts.length) parts.push('holds still');
+    for (const p of (e.path.pauses || []).filter((q) => q.state === sg.state && q.tick >= sg.from && (sg.to === null || sg.to === undefined || q.tick < sg.to || (q.tick === sg.from && sg.to === sg.from)))) {
+      parts.push(p.kind + ': the others stand frozen ' + nFrames(p.time) + (p.movetime >= p.time ? ', it moves on' : ', it moves for ' + p.movetime));
+    }
+    return parts.join(' · ');
+  }
+  function chainEnd(e, sg) {
+    if (sg.how === 'changestate') return (sg.toState !== undefined ? '→ state ' + sg.toState : 'changes state') + (sg.endText ? ' when ' + sg.endText : '');
+    if (sg.how === 'lands') return 'lands (the engine sends it to state 52)';
+    if (sg.how === 'destroyself') return 'destroys itself' + (sg.endText ? ' when ' + sg.endText : '');
+    if (sg.how === 'cap') return 'still going at frame ' + sg.to + ', where the walk stops';
+    if (sg.how === 'depends') return 'then it depends on ' + (e.path.end.text || 'the game');
+    return '';
+  }
+  // The states a helper is followed through (two or more): its numbers, its
+  // meter, its path marks and key read them for an Explod-drawn helper too;
+  // only a plain helper's frames are drawn state by state (an Explod-drawn
+  // one keeps the Explod's frames, the look the game shows).
+  const chainOf = (e) => ((e.kind === 'helper' || e.kind === 'explod') && e.path && Array.isArray(e.path.chain) && e.path.chain.length > 1 ? e.path.chain : null);
+  // One cell per element of `art` (boxes from `boxesOf`), drawn at zoom z in
+  // the frame `box` - the same cells for one state or for each of a chain's.
+  function pjCells(strip, e, art, boxesOf, g) {
+    const { box, z, sx, sy, bx, by, cw, ch, firstHitElem } = g;
+    const bxr = (r) => [r[0] * bx, r[1] * by, r[2] * bx, r[3] * by];
+    art.frames.forEach((fr, i) => {
+      // the boxes shown with this element: its own, or the blank helper's element of the same number
+      const bf = boxesOf === art ? fr : (boxesOf && boxesOf.frames[Math.min(i, boxesOf.frames.length - 1)]) || null;
+      const hasHit = !!(bf && bf.clsn1 && bf.clsn1.length);
+      const cell = el('div', { class: 'fr' + (hasHit ? ' active' : '') + (firstHitElem === fr.elem && e.kind !== 'explod' ? ' kf' : ''), style: '--cw:' + cw + 'px;--chh:' + ch + 'px' });
+      const stage = el('div', { class: 'stage' }), stin = el('div', { class: 'stin' });
+      stage.append(stin);
+      if (box) {
+        const ox = (cw - box.w * z) / 2 - box.l * z;
+        const oy = Math.max((ch - box.h * z) / 2, ch - 6 - box.h * z) - box.t * z;
+        // An Explod-drawn one: the Explod art's own drawing (its facing and
+        // vfacing mirror it). It is this entry's own look, as on master, so
+        // the Explod art switch (a move's ADDED art) does not hide it.
+        const isX = e.kind === 'explod' && !!e.explod;
+        const img = spriteAt(fr, ox, oy, sx * z * (isX && e.explod.facing < 0 ? -1 : 1), sy * z * (isX && e.explod.vfacing < 0 ? -1 : 1));
+        if (img) stin.append(img);
+        const addBox = (r, cls) => { const q = bxr(r); stin.append(el('div', { class: 'box ' + cls, style: 'left:' + Math.round(ox + q[0] * z) + 'px;top:' + Math.round(oy + q[1] * z) + 'px;width:' + Math.max(1, Math.round((q[2] - q[0]) * z)) + 'px;height:' + Math.max(1, Math.round((q[3] - q[1]) * z)) + 'px' })); };
+        if (bf) { for (const r of bf.clsn2 || []) addBox(r, 'c2'); for (const r of bf.clsn1 || []) addBox(r, 'c1hit'); }
+      }
+      const tk = el('div', { class: 'tk', 'aria-hidden': 'true' });
+      if (fr.time > 0) for (let t = 0; t < Math.min(fr.time, 60); t++) tk.append(el('i', { class: hasHit ? 'a' : 's' }));
+      cell.append(stage, el('div', { class: 'cap', title: '.air line ' + fr.line }, el('b', { text: '#' + fr.elem }), ' · ' + fr.group + ',' + fr.number + ' · ' + fr.time + 't'),
+        tk, el('div', { class: 'fn' }, el('b', { text: fr.elem }), fr.holds ? 'holds' : fr.time + 't'));
+      strip.append(cell);
+    });
+  }
+  // Its frames STATE BY STATE (the owner's Panini: her pink fall and pose come
+  // before the dark dash that hits): one heading and one strip per state of
+  // the walk, every strip in ONE frame and scale (the union of every state's
+  // sprites and boxes), so the ground line and size never jump between them.
+  function renderChainFrames(host, e, chain) {
+    const k = 320 / ((model.localcoord && model.localcoord[0]) || 320);
+    const sS = pjDrawScale(e);
+    const bS = (e.scale && e.scale.clsn) || [1, 1];
+    const sx = (sS[0] === null ? 1 : sS[0]) * k, sy = (sS[1] === null ? 1 : sS[1]) * k, bx = (bS[0] === null ? 1 : bS[0]) * k, by = (bS[1] === null ? 1 : bS[1]) * k;
+    const arts = chain.map((sg) => (sg.action === null || sg.action === undefined ? null : projAnim(sg.action)));
+    const rects = [];
+    for (const a of arts) {
+      if (!a || !a.exists) continue;
+      for (const f of a.frames) {
+        const r = frameRect(f);
+        if (r) rects.push([r[0] * sx, r[1] * sy, r[2] * sx, r[3] * sy]);
+        for (const b of [...(f.clsn1 || []), ...(f.clsn2 || [])]) rects.push([b[0] * bx, b[1] * by, b[2] * bx, b[3] * by]);
+      }
+    }
+    const box = unionOf(rects);
+    const cw = 170, ch = 170;
+    const raw = box ? Math.min((cw - 8) / box.w, (ch - 8) / box.h) : 1;
+    const z = raw >= 1 ? Math.min(4, Math.floor(raw)) : raw;
+    host.append(el('h2', { class: 'bk-sh' }, 'Its frames', el('span', { class: 'k', lang: 'ja', text: '連続写真' }),
+      el('span', { class: 'aside', text: chain.length + ' states from state ' + chain[0].state })));
+    const fh = e.path.firstHit;
+    chain.forEach((sg, i) => {
+      const art = arts[i];
+      const to = sg.to === null || sg.to === undefined ? sg.from : sg.to;
+      const head = el('div', { class: 'pjst' }, el('span', { class: 'sbn', 'aria-hidden': 'true', text: String(i + 1) }), el('span', { class: 'sn', text: 'State ' + sg.state }),
+        el('span', { text: (to > sg.from ? 'frames ' + (sg.from + 1) + '–' + to : 'frame ' + (sg.from + 1)) + ' of its life' }),
+        el('span', { text: chainWords(e, sg) }),
+        sg.hit ? el('span', { class: 'hd', text: 'its HitDef (' + sg.hit.file + ' line ' + sg.hit.line + ')' }) : null,
+        el('span', { text: chainEnd(e, sg) }),
+        el('span', { text: art ? 'action ' + art.action + ', ' + art.frames.length + (art.frames.length === 1 ? ' element' : ' elements') : 'its animation is not settled' }));
+      host.append(head);
+      if (!art || !art.exists) { host.append(el('div', { class: 'none', text: art ? 'Action ' + art.action + ' is not in the .air.' : 'Its animation here depends on the game.' })); return; }
+      // Edit off: every column at least as wide as the shared frame, so no
+      // sprite or box draws into its neighbor (a long state scrolls in its strip).
+      const strip = el('div', { class: 'strip pjch', style: box ? '--ph:' + Math.min(ch, Math.ceil(box.h * z) + 14) + 'px;--colw:' + Math.min(cw, Math.ceil(box.w * z) + 6) + 'px' : null });
+      const inSeg = fh !== null && fh !== undefined && fh >= sg.from && fh < to && e.path.pts[fh] && e.path.pts[fh][5] === i;
+      pjCells(strip, e, art, art, { box, z, sx, sy, bx, by, cw, ch, firstHitElem: inSeg ? e.path.pts[fh][2] : null });
+      host.append(strip);
+    });
+    host.append(el('div', { class: 'legend' },
+      el('span', {}, el('i', { style: 'border-color:var(--c1hit);background:var(--c1hit)' }), 'Clsn1 (its hit box)'), el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
+      el('span', { text: 'every state drawn ' + (z >= 1 ? z + 'x' : Math.round(z * 100) + '%') + ' the game\'s 320-wide screen: sprite at ' + pairText(sS) + ', boxes at ' + pairText(bS) + (k !== 1 ? ', localcoord ' + model.localcoord.join('x') : '') }),
+      el('span', { text: 'a hit box counts only where its HitDef has fired' })));
+  }
+  function renderProjFrames(host, e) {
+    const chain = chainOf(e);
+    if (chain && e.kind === 'helper') { renderChainFrames(host, e, chain); return; }
+    const k = 320 / ((model.localcoord && model.localcoord[0]) || 320);
+    const art = e.kind === 'explod' && e.explod && !e.explod.anim.foreign ? projAnim(e.explod.anim.action) : projAnim(e.look.action);
+    const sS = pjDrawScale(e);
+    const bS = (e.scale && e.scale.clsn) || [1, 1];
+    const sx = (sS[0] === null ? 1 : sS[0]) * k, sy = (sS[1] === null ? 1 : sS[1]) * k, bx = (bS[0] === null ? 1 : bS[0]) * k, by = (bS[1] === null ? 1 : bS[1]) * k;
+    // An Explod-drawn helper followed through its states keeps the Explod's
+    // frames (as before); the aside names the states its path follows.
+    host.append(el('h2', { class: 'bk-sh' }, 'Its frames', el('span', { class: 'k', lang: 'ja', text: '連続写真' }),
+      art ? el('span', { class: 'aside', text: 'action ' + art.action + ', ' + art.frames.length + ' elements' + (e.kind === 'explod' ? ', drawn by an Explod' : '') + (chain ? '; the helper goes on through states ' + chain.map((sg) => sg.state).join(' → ') + ' (its path)' : '') }) : null));
+    if (!art || !art.exists) { host.append(el('div', { class: 'none', text: e.look.action === null ? 'Its animation depends on ' + (e.look.raw || 'a formula') + '.' : 'Action ' + (art ? art.action : e.look.action) + ' is not in the .air' + (e.kind === 'projectile' ? ': the engine copies the animation the thrower is playing.' : '.') })); return; }
+    const boxesOf = e.kind === 'explod' ? projAnim(e.look.action) : art;
+    const rectOf = (f) => { const r = frameRect(f); return r ? [r[0] * sx, r[1] * sy, r[2] * sx, r[3] * sy] : null; };
+    const bxr = (r) => [r[0] * bx, r[1] * by, r[2] * bx, r[3] * by];
+    const allBoxes = [];
+    for (const f of (boxesOf ? boxesOf.frames : [])) for (const r of [...(f.clsn1 || []), ...(f.clsn2 || [])]) allBoxes.push(bxr(r));
+    const box = unionOf([...art.frames.map(rectOf), ...allBoxes]);
+    const cw = 170, ch = 170;
+    const raw = box ? Math.min((cw - 8) / box.w, (ch - 8) / box.h) : 1;
+    const z = raw >= 1 ? Math.min(4, Math.floor(raw)) : raw;
+    const strip = el('div', { class: 'strip', style: box ? '--ph:' + Math.min(ch, Math.ceil(box.h * z) + 14) + 'px' : null });
+    // (followed through states: marked only when that first hit is in its first
+    // state, whose element numbers are the ones drawn here)
+    const fhPt = e.path && e.firstHit !== null && e.firstHit !== undefined ? e.path.pts[e.firstHit] : null;
+    const firstHitElem = fhPt && (!chain || fhPt[5] === 0) ? fhPt[2] : null;
+    pjCells(strip, e, art, boxesOf, { box, z, sx, sy, bx, by, cw, ch, firstHitElem });
+    host.append(strip);
+    const blank = (projAnim(e.look.action) || {}).noSprite || e.look.blank;
+    host.append(el('div', { class: 'legend' },
+      el('span', {}, el('i', { style: 'border-color:var(--c1hit);background:var(--c1hit)' }), 'Clsn1 (its hit box)'), el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
+      el('span', { text: 'drawn ' + (z >= 1 ? z + 'x' : Math.round(z * 100) + '%') + ' the game\'s 320-wide screen: sprite at ' + pairText(sS) + ', boxes at ' + pairText(bS) + (k !== 1 ? ', localcoord ' + model.localcoord.join('x') : '') }),
+      e.kind === 'explod' ? el('span', { text: 'boxes: the blank helper\'s action ' + e.look.action + ', element by element' }) : null,
+      blank && e.kind === 'projectile' ? el('span', { class: 'warnline', text: 'its animation draws nothing: an invisible hit' }) : null));
+  }
+
+  // ITS PATH, side on: the ground, the thrower's axis (and the thrower's frame
+  // on the frame it throws, faded), one dot per frame of its flight (red while
+  // its hit box is out, a larger dot every 10th), its first hit box and where
+  // it ends; the screen edge a still camera would remove it at when thrown from
+  // the middle of the screen. All in the character's own units, scaled to fit.
+  function renderProjPath(host, e) {
+    const p = e.path;
+    host.append(el('h2', { class: 'bk-sh' }, 'Its path', el('span', { class: 'k', lang: 'ja', text: '軌道' }),
+      p ? el('span', { class: 'aside', text: p.pts.length + ' frames shown' + (e.spawn && e.spawn.postype !== 'p1' ? ', x from where it appears' : ', x from the thrower\'s axis') }) : null));
+    if (!p) { host.append(el('div', { class: 'none', text: 'Its path depends on ' + ((e.depends || []).map((d) => d.expr).join(', ') || 'a formula') + ': not drawn.' })); return; }
+    if (!p.pts.length) { host.append(el('div', { class: 'none', text: p.end.why === 'depends' ? 'Its motion depends on ' + p.end.text + ' from its first frame: not drawn.' : 'It ' + pjEndWords(e) + ' before it moves.' })); return; }
+    const W = 520, H = 190;
+    const thrS = attackStates().find((x) => x.no === e.thrower.state) || (model.states || []).find((x) => x.no === e.thrower.state) || null;
+    const ta = thrS && e.thrower.timing && e.thrower.timing.anim !== null ? (thrS.anims || []).find((a) => a.action === e.thrower.timing.anim) : null;
+    const tf = ta && e.spawn.postype === 'p1' ? ta.frames.find((f) => f.time > 0 && e.thrower.timing.frame - 1 >= f.start && e.thrower.timing.frame - 1 < f.start + f.time) || ta.frames[0] : null;
+    const xs = model.size ? model.size.xscale : 1, ys = model.size ? model.size.yscale : 1;
+    const tr = tf && tf.w ? (() => { const r = frameRect(tf); return r ? [r[0] * xs, r[1] * ys, r[2] * xs, r[3] * ys] : null; })() : null;
+    const pts = p.pts;
+    let l = Math.min(0, ...pts.map((q) => q[0])), r = Math.max(0, ...pts.map((q) => q[0])), t = Math.min(0, ...pts.map((q) => q[1])), b = 0;
+    if (tr) { l = Math.min(l, tr[0]); r = Math.max(r, tr[2]); t = Math.min(t, tr[1]); b = Math.max(b, tr[3]); }
+    const z = Math.min((W - 40) / Math.max(1, r - l), (H - (chainOf(e) ? 64 : 40)) / Math.max(1, b - t), 3);
+    const ox = 20 - l * z, oy = H - 14 - b * z;
+    const plate = el('div', { class: 'pjpath bk-plate', role: 'img', 'aria-label': 'its path: ' + pathWords(e) });
+    plate.append(el('div', { class: 'gnd', style: 'top:' + Math.round(oy) + 'px' }), el('div', { class: 'axv', style: 'left:' + Math.round(ox) + 'px' }));
+    if (tf && tr) {
+      const img = el('img', { alt: '', class: 'thr', src: '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + tf.group + '&index=' + tf.number });
+      img.onerror = () => { img.style.visibility = 'hidden'; };
+      img.style.left = Math.round(ox + tr[0] * z) + 'px'; img.style.top = Math.round(oy + tr[1] * z) + 'px';
+      img.style.width = Math.max(1, Math.round((tr[2] - tr[0]) * z)) + 'px'; img.style.height = Math.max(1, Math.round((tr[3] - tr[1]) * z)) + 'px';
+      if (hFlip(tf)) img.style.transform = 'scaleX(-1)';
+      plate.append(img);
+    }
+    if (e.screen && e.screen.middle !== null) {
+      const x0 = pts.length ? pts[0][0] : 0;
+      const sx = x0 + (e.screen.width / 2 + e.screen.edgebound) * Math.sign((pts[pts.length - 1][0] - x0) || 1);
+      if (sx * z + ox > 0 && sx * z + ox < W) plate.append(el('div', { class: 'scr', style: 'left:' + Math.round(ox + sx * z) + 'px', title: 'the screen edge + ' + e.screen.edgebound + ', thrown from the middle of a still screen' }));
+    }
+    pts.forEach((q, i) => plate.append(el('div', { class: 'dot' + (q[3] ? ' h' : '') + ((i + 1) % 10 === 0 ? ' t10' : ''), style: 'left:' + Math.round(ox + q[0] * z) + 'px;top:' + Math.round(oy + q[1] * z) + 'px', title: 'frame ' + (i + 1) + ': x ' + fmt(q[0]) + ', y ' + fmt(q[1]) + ', element ' + q[2] + (q[3] ? ', hit box out' : '') + (chainOf(e) && q[5] !== undefined && chainOf(e)[q[5]] ? ', state ' + chainOf(e)[q[5]].state : '') })));
+    // A chain: a numbered mark just above and right of the place it enters
+    // each state (the numbers of the frame headings); marks that would cover
+    // one another move on to the right, so each number stays readable (Panini
+    // poses and then dashes from one place). Kept inside the plate, under the tag.
+    const chain = chainOf(e);
+    if (chain) {
+      const placed = [];
+      chain.forEach((sg, i) => {
+        if (sg.from > 0 && sg.from >= pts.length) return;
+        let lx = Math.round(ox + (sg.x0 || 0) * z) + 4, ly = Math.round(oy + (sg.y0 || 0) * z) - 20;
+        lx = Math.min(W - 20, Math.max(4, lx)); ly = Math.min(H - 20, Math.max(24, ly));
+        while (placed.some((q) => Math.abs(q[0] - lx) < 19 && Math.abs(q[1] - ly) < 17)) {
+          lx += 19;
+          if (lx > W - 20) { lx = 4; ly = Math.min(H - 20, ly + 17); }
+        }
+        placed.push([lx, ly]);
+        plate.append(el('div', { class: 'sb', style: 'left:' + lx + 'px;top:' + ly + 'px', title: 'state ' + sg.state + ' from its frame ' + (sg.from + 1) }, el('span', { class: 'sbn', text: String(i + 1) })));
+      });
+    }
+    const fh = e.firstHit !== null && e.firstHit !== undefined ? pts[e.firstHit] : null;
+    if (fh) plate.append(el('div', { class: 'mk', style: 'left:' + Math.round(ox + fh[0] * z) + 'px;top:' + Math.round(oy + fh[1] * z) + 'px', title: 'its first hit box: frame ' + (e.firstHit + 1) + ' of its flight' }));
+    if (fh) {
+      const art = e.kind === 'explod' && e.explod && !e.explod.anim.foreign ? projAnim(e.explod.anim.action) : projAnim(e.look.action);
+      const boxA = e.kind === 'explod' ? projAnim(e.look.action) : art;
+      const ef = art && art.exists ? art.frames.find((f) => f.elem === fh[2]) || art.frames[0] : null;
+      const bf = boxA && boxA.exists ? boxA.frames.find((f) => f.elem === fh[2]) || boxA.frames[0] : null;
+      const sS = pjDrawScale(e);
+      const bS = (e.scale && e.scale.clsn) || [1, 1];
+      const sx = sS[0] === null ? 1 : sS[0], sy = sS[1] === null ? 1 : sS[1], bx = bS[0] === null ? 1 : bS[0], by = bS[1] === null ? 1 : bS[1];
+      const flip = fh[4] < 0 ? -1 : 1;
+      const px = ox + fh[0] * z, py = oy + fh[1] * z;
+      if (ef && ef.w && ef.h) {
+        const r = frameRect(ef);
+        if (r) {
+          const img = el('img', { alt: '', src: '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + ef.group + '&index=' + ef.number });
+          img.onerror = () => { img.style.visibility = 'hidden'; };
+          const L = flip > 0 ? r[0] * sx : -r[2] * sx;
+          img.style.left = Math.round(px + L * z) + 'px'; img.style.top = Math.round(py + r[1] * sy * z) + 'px';
+          img.style.width = Math.max(1, Math.round((r[2] - r[0]) * sx * z)) + 'px'; img.style.height = Math.max(1, Math.round((r[3] - r[1]) * sy * z)) + 'px';
+          if ((flip < 0) !== hFlip(ef)) img.style.transform = 'scaleX(-1)';
+          plate.append(img);
+        }
+      }
+      if (bf) for (const r of bf.clsn1 || []) {
+        const l2 = flip > 0 ? r[0] * bx : -r[2] * bx, r2 = flip > 0 ? r[2] * bx : -r[0] * bx;
+        plate.append(el('div', { class: 'box c1hit', style: 'left:' + Math.round(px + l2 * z) + 'px;top:' + Math.round(py + r[1] * by * z) + 'px;width:' + Math.max(1, Math.round((r2 - l2) * z)) + 'px;height:' + Math.max(1, Math.round((r[3] - r[1]) * by * z)) + 'px' }));
+      }
+    }
+    const last = pts[pts.length - 1];
+    if (p.end.why !== 'cap' && !p.cut) plate.append(el('div', { class: 'mk end', style: 'left:' + Math.round(ox + last[0] * z) + 'px;top:' + Math.round(oy + last[1] * z) + 'px', title: 'it ' + pjEndWords(e) }));
+    plate.append(el('span', { class: 'tag', text: (z >= 1 ? fmt(z) + 'x' : Math.round(z * 100) + '%') + ' · ' + (fh ? 'first hit box at frame ' + (e.firstHit + 1) : p.hitUnknown ? 'hit box unknown' : 'no hit box') + ' · ' + (p.end.why === 'cap' ? (chain ? 'still going at frame ' + p.end.tick : 'flies on') : p.end.why === 'depends' ? 'depends on the game after frame ' + p.end.tick : pjEndWords(e) + ' at ' + p.end.tick) + (p.cut && !chain ? ' (drawn: its first ' + pts.length + ' frames)' : '') }));
+    host.append(plate);
+    if (chain) {
+      const key = el('div', { class: 'pjkey' });
+      chain.forEach((sg, i) => {
+        const to = sg.to === null || sg.to === undefined ? sg.from : sg.to;
+        key.append(el('span', {}, el('span', { class: 'sbn', 'aria-hidden': 'true', text: String(i + 1) }),
+          'state ' + sg.state + ', frames ' + (sg.from + 1) + '–' + to + (sg.from > 0 && sg.from >= pts.length ? ' (past the drawn frames)' : '')));
+      });
+      if (p.cut) key.append(el('span', { text: 'drawn: its first ' + pts.length + ' frames, past them it is beyond any screen' }));
+      for (const pz of (p.pauses || [])) key.append(el('span', { text: 'frames ' + (pz.tick + 2) + '–' + (pz.tick + 1 + pz.time) + ': its ' + pz.kind + ' freezes the player and the opponent' + (pz.movetime >= pz.time ? '; it moves on' : '; it moves for ' + pz.movetime + ', then stands still') }));
+      const nf = (p.mayEnd || []).filter((m) => m.type === 'changestate' || m.type === 'selfstate');
+      if (nf.length) key.append(el('span', { text: 'not followed (the files do not settle them): ' + nf.slice(0, 4).map((m) => 'state ' + m.to + ' when ' + m.text + ' (in ' + m.state + ')').join('; ') + (nf.length > 4 ? '; and ' + (nf.length - 4) + ' more' : '') }));
+      host.append(key);
+    }
+  }
+
+  // ---- the cancels: what this move can be cancelled into ---------------------
+  function renderCancels(host, s) {
+    if (!cl || !Array.isArray(cl.cancels)) return;
+    const to = cancelsTo(s.no);
+    const box = el('div', { class: 'cxbox' }, el('h3', { class: 'bk-sh', text: 'Cancels' }));
+    if (!to.length) {
+      box.append(el('div', { class: 'from', text: 'No special, super or chain in the [State -1] can cancel this state, so its frame advantage is the whole story.' }));
+      host.append(box);
+      return;
+    }
+    for (const k of ['SP', 'SU', 'CH']) {
+      const ts = to.filter((x) => x.kind === k);
+      if (!ts.length) continue;
+      const list = el('span', { class: 'cxto' });
+      ts.forEach((x, i) => {
+        if (i) list.append(', ');
+        list.append(el('span', { text: moveName(x.state) }), el('span', { class: 'sn', text: ' ' + x.state }));
+        if (!(x.hit && x.block)) list.append(el('small', { text: x.hit ? ' on hit' : ' on block' }));
+        if (!x.exact) list.append(el('small', { text: ' ≈' }));
+      });
+      box.append(el('div', { class: 'cxrow' }, el('span', { class: 'cxm ' + k.toLowerCase() + (ts.every((x) => !x.exact) ? ' apx' : ''), 'aria-hidden': 'true' }, k), el('b', { text: KIND[k] }), list));
+    }
+    const exact = to.filter((x) => x.exact), apx = to.filter((x) => !x.exact);
+    const vias = [...new Set(exact.flatMap((x) => x.via))];
+    const where = [...new Set(to.map((x) => x.file + ' line ' + x.line))];
+    const note = el('div', { class: 'from' }, 'On hit and on block unless marked. Read from the [State -1] blocks that name this state'
+      + (vias.length ? ' (through ' + vias.join(', ') + ', which the [State -1], -2 or -3 sets for it)' : '') + ': ' + where.slice(0, 4).join(', ') + (where.length > 4 ? ' and ' + (where.length - 4) + ' more' : '') + '.');
+    if (apx.length) note.append(' ≈ = through ' + [...new Set(apx.flatMap((x) => x.via))].join(', ') + ', which this state sets in its own code; the [State -1] reads it a tick later.');
+    box.append(note);
+    host.append(box);
+  }
+
+  // ---- the training-mode readout -------------------------------------------
+  //
+  // What a fighting-game player reads first, in their words: startup, active,
+  // recovery and total, frame advantage on hit and on block, over a frame
+  // meter; then the numbers that make them - hitstun, blockstun, hitstop,
+  // damage, chip - editable in place with Edit on. Every number comes from
+  // framedata.js on the server, which says how it found it: from the file,
+  // computed from a formula (read as a fresh first hit), derived by the
+  // engine, or assumed. "≈" marks a number that rests on an assumption.
+  function renderFrameData(host, s, b) {
+    const f = b.frame;
+    if (!f) return;
+    const card = el('div', { class: 'fd' });
+    const head = el('div', { class: 'fdh' }, el('span', { class: 't', text: 'Frame data' }),
+      el('span', { class: 'tag', text: [f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : b.type, f.guard ? f.guard.level : null].filter(Boolean).join(' · ') }));
+    if (f.anim !== null && f.anim !== undefined) {
+      // Timing lives in the animation: the element times ARE startup, active
+      // and recovery. The animation editor writes them.
+      head.append(el('button', { class: 'ed', text: 'Edit timing…', title: 'Open action ' + f.anim + ' in the animation editor: element times decide startup, active and recovery.',
+        onclick: () => window.open('/animedit.html?char=' + encodeURIComponent(char) + '&name=' + encodeURIComponent(name) + '&action=' + f.anim, 'animedit-' + char, 'width=1440,height=900') }));
+    }
+    card.append(head);
+    const tilde = f.approx ? '≈' : '';
+    const n = (label, value, tip, cls) => el('div', { class: 'fdn' + (cls ? ' ' + cls : ''), title: tip }, el('span', { class: 'k', text: label }), el('b', { text: value === null || value === undefined ? '—' : String(value) }));
+    const advCls = (x) => (x === null || x === undefined ? '' : x > 0 ? 'plus' : x < 0 ? 'minus' : 'even');
+    const hitTip = 'frames you are ahead after the hit connects on its first active frame (+ you act first): hitstun + 2 + the hitstop difference - your frames after contact. One frame is the opponent getting control back mid-frame, the other the frame the engine adds for a MUGEN-made opponent. Worked out from the files; the formula matches the engine measured with the training frame meter.';
+    // A throw: its projectile's own numbers where this block has none, labeled
+    // point blank (PB) - the projectile entry has the rest.
+    const pj = f.proj && projById(f.proj.id) ? f.proj : null;
+    if (pj && (f.onHit === null || f.onHit === undefined) && (f.onBlock === null || f.onBlock === undefined)) {
+      const pje = projById(pj.id), act = pjActive(pje), pt = pj.approx ? '≈' : '';
+      card.append(el('div', { class: 'fdrow' },
+        n('Appears', f.startup, 'the frame the projectile appears on (frame 1 is the first frame of the move)'),
+        n('Active', act.text, 'the projectile\'s hit box: ' + act.tip),
+        n('Recovery', pj.recovery, 'your frames after it appears until you can act'),
+        n('Total', f.total, 'frames you cannot act'),
+        n('PB hit', pj.onHit === null || pj.onHit === undefined ? null : pt + signed(pj.onHit), PB_TIP, 'sep ' + advCls(pj.onHit)),
+        n('PB block', pj.onBlock === null || pj.onBlock === undefined ? null : pt + signed(pj.onBlock), PB_TIP, advCls(pj.onBlock))));
+      card.append(el('div', { class: 'fdnote' }, 'A throw: the numbers after Appears are its projectile\'s (PB = point blank, if it connects on the first frame it can). ',
+        pj.by !== undefined ? (pj.by !== null ? 'This state is a helper\'s: Appears and Total count the helper\'s frames, Recovery and PB count state ' + pj.by + '\'s, the move that makes the helper. ' : 'This state is a helper\'s, and the frames of the move that makes it are not settled. ') : null,
+        el('button', { class: 'pjlink', type: 'button', onclick: () => openProj(pj.id) }, 'Open the projectile →')));
+    }
+    const row = pj && (f.onHit === null || f.onHit === undefined) && (f.onBlock === null || f.onBlock === undefined) ? el('div', { hidden: true }) : el('div', { class: 'fdrow' },
+      n('Startup', f.startup, 'the first frame the attack can hit (frame 1 is the first frame of the move)'),
+      n('Active', f.active, 'frames the hit box stays out'),
+      n('Recovery', f.recovery, 'frames after the active frames until you can act again'),
+      n('Total', f.total, 'frames you cannot act' + (f.endHow === 'animtime' ? ': the state hands control back when its animation ends, and you act the frame after' : f.endHow === 'time' ? ': the state hands control back at a set time' : f.endHow === 'assumed' ? ': assumed to end with its animation (no end trigger found)' : '')),
+      f.knockdown ? n('On hit', 'KD', 'knockdown: the opponent falls, so frame advantage depends on their wake-up', 'sep kd')
+        : n('On hit', f.onHit === undefined || f.onHit === null ? null : tilde + signed(f.onHit), hitTip, 'sep ' + advCls(f.onHit)),
+      n('On block', f.onBlock === undefined || f.onBlock === null ? null : tilde + signed(f.onBlock), 'frames you are ahead after the opponent blocks on the first active frame: blockstun + 1 + the blockstop difference - your frames after contact (the 1 is the opponent getting control back mid-frame).', advCls(f.onBlock)));
+    card.append(row);
+
+    if (f.meter && f.meter.length) {
+      const meter = el('div', { class: 'meter', title: 'one cell per frame' });
+      f.meter.forEach((c, i) => meter.append(el('i', { class: c + ((i + 1) % 5 === 0 ? ' n5' : ''), title: 'frame ' + (i + 1) + ': ' + ({ s: 'startup', a: 'active', r: 'recovery' })[c] })));
+      card.append(meter, el('div', { class: 'mkey' },
+        el('span', {}, el('i', { class: 's' }), 'startup'),
+        el('span', {}, el('i', { class: 'a' }), 'active'),
+        el('span', {}, el('i', { class: 'r' }), 'recovery'),
+        el('span', { text: 'each cell is one frame (1/60 s); every 5th is marked' })));
+    }
+
+    // THE NUMBERS BEHIND THE ADVANTAGE, editable. A plain number is written in
+    // place; a value the block leaves out is added as a new line (it then
+    // stops following what the engine would derive); a formula is shown as
+    // what it reads and edited in the table below, so a scaling formula is
+    // never flattened by accident.
+    const v = f.values || {};
+    const stats = el('div', { class: 'fdstats ed' });
+    const stat = (label, x, param, index, tip) => {
+      if (!x) return;
+      const box = el('div', { class: 'fds', title: tip });
+      box.append(el('div', { class: 'k' }, label, el('small', { text: param + (index ? '[' + (index + 1) + ']' : '') })));
+      const line = el('div', { class: 'in' });
+      const err = el('div');
+      if (x.how === 'computed' || x.how === 'unknown') {
+        line.append(el('span', { class: 'ro calc', text: x.value === null ? '?' : '≈' + x.value, title: 'a formula: ' + x.text + '. Read as a fresh first hit (variables at 0, float variables at 1). Edit it in the table.' }));
+        box.append(line, el('div', { class: 'how', text: 'formula' }));
+      } else if (!b.editable && x.how === 'file') {
+        line.append(el('span', { class: 'ro', text: String(x.value) }));
+        box.append(line);
+      } else {
+        const pinned = x.how === 'derived' || x.how === 'default';
+        const input = el('input', { type: 'text', inputmode: 'numeric', spellcheck: 'false', value: x.value === null ? '' : String(x.value), class: pinned ? 'pinned' : '', 'aria-label': label });
+        const shown = input.value;
+        input.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); } else if (ev.key === 'Escape') { input.value = shown; input.blur(); } };
+        input.onblur = () => {
+          const val = input.value.trim();
+          if (val === shown) return;
+          editValue(b, param, index, val, err, () => { input.value = shown; });
+        };
+        line.append(input);
+        box.append(line, el('div', { class: 'how', text: pinned ? (x.how === 'derived' ? 'from ' + x.from + ': typing a number sets it' : 'engine default: typing a number sets it') : 'from the file' }));
+      }
+      box.append(err);
+      stats.append(box);
+    };
+    stat('Hitstun', v.hitstun, 'ground.hittime', 0, 'frames the grounded opponent stays stunned after the hitstop');
+    stat('Blockstun', v.blockstun, 'guard.hittime', 0, 'frames the opponent stays stuck blocking after the blockstop');
+    stat('Hitstop (you)', v.hitstop, 'pausetime', 0, 'frames you freeze when the hit connects');
+    stat('Hitstop (them)', v.hitstopP2, 'pausetime', 1, 'frames the opponent shakes when the hit connects');
+    stat('Damage', v.damage, 'damage', 0, 'damage on hit');
+    stat('Chip', v.chip, 'damage', 1, 'damage on block');
+    card.append(stats);
+
+    const props = el('div', { class: 'fdprops' });
+    const prop = (k, val) => { if (val !== null && val !== undefined && val !== '') props.append(el('div', {}, el('b', { text: k + ': ' }), String(val))); };
+    if (f.guard) prop('Blocked', f.guard.text);
+    prop('Hits', f.hits);
+    prop('Knockdown', f.knockdown === true ? 'yes' : f.knockdown === false ? 'no' : 'depends on a formula');
+    if (f.juggle !== null && f.juggle !== undefined) prop('Juggle cost', f.juggle);
+    if (f.armFrame > 1 || f.armHow !== 'file') prop('Armed', 'from frame ' + f.armFrame + (f.armHow === 'conditional' ? ' (when its condition holds)' : f.armHow === 'assumed' ? ' (assumed)' : ''));
+    card.append(props);
+    for (const x of (f.notes || [])) card.append(el('div', { class: 'fdnote', text: x }));
+    if (f.assumed && f.assumed.length) card.append(el('div', { class: 'fdnote', text: '≈ assumes: ' + f.assumed.join('; ') }));
+    renderExplodList(card, s);
+    host.append(card);
+  }
+
+  // ---- the 2x plate: the frame the move first hits on ----------------------
+  // The element on screen at the startup frame the server found (frame N is
+  // tick N - 1 of the animation), else the first element with a Clsn1 box.
+  function startupElement(a, f) {
+    if (!a || !a.frames || !a.frames.length) return null;
+    if (f && f.startup && f.anim === a.action) {
+      const t = f.startup - 1;
+      const hit = a.frames.find((x) => x.time > 0 && t >= x.start && t < x.start + x.time);
+      if (hit) return hit;
+    }
+    return a.frames.find((x) => x.clsn1 && x.clsn1.length) || null;
+  }
+  function renderPlate(host, s, b) {
+    const a = (s.anims || []).find((x) => x.action === sel.action) || null;
+    const f = b.frame || {};
+    const e = a && a.exists ? startupElement(a, f) : null;
+    if (!e) return;
+    let W2 = 250, H2 = 300;
+    const rects = [frameRect(e), ...(e.clsn1 || []), ...(e.clsn2 || [])];
+    let box = unionOf(rects);
+    if (!box) return;
+    // The tick this plate shows (frame N = tick N - 1), for its Explod art.
+    // THE PLATE IS WHERE THE ART SHOWS WHOLE UNDER ITS BOXES (the strip cuts
+    // it at each cell's edge): when art is drawn, it joins the fit (four
+    // times the area at most), and the fit uses the plate's real size - the
+    // narrow-window rule (@media max-width 1100px / max-height 760px) prints
+    // it 210 x 260, so a 250 x 300 fit would cut the art and its long boxes
+    // at 1024 x 700. No art drawn (switch off, or none alive here) = master's
+    // plate exactly.
+    const tk = f.startup && f.anim === a.action && f.startup - 1 >= e.start && f.startup - 1 < e.start + Math.max(1, e.time) ? f.startup - 1 : e.start;
+    const xr = explodArt && hasDrawnExplods(s) ? explodRects(s, a.action, tk) : [];
+    if (xr.length) {
+      try { if (W && W.matchMedia && W.matchMedia('(max-width: 1100px), (max-height: 760px)').matches) { W2 = 210; H2 = 260; } } catch (err) { /* the wide plate */ }
+      const u = unionOf([...rects, ...xr]);
+      if (u && u.w * u.h <= box.w * box.h * 4) box = u;
+    }
+    const fit = Math.min((W2 - 24) / box.w, (H2 - 40) / box.h);
+    const z = fit >= 2 ? 2 : fit >= 1 ? 1 : fit;
+    const ox = Math.round((W2 - box.w * z) / 2 - box.l * z);
+    const oy = Math.round(H2 - 14 - (box.t + box.h) * z);
+    const plate = el('div', { class: 'plate2 bk-plate', role: 'img', 'aria-label': 'element ' + e.elem + ' of action ' + a.action + ' with its boxes' });
+    plate.append(el('div', { class: 'axv', style: 'left:' + ox + 'px' }), el('div', { class: 'gnd', style: 'top:' + oy + 'px' }));
+    drawExplods(plate, s, a.action, tk, ox, oy, z, false);
+    if (e.w && e.h) {
+      const img = el('img', { alt: '', src: '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + e.group + '&index=' + e.number });
+      img.onerror = () => { img.style.visibility = 'hidden'; };
+      const [fx, fy] = axisAt(e);
+      img.style.width = Math.max(1, Math.round(e.w * z)) + 'px';
+      img.style.height = Math.max(1, Math.round(e.h * z)) + 'px';
+      img.style.left = Math.round(ox + fx * z - e.axisX * z) + 'px';
+      img.style.top = Math.round(oy + fy * z - e.axisY * z) + 'px';
+      if (hFlip(e) || vFlip(e)) { img.style.transformOrigin = (e.axisX * z) + 'px ' + (e.axisY * z) + 'px'; img.style.transform = 'scale(' + (hFlip(e) ? -1 : 1) + ',' + (vFlip(e) ? -1 : 1) + ')'; }
+      plate.append(img);
+    }
+    drawExplods(plate, s, a.action, tk, ox, oy, z, true);
+    const c1 = clsn1Class(s, b);
+    const addBox = (r, cls) => plate.append(el('div', { class: 'box ' + cls, style: 'left:' + Math.round(ox + r[0] * z) + 'px;top:' + Math.round(oy + r[1] * z) + 'px;width:' + Math.max(1, Math.round((r[2] - r[0]) * z)) + 'px;height:' + Math.max(1, Math.round((r[3] - r[1]) * z)) + 'px' }));
+    for (const r of e.clsn2 || []) addBox(r, 'c2');
+    for (const r of e.clsn1 || []) addBox(r, c1.cls);
+    plate.append(el('span', { class: 'tag', text: 'element ' + e.elem + ', ' + (z === 2 || z === 1 ? z + 'x' : Math.round(z * 100) + '%') }));
+
+    const dl = el('dl', { class: 'bk-prof platedl' });
+    const row = (k, ...v) => dl.append(el('dt', { text: k }), el('dd', {}, ...v));
+    row('Sprite', e.group + ',' + e.number + (e.w ? '  ' + e.w + ' × ' + e.h : '  (no sprite)') + (e.flip ? '  ' + e.flip : ''));
+    row('Time', e.holds ? 'holds' : e.time + (e.time === 1 ? ' tick' : ' ticks') + ', from tick ' + e.start);
+    const rc = (r) => r[0] + ',' + r[1] + ' → ' + r[2] + ',' + r[3];
+    (e.clsn1 || []).forEach((r, i) => row(i ? '' : 'Clsn1', el('span', { class: 'sw c1' }), rc(r)));
+    (e.clsn2 || []).forEach((r, i) => row(i ? '' : 'Clsn2', el('span', { class: 'sw c2' }), rc(r)));
+    row('Axis', e.axisX + ',' + e.axisY + (e.x || e.y ? '  offset ' + e.x + ',' + e.y : ''));
+    if (explodArt) for (const { e: x, pt } of explodsAt(s, a.action, tk)) row('Explod', 'action ' + x.anim.action + ', element ' + (pt[0] + 1) + ', ' + (x.layer.front ? 'over' : 'under') + ' the character');
+    dl.append(el('div', { class: 'gap' }));
+    const v = f.values || {};
+    const val = (x) => (!x || x.value === null || x.value === undefined ? '—' : (x.how === 'computed' ? '≈' : '') + x.value);
+    if (v.damage || v.chip) row('Damage', val(v.damage) + (v.chip ? ', chip ' + val(v.chip) : ''));
+    if (v.hitstun) row('Hitstun', val(v.hitstun));
+    if (v.blockstun) row('Blockstun', val(v.blockstun));
+    if (v.hitstop) row('Hitstop', val(v.hitstop) + (v.hitstopP2 ? ' / ' + val(v.hitstopP2) : ''));
+    if (f.guard) row('Blocked', f.guard.text);
+    row('Knockdown', f.knockdown === true ? 'yes' : f.knockdown === false ? 'no' : 'depends on a formula');
+    host.append(el('div', { class: 'platerow pr' }, plate, dl));
+  }
+
+  // ONE EDIT, from the readout or the table: an existing value is replaced,
+  // a missing parameter is added. The server checks everything; a "confirm"
+  // answer (a dangerous parameter, an expression it cannot check) asks here.
+  async function editValue(b, param, index, value, errBox, undo, confirmed) {
+    errBox.textContent = '';
+    const p = b.params.find((x) => x.name === param);
+    const sha1 = fileSha(b.file);
+    if (!sha1) { errBox.append(el('div', { class: 'fderr', text: 'This file has no checksum in the loaded view - reload the window.' })); undo(); return; }
+    let route, body;
+    if (p && p.values[index] && p.values[index].tier !== 'absent') {
+      route = '/api/char-move-edit';
+      body = { char, file: b.file, state: b.state, ordinal: b.ordinal, param, index, value, expect: p.raw, sha1, confirm: confirmed === true || undefined };
+    } else if (!p) {
+      // pausetime and damage come in pairs: an added hitstop sets both sides
+      // to the value typed, an added chip keeps hit damage at the engine's 0.
+      const values = param === 'pausetime' ? [value, value] : [value];
+      route = '/api/char-move-add';
+      body = { char, file: b.file, state: b.state, ordinal: b.ordinal, param, values, sha1, confirm: confirmed === true || undefined };
+    } else {
+      errBox.append(el('div', { class: 'fderr', text: param + ' is written without this value; set it in the table below.' })); undo(); return;
+    }
+    try {
+      const r = await postJson(route, body);
+      say(param + (index ? '[' + (index + 1) + ']' : '') + ' in state ' + b.state + ' → ' + (r.written !== undefined ? r.written : value) + (r.backupCreated ? ' · original kept as ' + r.backup : ''), 'ok');
+      await load(true);
+    } catch (e) {
+      if (e.code === 'confirm') {
+        const box = el('div', { class: 'confirm' }, el('div', { text: e.message }));
+        const yes = el('button', { class: 'warn', text: 'Write it anyway' });
+        const no = el('button', { text: 'Cancel' });
+        yes.onclick = () => { errBox.textContent = ''; editValue(b, param, index, value, errBox, undo, true); };
+        no.onclick = () => { errBox.textContent = ''; undo(); };
+        box.append(el('div', { class: 'btns' }, yes, no));
+        errBox.append(box);
+        return;
+      }
+      if (e.code === 'stale') { say(e.message, 'err'); await load(true); return; }
+      errBox.append(el('div', { class: 'fderr', text: e.message }));
+      undo();
+    }
+  }
+
+  // THE ENGINE'S PARAMETERS IN FIGHTING-GAME WORDS: [what a player calls it,
+  // what it does]. The table groups them the way a frame data page would.
+  const FGC = {
+    damage: ['Damage', 'damage on hit, chip damage on block'],
+    getpower: ['Meter gain', 'meter you gain on hit, on block'],
+    givepower: ['Meter given', 'meter the opponent gains on hit, on block'],
+    dizzypoints: ['Stun damage', 'fills the opponent\'s dizzy meter'],
+    guardpoints: ['Guard crush damage', 'drains the opponent\'s guard meter'],
+    redlife: ['Recoverable damage', 'red life the opponent can regain (tag)'],
+    numhits: ['Hit count', 'added to the combo counter'],
+    kill: ['Can KO', '0 = this hit cannot finish the round'],
+    'guard.kill': ['Chip can KO', '0 = chip damage cannot finish the round'],
+    pausetime: ['Hitstop', 'freeze when it hits: you, the opponent'],
+    'guard.pausetime': ['Blockstop', 'freeze when it is blocked: you, the opponent'],
+    'ground.hittime': ['Hitstun', 'frames the grounded opponent stays stunned'],
+    'air.hittime': ['Air hitstun', 'hitstun when the opponent is airborne and not knocked down'],
+    'guard.hittime': ['Blockstun', 'frames the opponent stays stuck blocking'],
+    'down.hittime': ['OTG hitstun', 'hitstun when hitting a downed opponent'],
+    'ground.slidetime': ['Hit slide', 'frames the opponent slides back on hit'],
+    'guard.slidetime': ['Block slide', 'frames the opponent slides back on block'],
+    'guard.ctrltime': ['Block recovery', 'frames until a blocking opponent can act'],
+    'airguard.ctrltime': ['Air block recovery', 'frames until an opponent blocking in the air can act'],
+    yaccel: ['Hitstun gravity', 'how fast a launched opponent falls'],
+    attr: ['Attack type', 'stance, then normal / special / super and attack / throw / projectile'],
+    hitflag: ['Can hit', 'H standing, L crouching, A airborne, F falling, D downed; + combo only, - never in a combo'],
+    guardflag: ['Block', 'H standing, L crouching, A in the air: H only is an overhead, L only a low, none unblockable'],
+    priority: ['Trade priority', 'higher wins when two attacks trade; Hit / Miss / Dodge on a tie'],
+    animtype: ['Hit reaction', 'light / medium / hard / back / up / diag-up'],
+    'air.animtype': ['Air hit reaction', 'the reaction when hit airborne'],
+    'ground.type': ['Hit height', 'high / low / trip (a sweep)'],
+    'air.type': ['Air hit height', 'high / low / trip when hit airborne'],
+    hitonce: ['Single target', '1 = hits only one opponent'],
+    forcestand: ['Force standing', 'a crouching opponent is stood up'],
+    forcecrouch: ['Force crouching', 'a standing opponent is made to crouch'],
+    'guard.dist': ['Proximity block range', 'how close the opponent must be to start blocking'],
+    'ground.velocity': ['Hit pushback', 'x (pushback), y (launch) on a grounded hit'],
+    'guard.velocity': ['Block pushback', 'x on block'],
+    'air.velocity': ['Air hit launch', 'x, y when the opponent is hit airborne'],
+    'airguard.velocity': ['Air block pushback', 'x, y when blocked in the air'],
+    'down.velocity': ['OTG launch', 'x, y when hitting a downed opponent'],
+    'down.bounce': ['OTG bounce', '1 = a downed opponent bounces'],
+    'ground.cornerpush.veloff': ['Corner pushback (hit)', 'how far you are pushed when the opponent is cornered'],
+    'guard.cornerpush.veloff': ['Corner pushback (block)', 'how far you are pushed off a cornered, blocking opponent'],
+    'air.cornerpush.veloff': ['Corner pushback (air hit)', ''],
+    'airguard.cornerpush.veloff': ['Corner pushback (air block)', ''],
+    'down.cornerpush.veloff': ['Corner pushback (OTG)', ''],
+    fall: ['Knockdown', '1 = knocks down on hit'],
+    'air.fall': ['Knockdown (air hit)', '1 = knocks down when hit airborne'],
+    'fall.recover': ['Air tech', '1 = the opponent can recover out of the knockdown'],
+    'fall.recovertime': ['Tech delay', 'frames before the opponent can tech'],
+    'fall.xvelocity': ['Knockdown drift', 'x speed while falling'],
+    'fall.yvelocity': ['Knockdown bounce', 'y speed when bouncing off the ground'],
+    'fall.damage': ['Landing damage', 'damage when the opponent hits the ground'],
+    'fall.kill': ['Landing can KO', ''],
+    'fall.animtype': ['Knockdown reaction', ''],
+    'air.juggle': ['Juggle cost', 'juggle points this hit uses'],
+    id: ['Chain ID', 'names this hit for cancels'],
+    chainid: ['Chains from', 'only connects after the hit with this ID'],
+    nochainid: ['Won\'t chain from', 'never connects after the hit with this ID'],
+    p1stateno: ['Your state on hit', 'throws and follow-ups'],
+    p2stateno: ['Opponent\'s state on hit', 'throws: the opponent runs your states'],
+    p1facing: ['Your facing on hit', ''], p2facing: ['Opponent\'s facing on hit', ''], p1getp2facing: ['Face the opponent', ''],
+    mindist: ['Throw range (min)', ''], maxdist: ['Throw range (max)', ''], snap: ['Throw snap', 'where the opponent is placed'],
+    sparkno: ['Hit spark', ''], 'guard.sparkno': ['Block spark', ''], sparkxy: ['Spark position', 'x, y from your axis'],
+    hitsound: ['Hit sound', ''], guardsound: ['Block sound', ''],
+    projid: ['Projectile ID', ''], projanim: ['Projectile animation', ''], projhitanim: ['Projectile hit animation', ''],
+    projremanim: ['Projectile vanish animation', ''], projcancelanim: ['Projectile clash animation', ''],
+    velocity: ['Projectile speed', 'x, y per frame'], accel: ['Projectile acceleration', ''], remvelocity: ['Speed after hitting', ''],
+    projremovetime: ['Projectile lifetime', 'frames before it vanishes (-1 = until it hits)'],
+    projhits: ['Projectile durability', 'hits before it vanishes'], projpriority: ['Projectile clash priority', 'a higher one beats a lower one'],
+    projmisstime: ['Projectile rehit delay', 'frames between hits'], offset: ['Spawn position', 'x, y from your axis'],
+    'reversal.attr': ['Counters', 'the attacks it catches'],
+  };
+  const GROUPS = [
+    ['Damage and meter', /^(damage|getpower|givepower|dizzypoints|guardpoints|redlife|numhits|kill|guard\.kill)$/],
+    ['Stun and hitstop', /^(pausetime|guard\.pausetime|ground\.hittime|air\.hittime|guard\.hittime|down\.hittime|ground\.slidetime|guard\.slidetime|guard\.ctrltime|airguard\.ctrltime|yaccel)$/],
+    ['How it hits', /^(attr|hitflag|guardflag|priority|animtype|air\.animtype|ground\.type|air\.type|hitonce|forcestand|forcecrouch|guard\.dist|reversal\.attr)$/],
+    ['Pushback and launch', /(velocity|cornerpush|down\.bounce)/],
+    ['Knockdown', /^(fall|air\.fall|fall\.|forcenofall)/],
+    ['Juggle and cancels', /^(air\.juggle|id|chainid|nochainid)$/],
+    ['Throws and states', /^(p1stateno|p2stateno|p1facing|p2facing|p1getp2facing|mindist|maxdist|snap|p1sprpriority|p2sprpriority|sprpriority)$/],
+    ['Projectile', /^(proj|velocity|accel|offset|remvelocity|supermovetime|pausemovetime)/],
+    ['Effects', /^(sparkno|guard\.sparkno|sparkxy|hitsound|guardsound|envshake|palfx|fall\.envshake)/],
+  ];
+  const groupOf = (name) => { const g = GROUPS.find(([, re]) => re.test(name)); return g ? g[0] : 'Other'; };
+  const fgcOf = (name) => FGC[name] || (/^envshake/.test(name) ? ['Screen shake', ''] : /^palfx/.test(name) ? ['Hit flash', ''] : /^fall\.envshake/.test(name) ? ['Landing screen shake', ''] : null);
+
+  // ---- the action, frame by frame ------------------------------------------
+
+  // Which color the engine's debug display gives this state's Clsn1 boxes
+  // (char.go:12836-12843): ReversalDef when a reversal is live, HitDef when
+  // atktmp is set, Inactive otherwise. atktmp is `movetype != I || a reversal
+  // is live` (char.go:12552), and a statedef without movetype is I
+  // (bytecode.go:15529) - such a state's HitDef is not an attack at all
+  // (char.go:10854).
+  function clsn1Class(s, b) {
+    if (b.ctrl === 'reversaldef' || b.ctrl === 'modifyreversaldef') return { cls: 'c1rev', label: 'ReversalDef' };
+    // A negative state runs inside whatever state is playing; one that sets
+    // movetype A with a StateTypeSet makes that state an attack.
+    if (s.negative) return s.setsAttack ? { cls: 'c1hit', label: 'HitDef' } : { cls: 'c1not', label: 'Inactive' };
+    if (s.movetype === 'i' || s.movetype === null) return { cls: 'c1not', label: 'Inactive' };
+    return { cls: 'c1hit', label: 'HitDef' };
+  }
+
+  // ONE BOX FOR THE WHOLE ACTION, the way the player (animview-core.js)
+  // frames it: the union of the typical frames, where anything over three
+  // times the median sprite area or under an eighth of it is left out, so
+  // one odd frame cannot shrink the pose. Here the Clsn boxes join the union
+  // too, unless they would more than triple it (a screen-filling super box).
+  function frameRect(f) {
+    if (!f.w || !f.h) return null;
+    const hx = hFlip(f), vy = vFlip(f), [ax, ay] = axisAt(f);
+    const l = hx ? ax - (f.w - f.axisX) : ax - f.axisX;
+    const t = vy ? ay - (f.h - f.axisY) : ay - f.axisY;
+    return [l, t, l + f.w, t + f.h];
+  }
+  // Mirrored on ANY H / V: the engine sets Hscale = -1 for every H, so `HH` is
+  // still flipped - only the offset's sign follows the count (anim.go:93-104).
+  // The server reads the flags the engine's way (f.flipH / f.flipV).
+  const hFlip = (f) => f.flipH === true;
+  const vFlip = (f) => f.flipV === true;
+  // The axis sits at the offset, or at minus it for `HH` / `VV` (the server's
+  // drawX / drawY, anim.go:93-99, 950-1024).
+  const axisAt = (f) => [f.drawX !== undefined ? f.drawX : f.x, f.drawY !== undefined ? f.drawY : f.y];
+  function unionOf(rects) {
+    let l = Infinity, t = Infinity, r = -Infinity, bt = -Infinity;
+    for (const x of rects) { if (!x) continue; l = Math.min(l, x[0]); t = Math.min(t, x[1]); r = Math.max(r, x[2]); bt = Math.max(bt, x[3]); }
+    return l === Infinity ? null : { l, t, w: Math.max(1, r - l), h: Math.max(1, bt - t) };
+  }
+  function measure(frames) {
+    const drawn = frames.filter((f) => f.w && f.h);
+    let keep = drawn;
+    if (drawn.length >= 3) {
+      const areas = drawn.map((f) => f.w * f.h).sort((a, b) => a - b);
+      const med = areas[areas.length >> 1];
+      keep = drawn.filter((f) => f.w * f.h <= med * 3 && f.w * f.h >= med / 8);
+      if (!keep.length) keep = drawn;
+    }
+    const spr = unionOf(keep.map(frameRect));
+    const boxes = [];
+    for (const f of (keep.length ? keep : frames)) for (const r of [...(f.clsn1 || []), ...(f.clsn2 || [])]) boxes.push(r);
+    const all = unionOf([...keep.map(frameRect), ...boxes]);
+    if (!spr) return all;
+    if (all && all.w * all.h <= spr.w * spr.h * 3) return all;
+    return spr;
+  }
+
+  function renderFrames(host, s, b) {
+    const k = s.blocks.indexOf(b);
+    const anims = s.anims || [];
+    if (sel.action === null || !anims.some((a) => a.action === sel.action)) sel.action = anims.length ? anims[0].action : null;
+    const a = anims.find((x) => x.action === sel.action) || null;
+    const f = b.frame || {};
+    // Edit off: the printed side head over the strip.
+    host.append(el('h2', { class: 'bk-sh pr' }, 'Frame by frame', el('span', { class: 'k', lang: 'ja', text: '連続写真' }),
+      a && a.exists ? el('span', { class: 'aside', text: 'action ' + a.action + ', ' + a.frames.length + ' elements, ' + (a.endless ? 'holds on element ' + (a.holdsOn || a.frames.length) : a.ticks + ' ticks') }) : null));
+    host.append(el('div', { class: 'title ed' }, 'State ' + s.no + ' · block ' + (k + 1) + ' of ' + s.blocks.length + ' · ', el('span', { class: 'ty', text: b.type }), ' · ' + animLabel(s)));
+    const facts = el('div', { class: 'facts ed' });
+    if (s.negative) facts.append(el('code', { text: s.file + ':' + s.line }), ' · a negative state: runs every tick ' + (s.no === -2 ? 'in any state, an opponent\'s custom state included' : 'while the character is in its own states')
+      + (s.setsAttack ? ' · sets movetype A with a StateTypeSet' : ' · sets no movetype A: a HitDef here hits only in states that are attacks already')
+      + ' · the animation drawn is the one its triggers test for'
+      + ' · localcoord ' + model.localcoord.join('x') + (model.localcoordDeclared ? '' : ' (undeclared)') + ' · [Size] ' + model.size.xscale + ' x ' + model.size.yscale);
+    else facts.append(el('code', { text: s.file + ':' + s.line }), ' · movetype ' + (s.movetypeRaw === null ? 'not set (I)' : s.movetypeRaw)
+      + ' · juggle ' + (s.juggle ? s.juggle.raw + ' (on the [Statedef] line ' + s.juggle.line + ', not the HitDef)' : 'not set')
+      + ' · localcoord ' + model.localcoord.join('x') + (model.localcoordDeclared ? '' : ' (undeclared)')
+      + ' · [Size] ' + model.size.xscale + ' x ' + model.size.yscale);
+    host.append(facts);
+    if (s.anim && !s.anim.literal) host.append(el('div', { class: 'facts' }, 'anim = ', el('code', { text: s.anim.raw }), s.anim.exact === false ? ' - candidates are a guess from the variables it reads' : ''));
+    for (const ca of s.changeAnims) {
+      host.append(el('div', { class: 'facts ed' }, ca.type + ' line ' + ca.line + ': value = ', el('code', { text: ca.raw || '' }),
+        ca.triggers && ca.triggers.length ? ' when ' : '', ca.triggers && ca.triggers.length ? el('code', { text: ca.triggers.join(' / ') }) : ''));
+    }
+
+    // Candidate animations as tabs (§8.1: an expression anim is several moves).
+    if (anims.length > 1) {
+      const tabs = el('div', { class: 'tabs', role: 'group', 'aria-label': 'Animations this state may play' });
+      for (const x of anims) {
+        const t = el('button', { 'aria-pressed': x.action === sel.action ? 'true' : 'false', title: x.source, text: 'action ' + x.action + (x.exists ? '' : ' (missing)') });
+        t.onclick = () => { sel.action = x.action; renderSelection(); };
+        tabs.append(t);
+      }
+      host.append(tabs);
+    }
+
+    // FIRING. The tick a block goes live and the elements that can hit are two
+    // different facts (§8): a HitDef on Time = 0 is live for the whole state,
+    // but only elements with a Clsn1 can connect.
+    const fireBox = el('div', { class: 'sub ed' });
+    const firingElems = new Set();
+    for (const fz of b.firing) {
+      const line = el('div', { class: 'fire' });
+      const grp = fz.group === 'all' ? 'triggerall' : 'trigger' + fz.group;
+      if (fz.kind === 'animelem' || fz.kind === 'animelemtime') {
+        const tick = a && fz.ticks ? fz.ticks[a.action] : undefined;
+        if (a && fz.elem <= a.frames.length) firingElems.add(fz.elem);
+        line.append(el('span', { class: 'k static', text: 'fires' }), grp + ': ', el('code', { text: fz.text }),
+          ' → element ' + fz.elem + (fz.kind === 'animelemtime' ? ' + ' + fz.offset + ' ticks' : '')
+          + (tick === null ? ' - past the end of action ' + (a && a.action) + ': never fires' : tick !== undefined ? ', tick ' + tick + ' of the animation' : ''));
+      } else if (fz.kind === 'time') {
+        line.append(el('span', { class: 'k static', text: 'fires' }), grp + ': ', el('code', { text: fz.text }), ' → tick ' + fz.tick + ' of the state; it then stays live, and only elements with a Clsn1 can connect');
+      } else if (fz.never) {
+        line.append(el('span', { class: 'k cond', text: 'never' }), grp + ': ', el('code', { text: fz.text }), ' - ' + (fz.note || 'this group never fires'));
+      } else {
+        if (a && fz.elem && fz.elem <= a.frames.length) firingElems.add(fz.elem);
+        line.append(el('span', { class: 'k cond', text: 'conditional' }), grp + ': ', el('code', { text: fz.text }),
+          fz.elem ? ' (reads element ' + fz.elem + ')' : '');
+      }
+      fireBox.append(line);
+    }
+    if (!b.firing.length) fireBox.append(el('div', { class: 'fire', text: 'No trigger line: the engine never runs this controller.' }));
+    host.append(fireBox);
+
+    const c1 = clsn1Class(s, b);
+    host.append(el('div', { class: 'legend' },
+      el('span', { class: 'pr' }, el('i', { class: 'fb s' }), 'startup'), el('span', { class: 'pr' }, el('i', { class: 'fb a' }), 'active'), el('span', { class: 'pr' }, el('i', { class: 'fb r' }), 'recovery'),
+      el('span', {}, el('i', { style: 'border-color:var(--' + c1.cls + ');background:var(--' + c1.cls + ')' }), 'Clsn1 (' + c1.label + ')'),
+      el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
+      el('span', { class: 'ed', text: 'engine debug colors, system.go:4000-4007' }),
+      el('span', { class: 'pr', text: 'one bar cell per tick, 60 to the second' }),
+      c1.cls === 'c1not' ? el('span', { class: 'warnline', text: 'movetype I: the engine does not treat this state as attacking (char.go:12552)' }) : null,
+      // Explod art: on / off (remembered); none drawn = the readout says why.
+      hasDrawnExplods(s) ? xplSwitch() : (s.explods && s.explods.length ? el('span', { class: 'xnone', text: 'Explod art: ' + s.explods.length + (s.explods.length === 1 ? ' Explod, not drawn' : ' Explods, none drawn') + ' (the frame data says why)' }) : null)));
+
+    if (!a) { host.append(el('div', { class: 'none', text: 'No animation could be resolved for this state.' })); return; }
+    if (!a.exists) { host.append(el('div', { class: 'none', text: 'Action ' + a.action + ' is not in the .air or the common animations - the state shows whatever it had before.' })); return; }
+    host.append(el('div', { class: 'ed' }, el('div', { class: 'facts', text: 'Action ' + a.action + (a.table === 'common' ? ' (engine common animation)' : ' · .air line ' + a.line)
+      + (a.copyOf !== undefined ? ' · plays action ' + a.copyOf + '\'s frames' : '')
+      + ' · ' + a.frames.length + ' elements · ' + (a.endless ? 'holds on element ' + (a.holdsOn || a.frames.length) : a.ticks + ' ticks')
+      + (a.loopStart ? ' · loops from element ' + (a.loopStart + 1) : '')
+      + ' · active (Clsn1): ' + (a.active.length ? a.active.join(', ') : 'none - this animation cannot hit') })));
+
+    // THE STRIP'S FRAMING IS THE MOVE'S OWN (the owner: "With the switch OFF
+    // the strip looks exactly as it does on master", and with it ON no cell
+    // may draw into its neighbor). The Explod art never joins the fit: every
+    // cell keeps the body's scale and ground line, on or off, and its art is
+    // cut cleanly at the cell's edge (its own clip layer, .xcl). The plate
+    // below shows the whole art under its boxes.
+    const box = measure(a.frames);
+    const cw = 170, ch = 170;
+    const raw = box ? Math.min((cw - 8) / box.w, (ch - 8) / box.h) : 1;
+    // Whole-number magnification only, as the magnifying player does: an
+    // integer factor keeps pixel art crisp; shrinking has no crisp form.
+    const z = raw >= 1 ? Math.floor(raw) : raw;
+    // Edit off prints the strip only as tall as the action needs.
+    const strip = el('div', { class: 'strip', style: box ? '--ph:' + Math.min(ch, Math.ceil(box.h * z) + 14) + 'px' : null });
+    // The frame bar under the sprites: the server's meter, one cell per tick
+    // of the element (frame N of the move is tick N - 1 of its animation).
+    const meter = f.meter && f.anim === a.action ? f.meter : null;
+    const kf = startupElement(a, f);
+    for (const fr of a.frames) {
+      const cell = el('div', { class: 'fr' + (fr.clsn1.length ? ' active' : '') + (firingElems.has(fr.elem) ? ' firing' : '') + (fr.hidden ? ' hidden' : '') + (kf === fr ? ' kf' : ''), style: '--cw:' + cw + 'px;--chh:' + ch + 'px' });
+      const stage = el('div', { class: 'stage' });
+      const stin = el('div', { class: 'stin' });
+      stage.append(stin);
+      if (box) {
+        const ox = (cw - box.w * z) / 2 - box.l * z;   // screen x of the character's origin
+        // the action's lowest point sits 6px above the stage's ground rule
+        const oy = Math.max((ch - box.h * z) / 2, ch - 6 - box.h * z) - box.t * z;
+        // Explod art on this element's first tick, each group in a clip layer
+        // of the cell: the ones the engine layers under the character, then
+        // the character, then the ones over it, and the boxes over all of
+        // them (in a second .stin, so the art over the character stays under
+        // the boxes). No art here = master's cell, node for node.
+        const xlayer = (front) => {
+          const inn = el('div', { class: 'xin' });
+          drawExplods(inn, s, a.action, fr.start, ox, oy, z, front);
+          return inn.children.length ? el('div', { class: 'xcl', 'aria-hidden': 'true' }, inn) : null;
+        };
+        const xUnder = xlayer(false), xOver = xlayer(true);
+        let bx = stin;
+        if (xUnder || xOver) {
+          if (xUnder) stage.prepend(xUnder);
+          bx = el('div', { class: 'stin' });
+          if (xOver) stage.append(xOver);
+          stage.append(bx);
+        }
+        if (fr.w && fr.h) {
+          const img = el('img', { alt: '', src: '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + fr.group + '&index=' + fr.number });
+          img.onerror = () => { img.style.visibility = 'hidden'; };
+          const hx = hFlip(fr), vy = vFlip(fr);
+          // The sprite is drawn at origin + element offset with its axis on
+          // that point (anim.go:961, 1090); a flip mirrors it about the axis.
+          const [fx, fy] = axisAt(fr);
+          const axX = ox + fx * z, axY = oy + fy * z;
+          img.style.width = Math.max(1, Math.round(fr.w * z)) + 'px';
+          img.style.height = Math.max(1, Math.round(fr.h * z)) + 'px';
+          img.style.left = Math.round(axX - fr.axisX * z) + 'px';
+          img.style.top = Math.round(axY - fr.axisY * z) + 'px';
+          if (hx || vy) {
+            img.style.transformOrigin = (fr.axisX * z) + 'px ' + (fr.axisY * z) + 'px';
+            img.style.transform = 'scale(' + (hx ? -1 : 1) + ',' + (vy ? -1 : 1) + ')';
+          }
+          stin.append(img);
+        }
+        // THE BOXES SIT ON THE CHARACTER'S POSITION, NOT ON THE ELEMENT OFFSET.
+        // The debug draw places Clsn at pos + the character's own draw offset
+        // (char.go:12820-12823 cueDebugDraw), while the element's x/y moves
+        // only the sprite (anim.go:961, 1090).
+        const addBox = (r, cls) => {
+          const d = el('div', { class: 'box ' + cls });
+          d.style.left = Math.round(ox + r[0] * z) + 'px';
+          d.style.top = Math.round(oy + r[1] * z) + 'px';
+          d.style.width = Math.max(1, Math.round((r[2] - r[0]) * z)) + 'px';
+          d.style.height = Math.max(1, Math.round((r[3] - r[1]) * z)) + 'px';
+          bx.append(d);
+        };
+        for (const r of fr.clsn2) addBox(r, 'c2');
+        for (const r of fr.clsn1) addBox(r, c1.cls);
+        const ax = el('div', { class: 'ax' });
+        ax.style.left = Math.round(ox) + 'px'; ax.style.top = Math.round(oy) + 'px';
+        bx.append(ax);
+      }
+      // Only the element the engine stops on holds (a middle -1 or a last -2
+      // is not a hold); a time of 0 or less takes no AnimElemTime ticks.
+      const end = fr.holds ? 'holds' : fr.time <= 0 ? 't' + fr.start : 't' + fr.start + '-' + (fr.start + fr.time - 1);
+      const badges = el('div', { class: 'badges' },
+        fr.clsn1.length ? el('span', { class: 'badge act', text: 'active', title: fr.clsn1.length + ' Clsn1 box(es), ' + fr.clsn1Source + ' block, .air line ' + fr.clsn1Line }) : null,
+        firingElems.has(fr.elem) ? el('span', { class: 'badge fires', text: 'fires here' }) : null,
+        fr.hidden ? el('span', { class: 'badge dim', text: 'never displayed', title: 'the engine never draws it - its time, the totals of the action or the loop skip it (anim.go:428-452, 638-721, 802-846) - but it still takes an AnimElem number (anim.go:507-520)' }) : null,
+        fr.clsn2.length && fr.clsn2Source === 'default' ? el('span', { class: 'badge dim', text: 'Clsn2 default' }) : null,
+        !fr.w ? el('span', { class: 'badge dim', text: fr.group === -1 || fr.number === -1 ? 'no sprite' : 'sprite missing' }) : null);
+      const tk = el('div', { class: 'tk', 'aria-hidden': 'true' });
+      if (fr.time > 0) for (let t = fr.start; t < fr.start + Math.min(fr.time, 60); t++) tk.append(el('i', { class: meter && meter[t] ? meter[t] : '' }));
+      cell.append(stage, el('div', { class: 'cap', title: '.air line ' + fr.line },
+        el('b', { text: '#' + fr.elem }), ' · ' + fr.group + ',' + fr.number + (fr.flip ? ' ' + fr.flip : '') + ' · ' + fr.time + 't · ' + end, badges),
+        tk, el('div', { class: 'fn' }, el('b', { text: fr.elem }), fr.holds ? 'holds' : fr.time + 't'));
+      strip.append(cell);
+    }
+    host.append(strip);
+    host.append(el('div', { class: 'facts ed', text: 'Element number (#) is what AnimElem counts; the tick range is what AnimElemTime counts. ' + (box ? 'Drawn at ' + (Math.round(z * 100)) + '%.' : '') }));
+
+    // Damage paid outside the HitDef (§4): throws.
+    if (s.outsideDamage && s.outsideDamage.length) {
+      const ul = el('ul');
+      for (const od of s.outsideDamage) {
+        ul.append(el('li', {}, el('code', { text: od.file + ':' + od.line }), ' ' + od.type + ' in state ' + od.state + ' (' + od.via + ')' + (od.value !== null ? ' value = ' : ''),
+          od.value !== null ? el('code', { text: od.value }) : '', od.note ? ' - ' + od.note : ''));
+      }
+      host.append(el('div', { class: 'sub' }, el('div', { class: 'h', text: 'Damage outside the HitDef' }), ul));
+    }
+  }
+
+  // ---- Edit on: the block, its triggers and its values ---------------------
+
+  function renderBlock(host, s, b) {
+    host.append(el('h2', { class: 'bk-sh' }, 'Values', el('span', { class: 'k', lang: 'ja', text: '数値' }), el('span', { class: 'aside', text: b.type + ', ' + b.params.length + ' parameters' })));
+    const bsel = el('div', { class: 'bsel' });
+    const prev = el('button', { text: '‹', title: 'Previous block', 'aria-label': 'Previous block', disabled: sel.ordinal === 0 });
+    const next = el('button', { text: '›', title: 'Next block', 'aria-label': 'Next block', disabled: sel.ordinal >= s.blocks.length - 1 });
+    const pick = el('select', { 'aria-label': 'Attack block' });
+    s.blocks.forEach((x, i) => pick.append(el('option', { value: i, text: 'block ' + (i + 1) + ' of ' + s.blocks.length + ' · ' + x.type + ' · line ' + x.line + (x.label ? ' · ' + x.label : '') })));
+    pick.value = String(sel.ordinal);
+    pick.onchange = () => { sel.ordinal = Number(pick.value); renderSelection(); };
+    prev.onclick = () => { sel.ordinal--; renderSelection(); };
+    next.onclick = () => { sel.ordinal++; renderSelection(); };
+    bsel.append(prev, pick, next);
+    host.append(bsel);
+
+    const tr = el('div', { class: 'trig' });
+    for (const t of b.triggers) tr.append(el('div', {}, el('span', { class: 'ln', text: t.line }), t.text));
+    if (!b.triggers.length) tr.append(el('div', { text: '(no triggers)' }));
+    host.append(tr);
+    host.append(el('div', { class: 'tierkey' },
+      el('span', {}, el('span', { class: 'bk-tier plain', text: '18' }), ' a plain number, written as typed'),
+      el('span', {}, el('span', { class: 'bk-tier tmpl', text: '69' }), ' the CvS damage template: the base, written in both places'),
+      el('span', {}, el('span', { class: 'bk-tier verb', text: 'S, NA' }), ' red: a formula is edited as text; anything else is never written, and the badge says why')));
+    if (!b.editable) host.append(el('div', { class: 'notes', text: 'This block is not editable.' }));
+    for (const n of (b.notes || [])) host.append(el('div', { class: 'notes', text: n }));
+    for (const d of (b.duplicates || [])) host.append(el('div', { class: 'notes', text: d.name + ' is written twice (lines ' + d.firstLine + ' and ' + d.line + '): ' + d.note }));
+
+    const table = el('table', { class: 'params' });
+    // Grouped the way a frame data page reads, each group in the order the
+    // file writes it.
+    const order = GROUPS.map(([g]) => g).concat('Other');
+    const byGroup = new Map(order.map((g) => [g, []]));
+    for (const p of b.params) byGroup.get(groupOf(p.name)).push(p);
+    for (const [g, ps] of byGroup) {
+      if (!ps.length) continue;
+      table.append(el('tr', { class: 'grp' }, el('td', { colspan: '2', text: g })));
+      for (const p of ps) table.append(paramRow(s, b, p));
+    }
+    // DERIVED VALUES (§4): what the engine computes for the parameters this
+    // block leaves out. Read only - writing one pins it.
+    if (b.derived && b.derived.applies) {
+      for (const [name, vals] of Object.entries(b.derived.values || {})) {
+        if (b.params.some((p) => p.name === name)) continue;
+        const dl = fgcOf(name);
+        table.append(el('tr', { class: 'derived' },
+          el('td', { class: 'nm' }, dl ? el('span', { class: 'fgc', text: dl[0] }) : null, el('span', { class: 'mg', text: name }), el('span', { class: 'ln', text: 'derived, not written' })),
+          el('td', {}, el('div', { class: 'vals' }, vals.map((v) => el('span', { class: 'dv', title: v.formula, text: '(' + v.value + ')' }))),
+            el('div', { class: 'notes' }, vals.map((v) => el('div', { text: v.formula }))))));
+      }
+      for (const u of (b.derived.unknown || [])) {
+        table.append(el('tr', { class: 'derived' }, el('td', { class: 'nm', text: u.name }), el('td', {}, el('div', { class: 'notes', text: 'not known statically: ' + u.why }))));
+      }
+      if (b.derived.note) host.append(el('div', { class: 'notes', text: b.derived.note }));
+    } else if (b.derived && b.derived.reason) {
+      host.append(el('div', { class: 'notes', text: 'Derived values: ' + b.derived.reason }));
+    }
+    host.append(table);
+  }
+
+  const fileSha = (file) => { const f = model.files.find((x) => x.rel === file); return f ? f.sha1 : undefined; };
+
+  function paramRow(s, b, p) {
+    const lab = fgcOf(p.name);
+    const nm = el('td', { class: 'nm' },
+      lab ? el('span', { class: 'fgc', text: lab[0] }) : null,
+      el('span', { class: 'mg' }, p.name, p.risk && p.risk.level !== 'safe' ? el('span', { class: 'risk ' + p.risk.level, text: p.risk.level }) : null),
+      lab && lab[1] ? el('span', { class: 'ex', text: lab[1] }) : null,
+      el('span', { class: 'ln', text: 'line ' + p.line }));
+    const vals = el('div', { class: 'vals' });
+    const extra = el('div');
+    for (const v of p.values) vals.append(valueCell(s, b, p, v, extra));
+    const td = el('td', {}, vals);
+    const notes = el('div', { class: 'notes' });
+    if (p.note) notes.append(el('div', { text: p.note }));
+    if (p.risk && p.risk.level !== 'safe') for (const n of p.risk.notes) notes.append(el('div', { text: n }));
+    if (!p.known) notes.append(el('div', { text: 'not a parameter the engine reads for ' + b.type }));
+    td.append(notes, extra);
+    return el('tr', {}, nm, td);
+  }
+
+  function valueCell(s, b, p, v, extra) {
+    const wrap = el('span', { class: 'v ' + v.tier });
+    if (v.tier === 'absent') { wrap.append(el('span', { class: 'absent', text: '—', title: 'component ' + (v.index + 1) + ' not written' })); return wrap; }
+    // A FORMULA is edited as text: what it reads as a fresh first hit is shown
+    // beside it. The server checks it; one it cannot read asks first.
+    if (v.tier === 'red' && v.expr && b.editable) return formulaCell(s, b, p, v, extra);
+    if (v.tier === 'red' || !b.editable) {
+      wrap.append(el('span', { class: 'red', text: v.raw }));
+      if (v.tier === 'red') {
+        const RED_LABEL = { string: 'text', prefix: 'table prefix', letter: 'letter', unknown: 'ignored', extra: 'extra value', expression: 'computed at runtime' };
+        wrap.append(el('span', { class: 'rt', text: RED_LABEL[v.red] || (v.kind === 'string' ? 'text' : 'read only'), title: v.note || '' }));
+      }
+      return wrap;
+    }
+    // Green: the literal itself. Amber: the base literal of the CvS template,
+    // written in both places it appears; the full expression is shown under
+    // it. A text field rather than type=number: a number input reads `-.8`
+    // (the author's own style, kept on write) back as empty.
+    const shown = v.tier === 'amber' ? v.base : v.raw;
+    const input = el('input', { type: 'text', inputmode: 'decimal', spellcheck: 'false', value: shown, title: p.name + ' component ' + (v.index + 1) + ' (' + v.kind + ')' });
+    let sent = shown;
+    const commit = async (confirmed) => {
+      const val = input.value.trim();
+      if (val === sent && !confirmed) return;
+      extra.textContent = '';
+      // A plain number, or a formula typed in its place - the server decides.
+      if (!val) { input.value = shown; return; }
+      // The server refuses an edit without the file's sha1 as read: the
+      // offsets are only valid for exactly those bytes.
+      if (!fileSha(b.file)) {
+        extra.append(el('div', { class: 'rowerr', text: 'This file has no checksum in the loaded view - reload the window.' }));
+        input.value = shown; return;
+      }
+      input.classList.add('busy');
+      const prevSent = sent;
+      sent = val;
+      try {
+        const r = await postJson('/api/char-move-edit', {
+          char, file: b.file, state: b.state, ordinal: b.ordinal, param: p.name, index: v.index,
+          value: val, expect: p.raw, sha1: fileSha(b.file), confirm: confirmed === true || undefined,
+        });
+        say(p.name + (p.values.length > 1 ? '[' + (v.index + 1) + ']' : '') + ' in state ' + b.state + ': ' + p.raw + ' → ' + r.raw
+          + (r.backupCreated ? ' · original kept as ' + r.backup : ''), 'ok');
+        await load(true);
+      } catch (e) {
+        input.classList.remove('busy');
+        sent = prevSent;
+        if (e.code === 'confirm') {
+          const box = el('div', { class: 'confirm' }, el('div', { text: e.message }));
+          const yes = el('button', { class: 'warn', text: 'Write ' + val + ' anyway' });
+          const no = el('button', { text: 'Cancel' });
+          yes.onclick = () => { extra.textContent = ''; commit(true); };
+          no.onclick = () => { extra.textContent = ''; input.value = shown; sent = shown; };
+          box.append(el('div', { class: 'btns' }, yes, no));
+          extra.append(box);
+          return;
+        }
+        if (e.code === 'stale') { say(e.message, 'err'); await load(true); return; }
+        extra.append(el('div', { class: 'rowerr', text: e.message }));
+        input.value = shown; sent = shown;
+      }
+    };
+    input.onkeydown = (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); commit(false); }
+      else if (ev.key === 'Escape') { input.value = shown; input.blur(); }
+    };
+    input.onblur = () => commit(false);
+    wrap.append(input);
+    if (v.tier === 'amber') wrap.append(el('div', { class: 'expr', text: v.raw, title: 'the base literal is written in both places it appears' }));
+    return wrap;
+  }
+
+  function formulaCell(s, b, p, v, extra) {
+    const wrap = el('span', { class: 'v xp' });
+    const input = el('input', { type: 'text', spellcheck: 'false', value: v.raw, title: p.name + ' component ' + (v.index + 1) + ': a formula, computed at runtime' });
+    const shown = v.raw;
+    input.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); } else if (ev.key === 'Escape') { input.value = shown; input.blur(); } };
+    input.onblur = () => {
+      const val = input.value.trim();
+      if (!val || val === shown) { input.value = shown; return; }
+      editValue(b, p.name, v.index, val, extra, () => { input.value = shown; });
+    };
+    wrap.append(input);
+    if (v.reads !== undefined) wrap.append(el('span', { class: 'reads', text: 'reads ' + v.reads, title: 'as a fresh first hit: ' + (v.assumed && v.assumed.length ? v.assumed.map((a) => a + ' = ' + (/^(sys)?fvar/.test(a) ? 1 : 0)).join(', ') : 'no variables') }));
+    return wrap;
+  }
+
+  // ---- THE COMMAND LIST: what Ikemen's pause menu would print --------------
+  //
+  // GET /api/movelist (the Command List writer) names each move, says where
+  // the name came from and gives the exact file the export would write. With
+  // Edit on, a name can be changed or a move hidden from the game's list; the
+  // choice is saved per bundle (POST /api/movelist) and never touches the
+  // character's own folder. Without the route, the section says so.
+  // ", state 1000", or a line that stands for a move's strengths: ", states 1000, 1010, 1020 (one line)"
+  const statesOf = (r) => (Array.isArray(r.merged) && r.merged.length > 1 ? ', states ' + r.merged.map((m) => m.state).join(', ') + ' (one line for ' + r.merged.length + ' strengths)' : ', state ' + r.state);
+  const FROM_SHORT = { owner: 'your name', label: '[State -1] label', command: 'command name', comment: 'comment', readme: 'readme' };
+  function renderCmdList() {
+    const host = $('cmdl');
+    if (!host) return;
+    host.textContent = '';
+    host.append(el('h2', { class: 'bk-sh' }, 'The game\'s Command List', el('span', { class: 'k', lang: 'ja', text: 'コマンドリスト' }), el('span', { class: 'aside', text: 'Ikemen\'s pause menu' })));
+    if (!cl) {
+      host.append(el('p', {}, clWhy && clWhy.startsWith('error:')
+        ? 'The Command List could not be read: ' + clWhy.slice(6)
+        : 'Not available in this build. This Studio has no Command List writer: move names are not read here, and an export writes no Command List for this character.'));
+      return;
+    }
+    if (cl.own) {
+      host.append(el('p', {}, el('b', { text: name }), ' ships its own Command List', cl.own.file ? [' (', el('code', { text: cl.own.file }), ')'] : null,
+        '. The export leaves it as it is; nothing is generated or written for this character.'));
+    } else {
+      host.append(el('p', {}, cl.enabled
+        ? 'The export writes this list into the exported copy of the character and names it in that copy\'s .def. The character\'s own folder is never written.'
+        : 'Off: the export writes no Command List. The list below is what it would write.'));
+      // The switch (POST { char, enabled }): per character, kept for this build.
+      if (editing) {
+        const sw = el('input', { type: 'checkbox', id: 'clOn' });
+        sw.checked = !!cl.enabled;
+        sw.onchange = async () => {
+          sw.disabled = true;
+          try {
+            const j = await postJson('/api/movelist', { char, enabled: sw.checked });
+            if (j && Array.isArray(j.rows)) cl = j;
+            say(sw.checked ? 'The export writes this Command List.' : 'The export writes no Command List for this character.', 'ok');
+          } catch (e) { say('Not changed: ' + e.message, 'err'); sw.checked = !sw.checked; sw.disabled = false; return; }
+          renderCmdList();
+        };
+        host.append(el('p', {}, el('label', { class: 'bk-chk' }, sw, el('i'), el('span', { text: 'Write this list into exported copies' }))));
+      }
+    }
+    const rows = (cl.rows || []).slice();
+    // What the reader flags: no name that reads like one, and a name the stock
+    // pause menu's font cannot draw (it prints blank there).
+    const flags = (r) => [
+      r.weak ? el('span', { class: 'bk-flag', title: 'No label, command name or comment that reads like a name', text: 'No name' }) : null,
+      r.drawable === false ? el('span', { class: 'bk-flag warn', title: 'The pause menu draws this name blank: a build ships a Japanese font (DotGothic16) for kana and kanji, but it has no Hangul or simplified Chinese. Rename it to show it.', text: 'Won\'t print' }) : null,
+    ].filter(Boolean);
+    if (!rows.length) { host.append(el('p', { text: 'No move to list: the files name no special or super.' })); return; }
+    const tbl = el('table', { class: 'bk-tbl flat' });
+    tbl.append(el('thead', {}, el('tr', {}, el('th', { text: 'In the pause menu' }), el('th', { text: editing && !cl.own ? 'Name' : 'Name, and where it came from' }), editing && !cl.own ? el('th', { text: 'Hide' }) : null)));
+    const body = el('tbody');
+    const edits = new Map();
+    for (const r of rows) {
+      const tr = el('tr', { class: r.hidden ? 'off' : '' });
+      tr.append(el('td', { class: 'tok' }, r.glyphs ? glyph(r.glyphs, false, true) : null, ' ', el('span', { text: r.name || '' })));
+      if (editing && !cl.own) {
+        const inp = el('input', { class: 'bk-inp sm', type: 'text', spellcheck: 'false', value: r.name || '', 'aria-label': 'Name of state ' + r.state, maxlength: '60' });
+        const hid = el('input', { type: 'checkbox', 'aria-label': 'Hide state ' + r.state + ' from the game\'s list' });
+        hid.checked = !!r.hidden;
+        const note = () => {
+          const ch = {};
+          if (inp.value.trim() !== (r.name || '')) ch.name = inp.value.trim();
+          if (hid.checked !== !!r.hidden) ch.hidden = hid.checked;
+          if (Object.keys(ch).length) edits.set(r.state, Object.assign({ state: r.state }, ch)); else edits.delete(r.state);
+          save.disabled = !edits.size;
+        };
+        inp.oninput = note; hid.onchange = note;
+        tr.append(el('td', {}, inp, el('div', { class: 'src' }, 'from ' + (FROM_SHORT[r.nameFrom] || r.nameFrom || '?') + statesOf(r), flags(r).length ? ' ' : null, flags(r))),
+          el('td', {}, el('label', { class: 'bk-chk' }, hid, el('i'), el('span', { class: 'bk-sr', text: 'Hide' }))));
+      } else {
+        const raw = r.raw || {};
+        tr.append(el('td', { class: 'src' }, (FROM_SHORT[r.nameFrom] || r.nameFrom || '?') + statesOf(r) + (raw.label && r.nameFrom !== 'label' ? '; label "' + raw.label + '"' : '') + (r.hidden ? '; hidden' : ''), flags(r).length ? ' ' : null, flags(r)));
+      }
+      body.append(tr);
+    }
+    tbl.append(body);
+    host.append(tbl);
+    let save = null;
+    if (editing && !cl.own) {
+      save = el('button', { class: 'bk-btn sm primary', text: 'Save names', disabled: true });
+      save.onclick = async () => {
+        save.disabled = true;
+        try {
+          const j = await postJson('/api/movelist', { char, rows: [...edits.values()] });
+          if (j && Array.isArray(j.rows)) cl = j;
+          say('Command List names saved for this build.', 'ok');
+        } catch (e) { say('The names were not saved: ' + e.message, 'err'); save.disabled = false; return; }
+        renderStates(); renderSelection(); renderCmdList();
+      };
+      host.append(el('div', { class: 'acts' }, save, el('span', { class: 'bk-caption', text: 'An empty name goes back to the one read from the files. Saved for this build only; the character\'s files are not written.' })));
+    }
+    if (cl.own && cl.own.text) host.append(el('pre', { class: 'ikfile', 'aria-label': 'The Command List this character ships', text: cl.own.text }));
+    else if (cl.text) host.append(el('pre', { class: 'ikfile', 'aria-label': 'The file the export writes', text: cl.text }));
+    drawGlyphs(host);
+    paintButtons(host, tbl);
+  }
+
+  // THE BUILD'S BUTTON STYLE (Settings > Controls, GET /api/button-style): in a
+  // style other than the default, the "In the pause menu" column shows the
+  // pictures the game draws for x y z a b c d w, any punch (p), any kick (k)
+  // and Start (s) in place of the booklet's chips, so the list reads as it
+  // will in the game (any punch in a pad style is one picture of its three
+  // buttons, wider than tall: its width follows). Asked once per window.
+  let BTN_PICS;
+  async function buttonPics() {
+    if (BTN_PICS !== undefined) return BTN_PICS;
+    try {
+      const j = await getJson('/api/button-style');
+      const st = j && j.styles && j.styles.find((s) => s.id === j.style);
+      BTN_PICS = st && j.style !== j.def ? { label: st.label, by: Object.fromEntries(st.buttons.filter((b) => b.src).map((b) => [b.button, b])) } : null;
+    } catch (e) { BTN_PICS = null; }
+    return BTN_PICS;
+  }
+  async function paintButtons(host, tbl) {
+    const P = await buttonPics();
+    if (!P || !tbl.isConnected) return;
+    for (const b of tbl.querySelectorAll('td.tok .bk-cmd .b[data-btn]')) {
+      const k = b.dataset.btn, pic = P.by[k];
+      if (!pic) continue;
+      const name = pic.word || k;
+      const img = el('img', { class: 'bpic', src: pic.src, width: String(Math.round(19 * (pic.w || 64) / (pic.h || 64))), height: '19', alt: name + ' (' + pic.label + ')', title: name + ': ' + pic.label + ' (' + P.label + ' style)' });
+      b.replaceWith(img);
+    }
+    tbl.before(el('p', { class: 'bpicnote' }, 'Buttons as this build draws them: the ', el('b', { text: P.label }), ' style (Settings › Controls).'));
+  }
+
+  if (!char) {
+    $('states').textContent = '';
+    $('states').append(el('div', { class: 'none', text: 'No character was passed to this window.' }));
+  } else {
+    load(false);
+  }
+</script>
+</body>
+</html>

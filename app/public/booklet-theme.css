@@ -1,0 +1,351 @@
+/* THE THEME AND MODS TABS, PRINTED AS BOOKLET PAGES (rd-theme-mods, Phase B).
+   ---------------------------------------------------------------------------
+   THEME is the booklet's "screen and system" spread. The left page is the
+   screen: the screenpack in use as a fill-in line with its path, the pack's own
+   options and common states (#themeOptCards), the packs you installed as
+   printed tags, the startup logo, a pack from another bundle, then the select
+   screen as a plate (#selGrid). The right page is the fight screen: lifebars,
+   hit sparks, hit sounds and the round clock as fill-in lines, what the choice
+   means as notes under the values column, the lifebar library as tags.
+
+   MODS is the "extras" spread. The left page is the Studio's add-ons, printed as
+   an options list (a square to tick, the name, what it does, what Off loses);
+   the right page is the bundle's own mods as catalog entries (the picture on a
+   plate, name, version, its On square, what it says about itself) with the
+   drop target above them. (No tip boxes: the band's tips are a slip over the
+   page, dealt from the header mascot.)
+
+   Same elements, ids, handlers and behaviors as before: every row is still
+   drawn by studio.html's renderers (render's Theme block, renderLifebarMix,
+   renderThemeCopy, renderThemeOptions, renderSelectGrid, renderMods). This file
+   lays them out. It loads BEFORE studio.html's own <style>, so every rule is
+   scoped under #panel-theme / #panel-mods, two ids where the old rules it
+   replaces carry one (`#themes button:not(...)` is 1-6-1). Tokens only
+   (themes.css / booklet.css): no raw hex, no shadow-as-card, no glass, no
+   gradients of its own (the global select caret is the old sheet's), no motion. */
+
+/* ======================================================================= */
+/* 0. SHARED: the band, the frame as a spread                               */
+/* ======================================================================= */
+:is(#panel-theme, #panel-mods) > .bk-secband { margin: 0 0 14px; }
+:is(#panel-theme, #panel-mods) .bk-secband-meta > .cnt:has(> b:empty) { display: none; }
+:is(#panel-theme, #panel-mods) .bk-secband-meta > .cnt b { margin-right: 4px; }
+/* + Add is the band's one control; open, it reads as pressed (bk-btn's own). */
+:is(#panel-theme, #panel-mods) .bk-secband-meta > [data-add] { min-width: 64px; }
+:is(#panel-theme, #panel-mods) .bk-secband-meta > [data-add][aria-expanded="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+/* The strip and the path row, while + Add is open, sit under the band. Theme's
+   three targets (a screenpack, a startup logo, lifebars) stand side by side as
+   three blanks, the same dashed target as the Mods page's. */
+:is(#panel-theme, #panel-mods).adding > .drops { margin: 0 0 10px; }
+#panel-theme.adding > .drops { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+#panel-theme > .drops > .drop {
+  display: flex; align-items: center; justify-content: center; min-height: 54px; margin: 0; padding: 10px 14px;
+  border: 2px dashed var(--line); background: var(--sunk); color: var(--ink2);
+  font: 600 var(--t-13)/1.35 var(--f-body); text-align: center; letter-spacing: 0; text-transform: none;
+}
+#panel-theme > .drops > .drop::before, #panel-theme > .drops > .drop::after { display: none; }
+#panel-theme > .drops > .drop:hover { border-color: var(--ink); color: var(--ink); }
+#panel-theme > .drops > .drop.hover { border-color: var(--focus); border-style: solid; color: var(--ink); background: var(--plate); }
+@media (max-width: 900px) { #panel-theme.adding > .drops { grid-template-columns: minmax(0, 1fr); } }
+
+/* The frame is the page: printed on the stock, no box. Its height is the old
+   frame rule's (fitRoster measures it; booklet chrome takes the foot). */
+#panel-theme > .pframe, #panel-mods > .pframe {
+  border: 0; background: transparent; overflow: hidden; min-height: 280px;
+}
+#panel-theme > .pframe > .pbody, #panel-mods > .pframe > .pbody {
+  padding: 0; overflow: hidden; min-height: 0; flex: 1 1 auto;
+}
+#panel-theme .bk-pg, #panel-mods .bk-pg { padding-top: 4px; padding-bottom: 18px; }
+#panel-theme .bk-pg.l, #panel-mods .bk-pg.l { padding-left: 0; padding-right: 6px; }
+#panel-theme .bk-pg.r, #panel-mods .bk-pg.r { padding-right: 6px; }
+#panel-theme .bk-sh, #panel-mods .bk-sh { margin-top: 0; }
+#panel-theme .bk-sh ~ .bk-sh { margin-top: 22px; }
+
+/* Buttons in these pages print as booklet buttons (.bk-btn.sm), whatever
+   class the renderer gave them (.tiny); danger keeps its two-click arming.
+   Two ids: the old `#themes button:not(...)` / `#mods button:not(...)` rules
+   are 1-6-1. */
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button, #panel-mods #mods button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 26px; padding: 0 9px; margin: 0; border: 1.5px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink);
+  font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .005em; text-transform: none;
+  white-space: nowrap; box-shadow: none; cursor: pointer;
+}
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button:hover, #panel-mods #mods button:hover {
+  background: var(--plate); color: var(--ink); border-color: var(--ink);
+}
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button:active, #panel-mods #mods button:active { background: var(--ink); color: var(--paper); }
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button:disabled, #panel-mods #mods button:disabled,
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button:disabled:hover, #panel-mods #mods button:disabled:hover {
+  border-color: var(--line); color: var(--ink2); background: var(--paper); cursor: default;
+}
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button.danger, #panel-mods #mods button.danger { border-color: var(--flag); color: var(--ink); }
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button.danger:hover, #panel-mods #mods button.danger:hover,
+#panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button.danger.armed, #panel-mods #mods button.danger.armed {
+  background: var(--flag); color: var(--onflag); border-color: var(--flag);
+}
+
+/* ======================================================================= */
+/* 1. THEME: the screen (left) and the fight screen (right)                 */
+/* ======================================================================= */
+#panel-theme #themeSpread { --l: 7fr; --r: 5fr; --tl: 132px; height: 100%; }
+
+/* A ROW is a fill-in line: its label in the margin column, the value (a select
+   printed as a blank) and its buttons beside, what it means under the value. */
+#panel-theme .pbody .card, #panel-theme #logoStatus:not(:empty) {
+  position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 10px;
+  min-height: 0; margin: 0; padding: 9px 0 10px var(--tl);
+  border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; box-shadow: none;
+  color: var(--ink); font-size: var(--t-13);
+}
+#panel-theme .pbody .card > label:first-child, #panel-theme #logoStatus > .lbl {
+  position: absolute; left: 0; top: 9px; width: calc(var(--tl) - 14px);
+  display: block; padding: 7px 0 0; box-sizing: border-box;
+  font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink2); letter-spacing: 0; text-transform: none;
+}
+#panel-theme .pbody .card > label:first-child::first-letter, #panel-theme #logoStatus > .lbl::first-letter { text-transform: uppercase; }
+/* the value: a select printed as a blank on its rule */
+#panel-theme .pbody .card > select {
+  flex: 1 1 220px; min-width: 0; max-width: 100%; width: auto; height: 28px; margin: 0;
+  padding: 0 24px 2px 2px; border: 0; border-bottom: 2px solid var(--line); background-color: transparent;
+  color: var(--ink); font: 700 var(--t-16)/1 var(--f-body); text-overflow: ellipsis; cursor: pointer;
+}
+#panel-theme .pbody .card > select:hover { border-bottom-color: var(--ink); color: var(--ink); }
+#panel-theme .pbody .card > select:focus { color: var(--ink); }
+#panel-theme .pbody .card > select:focus-visible { outline: none; border-bottom: 3px solid var(--focus); padding-bottom: 1px; }
+#panel-theme .pbody .card > select:disabled { color: var(--ink2); border-bottom-color: var(--rule); cursor: default; }
+#panel-theme .pbody .card > select option { background: var(--paper); color: var(--ink); }
+#panel-theme .pbody .card > select option:disabled { color: var(--ink2); }
+/* what it means: under the value, in the second ink */
+#panel-theme .pbody .card > .meta, #panel-theme .pbody .card > .note {
+  flex: 1 1 100%; min-width: 0; margin: 0; padding: 0; border: 0;
+  color: var(--ink2); font: 400 var(--t-12)/1.45 var(--f-body); overflow-wrap: anywhere;
+}
+#panel-theme .pbody .card > .meta > div + div { margin-top: 2px; }
+#panel-theme .pbody .card > canvas.lbprev {
+  flex: 1 1 100%; display: block; width: 100%; max-width: 480px; height: auto; margin: 6px 0 0;
+  border: 0; border-radius: 0; image-rendering: pixelated;
+}
+/* A line about the pack (an engine update, a warning) printed under the rows,
+   in the values column. */
+#panel-theme #themes > .meta, #panel-theme #lifebarMix > .note, #panel-theme #themes > .note {
+  margin: 0; padding: 8px 0 9px var(--tl); border-bottom: 1px solid var(--rule);
+  color: var(--ink); font: 400 var(--t-12)/1.5 var(--f-body); overflow-wrap: anywhere;
+}
+#panel-theme #lifebarMix > .note > button { margin-left: 6px; vertical-align: baseline; }
+/* A pack that cannot be used, or asks for what it never shipped: flagged rows. */
+#panel-theme #themes > .card:has(> .note) { box-shadow: inset 4px 0 0 var(--flag); padding-left: calc(var(--tl)); }
+#panel-theme #themes > .card:has(> .note) > label:first-child { left: 12px; width: calc(var(--tl) - 26px); color: var(--bad); }
+#panel-theme #themes > .card:has(> .note) > .note { color: var(--ink); }
+
+/* The packs you installed / the lifebar library: printed tags, each with its
+   own delete square (the two-click arming is the renderer's). */
+#panel-theme .pbody .card > .chip {
+  display: inline-flex; align-items: stretch; gap: 0; margin: 0; padding: 0; min-height: 26px; height: auto;
+  border: 1.5px solid var(--ink); border-left-width: 1.5px; background: var(--paper); max-width: 100%;
+}
+#panel-theme .pbody .card > .chip .who {
+  display: flex; align-items: center; padding: 4px 8px; min-width: 0; white-space: normal; overflow-wrap: anywhere;
+  font: 400 var(--t-12)/1.3 var(--f-data); color: var(--ink); letter-spacing: 0;
+}
+#panel-theme #themeSpread .card > .chip > button.danger {
+  height: auto; min-width: 26px; padding: 0 6px; border: 0; border-left: 1.5px solid var(--ink); font-size: var(--t-16); font-weight: 400;
+}
+#panel-theme #themeSpread .card > .chip > button.danger.armed { padding: 0 8px; font-size: var(--t-12); font-weight: 700; }
+#panel-theme .pbody .card > label:first-child + .meta:last-child,
+#panel-theme .pbody .card > label:first-child + span.meta { flex: 1 1 100%; padding-bottom: 4px; }
+
+/* The startup logo: a row like the others (the label the renderer prints). */
+#panel-theme #logoStatus:not(:empty) > span:not(.lbl) { flex: 1 1 200px; min-width: 0; padding-bottom: 4px; color: var(--ink); font-size: var(--t-13); }
+
+/* The select screen: a plate the size of the page's column. */
+#panel-theme #selGridHead .aside { font-family: var(--f-data); font-size: var(--t-12); }
+#panel-theme #selGrid { margin: 0 0 6px; }
+#panel-theme #selGrid .wrap { border: 0; border-radius: 0; background: var(--plate); padding: 18px 14px; }
+#panel-theme #selGrid .gcell { border-color: var(--line); }
+/* the line under the plate (and the no-grid case): a caption, its button a booklet button */
+#panel-theme #selGrid .gridhint { margin: 8px 0 0; padding: 0; border: 0; background: transparent; color: var(--ink2); font: 400 var(--t-12)/1.9 var(--f-body); }
+#panel-theme #selGrid .gridhint button {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; margin: 0 4px; border: 1.5px solid var(--ink); border-radius: 0;
+  background: var(--paper); color: var(--ink); font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .005em; text-transform: none; box-shadow: none;
+}
+#panel-theme #selGrid .gridhint button:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#panel-theme #selGrid .gridhint button:active { background: var(--ink); color: var(--paper); }
+
+/* The right page's own head is drawn by renderLifebarMix (a .bk-sh). */
+#panel-theme #lifebarMix > h2.bk-sh { margin: 0 0 4px; }
+
+/* ======================================================================= */
+/* 2. MODS: the Studio's add-ons (left) and your mods (right)               */
+/* ======================================================================= */
+/* #mods holds both pages (the renderer appends the two groups); the spread's
+   tracks are the frame's: row 1 the pages, row 2 the right page's footnote. */
+#panel-mods #modsSpread {
+  display: grid; height: 100%;
+  grid-template-columns: minmax(0, 7fr) var(--fold) minmax(0, 5fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+#panel-mods #mods {
+  grid-column: 1 / -1; grid-row: 1 / -1; min-height: 0;
+  display: grid; grid-template-columns: subgrid; grid-template-rows: subgrid;
+}
+#panel-mods #mods > * { grid-column: 1; min-width: 0; }
+#panel-mods #mods > .grp[data-grp="builtin"] { grid-column: 1; grid-row: 1 / -1; }
+#panel-mods #mods > .grp[data-grp="user"] { grid-column: 3; grid-row: 1; }
+/* when changes reach a build: the right page's footnote */
+#panel-mods #mods > .after { grid-column: 3; grid-row: 2; align-self: end; margin: 12px 0 0; padding: 8px 0 0;
+  border-top: 2px solid var(--ink); color: var(--ink2); font: 400 var(--t-12)/1.5 var(--f-body); }
+#panel-mods #mods > .note { grid-column: 1 / -1; grid-row: 1; align-self: start; position: relative; z-index: 1; }
+#panel-mods #modsSpread > .bk-fold { grid-column: 2; grid-row: 1 / -1; pointer-events: none; }
+/* each page scrolls on its own */
+#panel-mods #mods > .grp { min-height: 0; overflow: auto; padding: 4px 6px 18px 0; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#panel-mods #mods > .grp:not([open]) { overflow: visible; }
+
+/* The group's summary is the page's side head; a click folds the page's list
+   (the square is filled while open, outlined while folded). */
+#panel-mods #mods .grp { margin: 0; box-shadow: none; border: 0; background: transparent; }
+#panel-mods #mods .grp[open] { box-shadow: none; }
+#panel-mods #mods .grp > summary {
+  display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; padding: 0; cursor: pointer; list-style: none;
+  color: var(--ink); font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase;
+}
+#panel-mods #mods .grp > summary::before {
+  content: ''; flex: none; width: 10px; height: 10px; align-self: center; background: var(--band);
+  border: 2px solid var(--band); box-sizing: border-box; transform: none; transition: none; font-size: 0;
+}
+#panel-mods #mods .grp:not([open]) > summary::before { background: transparent; }
+#panel-mods #mods .grp > summary::after { content: ''; order: 2; flex: 1 1 auto; height: 2px; background: var(--rule); align-self: center; min-width: 12px; }
+#panel-mods #mods .grp > summary > span:first-child { order: 1; }
+#panel-mods #mods .grp > summary .gcount { order: 3; font: 400 var(--t-12)/1 var(--f-body); color: var(--ink2); text-transform: none; letter-spacing: 0; }
+#panel-mods #mods .grp > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+#panel-mods #mods .note { margin: 0; padding: 0 0 10px; border: 0; color: var(--ink2); font: 400 var(--t-12)/1.5 var(--f-body); }
+#panel-mods #mods .note code { font: 400 var(--t-12)/1.4 var(--f-data); color: var(--ink); word-break: break-all; }
+#panel-mods #mods .note.bad { color: var(--bad); background: var(--paper); padding: 6px 0; }
+#panel-mods #mods > .note { padding: 0 0 8px; }
+
+/* -- the add-ons: an options list -- */
+#panel-mods #mods .arow {
+  position: relative; padding: 10px 0 11px 30px; border: 0; border-top: 1px solid var(--rule); background: transparent; box-shadow: none;
+}
+#panel-mods #mods .arow:last-child { border-bottom: 1px solid var(--rule); }
+#panel-mods #mods .arow .t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--t-13); cursor: pointer; }
+#panel-mods #mods .arow.locked .t { cursor: default; }
+#panel-mods #mods .arow .t b { font: 800 var(--t-13)/1.25 var(--f-disp); font-stretch: 104%; color: var(--ink); }
+/* the square to tick sits in the margin, the name on the line */
+#panel-mods #mods .arow .t > input[type=checkbox], #panel-mods #mods .arow .t > .lockmark {
+  position: absolute; left: 0; top: 10px;
+}
+#panel-mods #mods .arow .t > input[type=checkbox] {
+  appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin: 0; border: 2px solid var(--ink); background: var(--paper);
+  cursor: pointer; display: grid; place-items: center;
+}
+#panel-mods #mods .arow .t > input[type=checkbox]:checked { background: var(--ink); }
+#panel-mods #mods .arow .t > input[type=checkbox]:checked::after {
+  content: ''; width: 12px; height: 12px; background: var(--paper);
+  clip-path: var(--bk-tick);
+}
+#panel-mods #mods .arow .t > input[type=checkbox]:disabled { border-color: var(--line); cursor: default; }
+#panel-mods #mods .arow .t > input[type=checkbox]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#panel-mods #mods .arow .lockmark { width: 18px; height: 18px; display: grid; place-items: center; color: var(--ink2); }
+#panel-mods #mods .arow .lockmark svg { width: 13px; height: 13px; }
+/* ALWAYS ON / OFF BY DEFAULT / NOT IN THIS BUILD: small outlined stamps */
+#panel-mods #mods .offlabel {
+  display: inline-flex; align-items: center; height: 18px; margin: 0; padding: 0 6px; border: 1.5px solid var(--ink2); border-left-width: 1.5px;
+  background: transparent; color: var(--ink2); font: 700 var(--t-11)/1 var(--f-disp); letter-spacing: .03em; text-transform: uppercase;
+}
+#panel-mods #mods .arow .d, #panel-mods #mods .arow .lose { padding-left: 0; font: 400 var(--t-12)/1.5 var(--f-body); }
+#panel-mods #mods .arow .d { color: var(--ink); margin-top: 4px; max-width: 76ch; }
+#panel-mods #mods .arow .lose { color: var(--ink2); margin-top: 2px; max-width: 76ch; }
+/* switched off from its default: the warn ink in the margin, and what is lost in it */
+#panel-mods #mods .arow.off { background: transparent; box-shadow: inset 4px 0 0 var(--warn); padding-left: 42px; }
+#panel-mods #mods .arow.off .t > input[type=checkbox], #panel-mods #mods .arow.off .t > .lockmark { left: 14px; }
+#panel-mods #mods .arow.off .lose { color: var(--warn); font-weight: 600; }
+#panel-mods #mods .arow.off .t b { color: var(--ink2); }
+
+/* -- your mods: the drop target, then the catalog -- */
+#panel-mods #mods .drophere { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 0 14px; border: 0; }
+#panel-mods #mods .drophere .drop {
+  flex: 1 1 100%; padding: 16px 14px; border: 2px dashed var(--line); background: var(--sunk); color: var(--ink2);
+  font: 600 var(--t-13)/1.3 var(--f-body); text-align: center; letter-spacing: 0; text-transform: none;
+}
+#panel-mods #mods .drophere .drop::before, #panel-mods #mods .drophere .drop::after { display: none; }
+#panel-mods #mods .drophere .drop:hover { border-color: var(--ink); color: var(--ink); }
+#panel-mods #mods .drophere .drop.hover { border-color: var(--focus); border-style: solid; color: var(--ink); background: var(--plate); }
+#panel-mods #mods .mempty { padding: 4px 0 0; color: var(--ink2); font: 400 var(--t-13)/1.5 var(--f-body); border-top: 1px solid var(--rule); padding-top: 10px; }
+#panel-mods #mods .mcards { display: block; padding: 0; }
+#panel-mods #mods .mcard {
+  display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; margin: 0; min-width: 0;
+  border: 0; border-top: 1px solid var(--rule); background: transparent; background-image: none; box-shadow: none;
+}
+#panel-mods #mods .mcard:last-child { border-bottom: 1px solid var(--rule); }
+#panel-mods #mods .mimg { position: relative; width: 128px; height: 72px; border: 0; background: var(--plate); }
+#panel-mods #mods .mimg svg { color: var(--ink2); }
+#panel-mods #mods .mbody { gap: 4px; }
+#panel-mods #mods .mname { font: 800 var(--t-16)/1.2 var(--f-disp); font-stretch: 104%; color: var(--ink); }
+#panel-mods #mods .mver { font: 400 var(--t-12)/1 var(--f-data); color: var(--ink2); }
+#panel-mods #mods .mon { gap: 7px; font: 700 var(--t-12)/1 var(--f-disp); color: var(--ink); }
+#panel-mods #mods .mon input[type=checkbox] {
+  appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin: 0; border: 2px solid var(--ink); background: var(--paper);
+  display: grid; place-items: center; cursor: pointer;
+}
+#panel-mods #mods .mon input[type=checkbox]:checked { background: var(--ink); }
+#panel-mods #mods .mon input[type=checkbox]:checked::after {
+  content: ''; width: 12px; height: 12px; background: var(--paper);
+  clip-path: var(--bk-tick);
+}
+#panel-mods #mods .mon input[type=checkbox]:disabled { border-color: var(--line); }
+#panel-mods #mods .mon input[type=checkbox]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#panel-mods #mods .mmeta { color: var(--ink2); font: 400 var(--t-12)/1.4 var(--f-body); }
+#panel-mods #mods .mmeta .files { font-family: var(--f-data); }
+#panel-mods #mods .mdesc { color: var(--ink); font: 400 var(--t-12)/1.5 var(--f-body); }
+#panel-mods #mods .mdesc.none { color: var(--ink2); }
+#panel-mods #mods .mlink { color: var(--mark); font: 400 var(--t-12)/1.4 var(--f-data); text-decoration: underline; text-underline-offset: 3px; }
+#panel-mods #mods .mchips .chip {
+  margin: 0 6px 4px 0; padding: 2px 8px; border: 0; background: var(--paper); box-shadow: inset 4px 0 0 var(--line);
+  color: var(--ink); font: 400 var(--t-12)/1.45 var(--f-body);
+}
+#panel-mods #mods .mchips .chip.warn { box-shadow: inset 4px 0 0 var(--warn); }
+#panel-mods #mods .mchips .chip.clash { box-shadow: inset 4px 0 0 var(--flag); }
+#panel-mods #mods .mact { gap: 6px; margin-top: 4px; }
+/* a mod that is off: its picture grayed, its name in the second ink, and an
+   OFF stamp on the plate */
+#panel-mods #mods .mcard.off { background-image: none; }
+#panel-mods #mods .mcard.off .mname { color: var(--ink2); }
+#panel-mods #mods .mcard.off .mdesc, #panel-mods #mods .mcard.off .mmeta { color: var(--ink2); }
+#panel-mods #mods .mcard.off .mimg::after {
+  content: 'Off'; position: absolute; left: 0; top: 0; height: 18px; padding: 0 6px; display: flex; align-items: center;
+  background: var(--ink); color: var(--paper); font: 800 var(--t-11)/1 var(--f-disp); letter-spacing: .04em; text-transform: uppercase;
+}
+
+/* ======================================================================= */
+/* 3. NARROW WINDOWS                                                         */
+/* ======================================================================= */
+@media (max-width: 1100px) {
+  #panel-theme #themeSpread { --tl: 112px; }
+  #panel-mods #mods .mimg { width: 96px; height: 54px; }
+}
+/* Under 900 wide the spread is one column that scrolls as a page. */
+@media (max-width: 900px) {
+  #panel-theme #themeSpread { display: block; overflow: auto; }
+  #panel-theme #themeSpread > .bk-pg { overflow: visible; padding: 4px 6px 18px 0; }
+  #panel-theme #themeSpread > .bk-fold { height: 2px; margin: 4px 0 18px; background: var(--rule); }
+  #panel-theme #themeSpread > .bk-fold::after { display: none; }
+  #panel-mods #modsSpread { display: block; overflow: auto; }
+  #panel-mods #mods { display: block; }
+  #panel-mods #mods > .grp { overflow: visible; margin-bottom: 18px; }
+  #panel-mods #modsSpread > .bk-fold { display: none; }
+}
+@media (max-width: 700px) {
+  #panel-theme > .pframe > .pbody, #panel-mods > .pframe > .pbody { overflow: visible; }
+  #panel-theme #themeSpread, #panel-mods #modsSpread { overflow: visible; height: auto; }
+  #panel-mods #mods .mcard { flex-direction: column; }
+  #panel-mods #mods .mimg { width: 100%; height: 120px; }
+}
+
+/* The Mods page has no .drops strip, so setTab puts the path row first in the
+   panel: the band is ordered back on top of it. */
+#panel-mods:not([hidden]) { display: flex; flex-direction: column; }
+#panel-mods > #modsBand { order: -1; }
+#panel-mods > .pframe { flex: none; }

@@ -1,0 +1,11 @@
+{
+  "contentRoot": "../Content",
+  "folders": {
+    "cache": "characters"
+  },
+  "dependencies": "./Dependencies",
+  "desktopExport": "../Desktop Export",
+  "websiteExport": "../Website Export",
+  "settings": "../Settings",
+  "starter": "./starter"
+}

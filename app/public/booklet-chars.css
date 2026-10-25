@@ -1,0 +1,471 @@
+/* THE CHARACTERS TAB, PRINTED AS A MANUAL SPREAD (rd-chars).
+   ---------------------------------------------------------------------------
+   The left page is the roster: the back-of-book index (#charList: letter heads
+   in the margin, leader dots, megabytes), the select grid (#charGrid: each
+   portrait on a plate, its select slot as the page numeral), running the
+   page's whole height (no tip box: the band's tips are a slip over the page,
+   dealt from the header mascot). The fold is the detail column's resize handle. The
+   right page is the character page (#charDetail): the slot, Hide and Remove on
+   its top line, the portrait on a plate framed in the download-size ring's
+   ink, the name as the page title, the profile, Stage and Music as fill-in
+   lines, then Palettes, Animation, Versions and the H role under side heads.
+
+   Same elements, ids, handlers and behaviors as before: this file only lays
+   them out. It loads BEFORE studio.html's own <style>, so every rule is scoped
+   under #panel-chars (one more id than the old rules it replaces). Tokens
+   only (themes.css / booklet.css): no raw hex, no shadow-as-card, no glass, no
+   gradients but the index's leader dots, no motion. */
+
+/* ---------- the panel and the spread ---------- */
+#panel-chars > .bk-secband { margin: 0 0 14px; }
+#panel-chars #charBandMeta:empty { display: none; }
+#panel-chars #charWrap {
+  column-gap: 28px;
+  grid-template-rows: minmax(0, 1fr);
+}
+/* The frame ends where the running foot begins (the foot is fixed; main's 14px
+   under the frame is the old bottom air, so the foot's height is taken here). */
+@media (min-width: 701px) {
+  #panel-chars #charWrap { height: calc(100vh - var(--roster-top, 340px) - var(--roster-bottom, 14px) - var(--foot-h)); }
+}
+/* The pages are printed on the stock, not boxed. */
+#panel-chars #charList, #panel-chars #charDetail {
+  background: transparent; background-image: none; border: 0; border-radius: 0; box-shadow: none;
+}
+/* The handles sit in the wider gutter; the detail handle IS the fold. */
+#panel-chars #charWrap > .colsz { left: -28px; width: 28px; }
+#panel-chars #charWrap > .colsz::after { left: 13px; width: 2px; }
+#panel-chars #charWrap > #detailSizer { grid-row: 1; }
+#panel-chars #charWrap > #detailSizer::after { background: var(--rule); top: 0; bottom: 0; }
+#panel-chars #charWrap > .colsz:hover::after { background: var(--ink2); }
+#panel-chars #charWrap > .colsz.dragging::after,
+#panel-chars #charWrap > .colsz:focus-visible::after { background: var(--focus); }
+/* The page is pinned to the last column: a row-locked item is placed before the
+   others, and unpinned it could take the first free column. */
+#panel-chars #charWrap > #charDetail { grid-row: 1; grid-column: -2 / -1; }
+#panel-chars #charWrap > #charList { grid-row: 1; grid-column: 1; }
+#panel-chars #charWrap > #charMid { grid-row: 1; }
+@media (max-width: 700px) {
+  #panel-chars #charWrap > #charDetail { grid-row: auto; grid-column: auto; }
+}
+
+/* ---------- the index (#charList) ---------- */
+#panel-chars #charList .lhead {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; column-gap: 8px;
+  height: auto; min-height: 30px; padding: 0 2px 0 18px; margin: 0 0 8px; background: transparent; border: 0;
+}
+#panel-chars #charList .lhead .lbl {
+  font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink2); letter-spacing: 0; text-transform: none; padding-bottom: 6px;
+}
+#panel-chars #rosterFilter {
+  width: 100%; min-width: 0; height: 26px; margin: 0; padding: 0 2px 2px; border: 0; border-bottom: 2px solid var(--line);
+  background: transparent; color: var(--ink); font: 400 var(--t-13)/1 var(--f-body); box-shadow: none;
+}
+#panel-chars #rosterFilter::placeholder { color: var(--ink2); opacity: 1; }
+#panel-chars #rosterFilter:hover { border-bottom-color: var(--ink); }
+#panel-chars #rosterFilter:focus-visible { outline: none; border-bottom: 3px solid var(--focus); padding-bottom: 1px; }
+#panel-chars #rosterCount { font: 400 var(--t-12)/1 var(--f-data); color: var(--ink2); padding-bottom: 7px; }
+#panel-chars #rosterCount.filtered { color: var(--mark); }
+#panel-chars #charList .rows {
+  padding: 0 2px 0 18px; scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+#panel-chars #charList .lrow {
+  position: relative; height: var(--bk-row); gap: 6px; padding: 0 4px 0 2px; border: 0; border-radius: 0;
+  background: transparent; color: var(--ink);
+}
+#panel-chars #charList .lrow img {
+  width: 20px; height: 20px; border-radius: 0 !important; background: var(--plate); align-self: center;
+}
+#panel-chars #charList .lrow .t { display: flex; align-items: baseline; gap: 5px; min-width: 0; flex: 1 1 auto; }
+#panel-chars #charList .lrow .t b {
+  flex: 0 1 auto; min-width: 0; display: block; font: 600 var(--t-13)/var(--bk-row) var(--f-body); font-stretch: 92%;
+  color: inherit; letter-spacing: 0;
+}
+#panel-chars #charList .lrow .t .sub { display: contents; }
+#panel-chars #charList .lrow .t .sub .def { display: none; }
+#panel-chars #charList .lrow .t .sub .sz {
+  order: 3; flex: none; font: 400 var(--t-12)/1 var(--f-data); color: var(--ink2); letter-spacing: 0;
+}
+/* the leader dots: the index's line from the name to its number */
+#panel-chars #charList .lrow .t::after {
+  content: ''; order: 2; flex: 1 1 auto; min-width: 6px; height: 2px; align-self: center; margin-top: 6px;
+  background-image: radial-gradient(circle, var(--ink2) 0 0.9px, transparent 1.1px);
+  background-size: 4px 2px; background-repeat: repeat-x;
+}
+/* the letter head hangs in the margin */
+#panel-chars #charList .lrow[data-lt]::after {
+  content: attr(data-lt); position: absolute; left: -17px; top: 0; width: 14px; text-align: center;
+  font: italic 800 var(--t-13)/var(--bk-row) var(--f-disp); font-stretch: 112%; color: var(--mark); pointer-events: none;
+}
+#panel-chars #charList .lrow:hover { background: transparent; }
+#panel-chars #charList .lrow:not(.on):hover .t b { text-decoration: underline; text-underline-offset: 3px; }
+#panel-chars #charList .lrow.on { background: var(--ink); color: var(--paper); box-shadow: none; border: 0; }
+#panel-chars #charList .lrow.on .t .sub .sz { color: var(--paper); }
+#panel-chars #charList .lrow.on .t::after { background-image: radial-gradient(circle, var(--paper) 0 0.9px, transparent 1.1px); }
+#panel-chars #charList .lrow.offbuild .t b { font-style: italic; }
+/* the strip (the list folded to its portraits): no letters, no dots */
+#panel-chars #charWrap.list-strip #charList .rows,
+#panel-chars #charWrap.list-strip #charList .lhead { padding-left: 0; }
+#panel-chars #charWrap.list-strip #charList .lrow[data-lt]::after { display: none; }
+#panel-chars #charWrap.list-strip #charList .lrow { justify-content: center; }
+
+/* "!" health/speed/size changed: a square warning mark, as the audit flags print */
+#panel-chars .edit-dot {
+  border-radius: 0 !important; background: var(--warn); color: var(--onwarn); box-shadow: 0 0 0 2px var(--paper);
+  font: 800 var(--t-11)/16px var(--f-disp);
+}
+#panel-chars .edit-dot.sm { line-height: 13px; font-size: 9px; box-shadow: none; }
+
+/* ---------- the roster bar ---------- */
+#panel-chars #charMid {
+  border: 0; border-radius: 0; background: transparent;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-width: 0;
+}
+#panel-chars #charMid > #charBar, #panel-chars #charMid > .pickbar, #panel-chars #charMid > #facetBar { grid-column: 1 / -1; }
+#panel-chars #charMid > #charGrid { grid-column: 2; grid-row: 4; }
+#panel-chars #charMid > #charAZ { grid-column: 1; grid-row: 4; }
+#panel-chars #charBar {
+  height: auto; min-height: 30px; gap: 6px; padding: 0 0 10px; margin: 0; background: transparent; border: 0; box-shadow: none;
+}
+#panel-chars #charBar button {
+  height: 24px; min-width: 26px; padding: 0 8px; margin: 0; border: 1.5px solid var(--ink); border-radius: 0;
+  background: var(--paper); color: var(--ink); font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%;
+  letter-spacing: 0; text-transform: none; box-shadow: none; transition: none; overflow: visible;
+}
+#panel-chars #charBar button::before, #panel-chars #charBar button::after { content: none; display: none; }
+#panel-chars #charBar button:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#panel-chars #charBar button:active,
+#panel-chars #charBar button[aria-pressed="true"],
+#panel-chars #charBar button[aria-expanded="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+#panel-chars #charBar button .w { margin-left: 3px; }
+#panel-chars #charBar #gridCount {
+  font: 700 var(--t-12)/1 var(--f-disp); color: var(--ink2); letter-spacing: 0; text-transform: none; margin-right: 4px;
+}
+#panel-chars #charBar #gridCount.link { color: var(--mark); }
+#panel-chars #charBar .srt {
+  gap: 6px; align-items: flex-end; font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink2); letter-spacing: 0; text-transform: none;
+}
+#panel-chars #charBar .srt .w { padding-bottom: 5px; }
+#panel-chars #charSort {
+  height: 24px; padding: 0 4px 2px 2px; border: 0; border-bottom: 2px solid var(--line); border-radius: 0;
+  background: transparent; color: var(--ink); font: 700 var(--t-13)/1 var(--f-body); box-shadow: none;
+}
+#panel-chars #charSort:hover { border-bottom-color: var(--ink); }
+#panel-chars #charSort option { background: var(--paper); color: var(--ink); }
+
+/* ---------- the A-Z strip (shown where the index is not) ---------- */
+#panel-chars #charAZ { display: none; }
+@media (max-width: 900px) {
+  #panel-chars #charAZ { display: flex; }
+}
+#panel-chars #charWrap.list-strip #charAZ { display: flex; }
+#panel-chars #charAZ {
+  flex-direction: column; gap: 2px; min-height: 0; width: 24px; margin-right: 10px; overflow: hidden;
+}
+#panel-chars #charAZ button {
+  flex: 1 1 0; width: 24px; min-height: 13px; max-height: 24px; padding: 0; margin: 0; border: 0; border-radius: 0;
+  background: var(--ink); color: var(--paper); cursor: pointer; box-shadow: none;
+  font: italic 800 var(--t-11)/1 var(--f-disp); font-stretch: 110%; letter-spacing: 0; text-transform: none;
+}
+#panel-chars #charAZ button:hover { background: var(--band); color: var(--onband); }
+#panel-chars #charAZ button[disabled] { background: var(--paper); color: var(--ink2); box-shadow: inset 0 0 0 1px var(--rule); cursor: default; }
+#panel-chars #charAZ button[aria-current="true"] { background: var(--band); color: var(--onband); box-shadow: inset -3px 0 0 var(--band2); }
+#panel-chars #charAZ button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+@media (max-width: 700px) {
+  #panel-chars #charAZ { position: sticky; top: calc(var(--topbar-h, 52px) + 6px); align-self: start;
+    height: calc(100vh - var(--topbar-h, 52px) - var(--foot-h) - 40px); }
+}
+
+/* ---------- the select grid ---------- */
+#panel-chars #charMid #charGrid {
+  gap: 12px 10px; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); padding: 0 2px 6px 0;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+#panel-chars #charGrid .ptile {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; transform: none; transition: none;
+}
+#panel-chars #charGrid .ptile:active { transform: none; }
+#panel-chars #charGrid .ptile .art { background: var(--plate); border-radius: 0 !important; }
+#panel-chars #charGrid .ptile .cap {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 6px; padding: 5px 2px 0;
+  border-top: 3px solid transparent; background: transparent;
+}
+#panel-chars #charGrid .ptile .cap b {
+  font: 700 var(--t-13)/1.25 var(--f-body); color: var(--ink); letter-spacing: 0;
+}
+#panel-chars #charGrid .ptile .cap .slot {
+  display: block; font: italic 800 var(--t-12)/1.25 var(--f-disp); font-stretch: 108%; color: var(--mark);
+  font-variant-numeric: tabular-nums; letter-spacing: 0; overflow: visible;
+}
+#panel-chars #charGrid .ptile .cap .sub {
+  grid-column: 1 / -1; display: flex; gap: 6px; font: 400 var(--t-11)/1.5 var(--f-data); color: var(--ink2);
+}
+#panel-chars #charGrid .ptile .cap .sub span { display: block; font: inherit; color: var(--ink2); letter-spacing: 0; }
+#panel-chars #charGrid .ptile:hover .cap b { text-decoration: underline; text-underline-offset: 3px; }
+#panel-chars #charGrid .ptile.on .art { background: var(--ink); }
+#panel-chars #charGrid .ptile.on .cap { border-top-color: var(--band); }
+#panel-chars #charGrid .ptile.on .cap b { color: var(--mark); text-decoration: none; }
+#panel-chars #charGrid .ptile.edited { border: 0; }
+#panel-chars #charGrid .ptile.offbuild .art { opacity: .55; }
+#panel-chars #charGrid.small { grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 9px 7px; }
+#panel-chars #charGrid.small .ptile .cap .sub { display: none; }
+#panel-chars #charGrid.small .ptile .cap b { font-size: var(--t-12); }
+/* the marks on a tile: printed flags, square */
+#panel-chars #charGrid .ptile .flag {
+  top: 0; right: 0; height: 18px; padding: 0 6px; border: 0; border-radius: 0; background: var(--warn); color: var(--onwarn);
+  font: 800 var(--t-11)/18px var(--f-disp); letter-spacing: .03em;
+}
+#panel-chars #charGrid .ptile .hmark, #panel-chars #charGrid .ptile .sabmark {
+  border-radius: 0; border: 0; box-shadow: none; min-width: 18px; height: 18px; padding: 0 3px; text-align: center;
+  font: 800 var(--t-12)/18px var(--f-disp);
+}
+#panel-chars #charGrid .ptile .hmark { background: var(--ink); color: var(--paper); }
+#panel-chars #charGrid .ptile .hmark i { color: inherit; }
+#panel-chars #charGrid .ptile .sabmark { background: var(--warn); color: var(--onwarn); }
+#panel-chars #charGrid .emptydetail, #panel-chars #charGrid .facetnone { grid-column: 1 / -1; color: var(--ink2); }
+/* a character with no cell (Exclude from grid): the slot's place says so in words */
+#panel-chars #charGrid .ptile .cap .slot.offgrid { font: italic 700 var(--t-11)/1.4 var(--f-disp); color: var(--ink2); white-space: nowrap; }
+/* THE BLANK CELLS (Build order): an empty numbered plate where a placeholder
+   takes a cell - hatched hairlines, the cell number on a paper patch, the
+   caption in the secondary ink. Not a character: no pointer, no hover. */
+#panel-chars #charGrid .cellplate { position: relative; cursor: default; }
+#panel-chars #charGrid .cellplate[hidden] { display: none; }
+#panel-chars #charGrid .cellplate .art {
+  display: grid; place-items: center; aspect-ratio: 6 / 7; box-sizing: border-box;
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(135deg, transparent 0 9px, var(--rule) 9px 10px), var(--paper);
+}
+#panel-chars #charGrid .cellplate .art .no {
+  padding: 0 8px; background: var(--paper); color: var(--ink2);
+  font: italic 800 34px/1.1 var(--f-disp); font-stretch: 108%; font-variant-numeric: tabular-nums;
+}
+#panel-chars #charGrid .cellplate.random .art .no::after { content: '?'; margin-left: 4px; color: var(--mark); }
+#panel-chars #charGrid .cellplate .cap {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 6px; padding: 5px 2px 0;
+  border-top: 3px solid transparent;
+}
+#panel-chars #charGrid .cellplate .cap b {
+  font: italic 600 var(--t-12)/1.25 var(--f-body); color: var(--ink2); letter-spacing: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#panel-chars #charGrid .cellplate .cap .slot {
+  display: block; font: italic 800 var(--t-12)/1.25 var(--f-disp); font-stretch: 108%; color: var(--mark);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+}
+#panel-chars #charGrid.small .cellplate .art .no { font-size: 24px; padding: 0 5px; }
+
+/* ---------- the character page (#charDetail) ---------- */
+#panel-chars #charDetail {
+  container-type: inline-size; display: block; padding: 0 6px 18px 2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+#panel-chars #charDetail > .emptydetail { color: var(--ink2); }
+/* the top line: slot numeral, Hide, Remove */
+#panel-chars #charDetail .phead {
+  display: flex; align-items: center; gap: 8px; height: auto; min-height: 30px; padding: 0 0 10px; margin: 0;
+  position: static; background: transparent; border: 0; box-shadow: none;
+}
+#panel-chars #charDetail .phead .lbl, #panel-chars #charDetail .phead .k {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+#panel-chars #charDetail .phead .spacer { flex: 1 1 auto; }
+#panel-chars #charDetail .cslot, #panel-chars #charDetail .cslot small { text-transform: none; letter-spacing: 0; }
+#panel-chars #charDetail .cslot { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* "No.04b of 9 cells, slot group of 2": on a narrow page the clause after the count goes (the tooltip keeps it) */
+@container (max-width: 440px) { #panel-chars #charDetail .cslot .why { display: none; } }
+/* the head: the plate, and beside it the name, the profile and the card */
+#panel-chars #charDetail .dhead {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 20px; align-items: start;
+  padding: 0; margin: 0; background: transparent; border: 0; box-shadow: none;
+}
+#panel-chars #charDetail .cident { display: contents; }
+/* A narrow page: the plate beside the name, the profile and the fill-ins under both. */
+#panel-chars #charDetail .cplate { grid-column: 1; grid-row: 1; width: 120px; }
+#panel-chars #charDetail .cplate .bk-plate {
+  width: 120px; height: 140px; display: flex; align-items: flex-end; justify-content: center;
+}
+#panel-chars #charDetail .cplate .bk-plate img {
+  display: block; flex: none; width: auto; height: auto; max-width: none; object-fit: fill;
+  border: 0; border-radius: 0 !important; background: transparent; image-rendering: pixelated;
+}
+#panel-chars #charDetail .cplate .bk-plate::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; box-shadow: inset 0 0 0 4px var(--ring, var(--ink));
+}
+#panel-chars #charDetail .cplate[data-band="ok"], #panel-chars #charDetail .csize[data-band="ok"] { --ring: var(--ok); }
+#panel-chars #charDetail .cplate[data-band="medium"], #panel-chars #charDetail .csize[data-band="medium"] { --ring: var(--warn); }
+#panel-chars #charDetail .cplate[data-band="heavy"], #panel-chars #charDetail .csize[data-band="heavy"] { --ring: var(--flag); }
+#panel-chars #charDetail .cplate .cportraits { margin-top: 10px; }
+#panel-chars #charDetail .who { grid-column: 2; grid-row: 1; min-width: 0; }
+#panel-chars #charDetail .who > b {
+  display: block; margin: 0; color: var(--ink); cursor: text; overflow-wrap: anywhere;
+  font: italic 800 var(--t-26)/.95 var(--f-disp); font-stretch: 112%; letter-spacing: -.01em; text-transform: uppercase;
+}
+#panel-chars #charDetail .who > span {
+  display: block; margin-top: 4px; font: 400 var(--t-12)/1.4 var(--f-data); color: var(--ink2); overflow-wrap: anywhere;
+}
+#panel-chars #charDetail .who .renamebox {
+  width: 100%; height: auto; padding: 0 2px; border: 0; border-bottom: 3px solid var(--focus); border-radius: 0;
+  background: transparent; color: var(--ink); font: italic 800 var(--t-26)/1.1 var(--f-disp); font-stretch: 112%;
+}
+#panel-chars #charDetail .cprof { grid-column: 1 / -1; margin: 12px 0 8px; }
+#panel-chars #charDetail .cprof span { font: inherit; color: inherit; letter-spacing: 0; }
+#panel-chars #charDetail .card.char > .portrait-wrap { display: none; }
+#panel-chars #charDetail .cplate .bk-flag.corner { z-index: 3; }
+#panel-chars #charDetail .csize i { display: inline-block; vertical-align: -1px; margin-right: 7px; }
+#panel-chars #charDetail .csize i {
+  flex: none; width: 11px; height: 11px; align-self: center; background: var(--ring, var(--plate)); box-shadow: inset 0 0 0 1px var(--ink);
+}
+#panel-chars #charDetail .dbody { grid-column: 1 / -1; padding: 0; margin: 0; }
+#panel-chars #charDetail .card.char { border: 0; background: transparent; padding: 0; margin: 0; box-shadow: none; }
+#panel-chars #charDetail .card.char .body { display: flex; flex-direction: column; gap: 8px; }
+/* the card's own head repeats the title and the file: the page prints them once */
+#panel-chars #charDetail .card.char .line.ident > .name,
+#panel-chars #charDetail .card.char .line.ident > .meta { display: none; }
+#panel-chars #charDetail .card.char .line.ident { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; min-height: 0; }
+#panel-chars #charDetail .card.char .line.ident:not(:has(> .badge)) { display: none; }
+#panel-chars #charDetail .card.char .badge {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border: 0; border-radius: 0;
+  font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase;
+  background: var(--paper); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink);
+}
+#panel-chars #charDetail .card.char .badge.sabotage { background: var(--warn); color: var(--onwarn); box-shadow: none; }
+/* Stage / Music: fill-in lines (always printed on the page) */
+#panel-chars #charDetail .card.char .line.opts.basic-face,
+body.adv #panel-chars #charDetail .card.char .line.opts.basic-face {
+  display: grid; grid-template-columns: 50px minmax(0, 1fr); column-gap: 10px; row-gap: 4px; align-items: end; padding: 0; margin: 0;
+}
+#panel-chars #charDetail .basic-face > label {
+  font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink2); padding-bottom: 6px; text-transform: capitalize; letter-spacing: 0; margin: 0;
+}
+#panel-chars #charDetail .basic-face .fill-v { position: relative; display: block; min-width: 0; }
+#panel-chars #charDetail .basic-face .fill-v > select {
+  appearance: none; -webkit-appearance: none; width: 100%; max-width: none; height: 28px; padding: 0 24px 2px 2px; margin: 0;
+  border: 0; border-bottom: 2px solid var(--line); border-radius: 0; background: transparent; color: var(--ink);
+  font: 700 var(--t-13)/1 var(--f-body); cursor: pointer; text-overflow: ellipsis; box-shadow: none;
+}
+#panel-chars #charDetail .basic-face .fill-v > select:hover { border-bottom-color: var(--ink); }
+#panel-chars #charDetail .basic-face .fill-v > select:focus-visible { outline: none; border-bottom: 3px solid var(--focus); padding-bottom: 1px; }
+#panel-chars #charDetail .basic-face .fill-v > select option { background: var(--paper); color: var(--ink); }
+#panel-chars #charDetail .basic-face .fill-v:has(select)::after {
+  content: ''; position: absolute; right: 4px; bottom: 11px; width: 10px; height: 6px; background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%); pointer-events: none;
+}
+#panel-chars #charDetail .basic-face .fill-v > .roval { display: block; padding: 0 2px 6px; font: 700 var(--t-13)/1.2 var(--f-body); color: var(--ink); border-bottom: 2px solid var(--rule); }
+/* Advanced (Options > Advanced settings): Health / Speed / Size printed as stacked fill-ins */
+body.adv #panel-chars #charDetail .card.char .line.opts.adv-face {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; row-gap: 4px; align-items: end;
+  padding: 10px 0 0; margin: 4px 0 0; border-top: 2px solid var(--ink);
+}
+body.adv #panel-chars #charDetail .card.char .line.opts.adv-face::before {
+  content: 'Advanced'; grid-column: 1 / -1; grid-row: 1; margin-bottom: 4px;
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; text-transform: uppercase; color: var(--ink);
+}
+#panel-chars #charDetail .adv-face > label {
+  grid-row: 2; font: 700 var(--t-12)/1.2 var(--f-disp); color: var(--ink2); text-transform: capitalize; letter-spacing: 0; margin: 0;
+}
+#panel-chars #charDetail .adv-face > label:nth-of-type(1) { grid-column: 1; }
+#panel-chars #charDetail .adv-face > label:nth-of-type(2) { grid-column: 2; }
+#panel-chars #charDetail .adv-face > label:nth-of-type(3) { grid-column: 3; }
+#panel-chars #charDetail .adv-face > input { grid-row: 3; grid-column: 1; }
+#panel-chars #charDetail .adv-face > select:nth-of-type(1) { grid-row: 3; grid-column: 2; }
+#panel-chars #charDetail .adv-face > select:nth-of-type(2) { grid-row: 3; grid-column: 3; }
+#panel-chars #charDetail .adv-face > input, #panel-chars #charDetail .adv-face > select {
+  width: 100% !important; min-width: 0; height: 28px; padding: 0 2px 2px; margin: 0; border: 0; border-bottom: 2px solid var(--line);
+  border-radius: 0; background: transparent; color: var(--ink); font: 700 var(--t-13)/1 var(--f-body); box-shadow: none;
+}
+#panel-chars #charDetail .adv-face > input::placeholder { color: var(--ink2); opacity: 1; }
+#panel-chars #charDetail .adv-face > select option { background: var(--paper); color: var(--ink); }
+#panel-chars #charDetail .adv-face > button { grid-row: 4; justify-self: start; margin-top: 8px; }
+#panel-chars #charDetail .adv-face > .spacer { display: none; }
+/* repairs: a row of keys under the fill-ins (Portraits... moved under the plate) */
+#panel-chars #charDetail .card.char .line.opts.repair-face { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 0; margin: 0; }
+#panel-chars #charDetail .card.char .line.opts.repair-face:not(:has(> :not(.cardportraits))) { display: none; }
+#panel-chars #charDetail .card.char .cardportraits { display: none; }
+#panel-chars #charDetail .card.char .repair-face .meta { font-size: var(--t-12); color: var(--ink2); }
+
+/* every key on the page: the booklet's small button */
+#panel-chars #charDetail button {
+  height: 24px; padding: 0 8px; line-height: 21px; vertical-align: middle;
+  border: 1.5px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); box-shadow: none; transition: none;
+  font: 700 var(--t-12)/1 var(--f-disp); font-stretch: 104%; letter-spacing: 0; text-transform: none; white-space: nowrap;
+}
+#panel-chars #charDetail button:hover { background: var(--plate); color: var(--ink); border-color: var(--ink); }
+#panel-chars #charDetail button:active,
+#panel-chars #charDetail button[aria-pressed="true"],
+#panel-chars #charDetail button[aria-expanded="true"],
+#panel-chars #charDetail button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+#panel-chars #charDetail button:disabled, #panel-chars #charDetail button:disabled:hover {
+  background: var(--paper); color: var(--ink2); border-color: var(--line); cursor: default;
+}
+#panel-chars #charDetail button.danger { border-color: var(--flag); color: var(--ink); background: var(--paper); }
+#panel-chars #charDetail button.danger:hover,
+#panel-chars #charDetail button.danger.armed { background: var(--flag); color: var(--onflag); border-color: var(--flag); }
+#panel-chars #charDetail .phead #detailHide { border-color: transparent; background: transparent; padding: 0 6px; }
+#panel-chars #charDetail .phead #detailHide:hover { border-color: var(--line); background: transparent; }
+#panel-chars #charDetail .phead .delcorner { margin-left: 0; font-size: var(--t-12); letter-spacing: 0; padding: 0 8px; }
+
+/* side heads: Palettes, Animation, Versions, H role */
+#panel-chars #charDetail .dsec { border: 0; padding: 0; margin-top: 18px; background: transparent; }
+#panel-chars #charDetail .dsec > .h {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 0; color: var(--ink);
+  font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; letter-spacing: .01em; text-transform: uppercase;
+}
+#panel-chars #charDetail .dsec > .h::before { content: ''; flex: none; width: 10px; height: 10px; background: var(--band); }
+#panel-chars #charDetail .dsec > .h::after { content: ''; order: 2; flex: 1 1 auto; height: 2px; background: var(--rule); min-width: 12px; }
+#panel-chars #charDetail .dsec > .h > * { order: 3; }
+#panel-chars #charDetail .palhint, #panel-chars #charDetail .vnote { color: var(--ink2); font-size: var(--t-12); line-height: 1.45; padding: 6px 0 0; }
+
+/* palettes: a ruled table that scrolls, two columns on a wide page */
+#panel-chars #charDetail .pallist {
+  display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 22px; margin: 0; max-height: calc(22px * 5.5);
+  overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+#panel-chars #charDetail .palrow {
+  display: grid; grid-template-columns: 22px auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
+  height: 22px; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: var(--ink);
+}
+#panel-chars #charDetail .palrow::before { content: attr(data-pos); font: 400 var(--t-12)/1 var(--f-data); color: var(--ink2); text-align: right; }
+#panel-chars #charDetail .palrow .sw { box-shadow: 0 0 0 1px var(--rule); }
+#panel-chars #charDetail .palrow .sw i { width: 9px; height: 14px; }
+#panel-chars #charDetail .palrow .nm { font: 400 var(--t-13)/1 var(--f-body); color: inherit; }
+#panel-chars #charDetail .palrow .tag { font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); letter-spacing: 0; text-transform: none; }
+#panel-chars #charDetail .palrow:hover .nm { text-decoration: underline; text-underline-offset: 3px; }
+#panel-chars #charDetail .palrow.on { background: var(--ink); color: var(--paper); }
+#panel-chars #charDetail .palrow.on::before, #panel-chars #charDetail .palrow.on .tag { color: var(--paper); }
+#panel-chars #charDetail .palrow.on .sw { box-shadow: 0 0 0 1px var(--paper); }
+#panel-chars #charDetail .palrow.dupe .nm { color: var(--ink2); }
+#panel-chars #charDetail .palrow.gone .nm { color: var(--bad); }
+#panel-chars #charDetail .palrow.on.dupe .nm, #panel-chars #charDetail .palrow.on.gone .nm { color: var(--paper); }
+
+/* versions */
+#panel-chars #charDetail .vrow { padding: 4px 0; border-bottom: 1px solid var(--rule); }
+#panel-chars #charDetail .vrow .nm { font: 400 var(--t-12)/1.4 var(--f-data); color: var(--ink); }
+#panel-chars #charDetail .vrow .tag { font: 700 var(--t-11)/1 var(--f-disp); color: var(--ink2); letter-spacing: 0; text-transform: none; }
+#panel-chars #charDetail .vkind { border-radius: 0; opacity: 1; font: 800 var(--t-11)/1.4 var(--f-disp); letter-spacing: .02em; }
+#panel-chars #charDetail .vkind.k-dup { color: var(--ink2); }
+#panel-chars #charDetail .vkind.k-warn { color: var(--bad); }
+#panel-chars #charDetail .vkind.k-info { color: var(--mark); }
+
+/* the animation plate */
+#panel-chars #charDetail #animBody .animstage { background: var(--plate); border: 0; border-radius: 0; }
+#panel-chars #charDetail .dsec select,
+#panel-chars #charDetail #animBody select {
+  height: 26px; padding: 0 4px 2px 2px; border: 0; border-bottom: 2px solid var(--line); border-radius: 0;
+  background: transparent; color: var(--ink); font: 700 var(--t-13)/1 var(--f-body); box-shadow: none;
+}
+#panel-chars #charDetail .dsec select option, #panel-chars #charDetail #animBody select optgroup { background: var(--paper); color: var(--ink); }
+#panel-chars #charDetail #animBody button { min-width: 26px; padding: 0 7px; }
+
+/* ---------- the wide page: the plate at twice the size, palettes in two columns ---------- */
+@container (min-width: 500px) {
+  /* the wide page: the plate down the left, the name, profile and fill-ins beside it;
+     the last of those rows takes what the plate is taller by */
+  #panel-chars #charDetail .cident { display: block; grid-column: 2; grid-row: 1; min-width: 0; }
+  #panel-chars #charDetail .cprof { margin-top: 10px; }
+  #panel-chars #charDetail .cplate { width: 240px; }
+  #panel-chars #charDetail .cplate .bk-plate { width: 240px; height: 280px; }
+  #panel-chars #charDetail .who > b { font-size: var(--t-40); }
+  #panel-chars #charDetail .pallist { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: calc(22px * 4.5); }
+}
+/* the read-only build: nothing on the page is a key to press */
+body.readonly #panel-chars #charDetail .who > b { cursor: default; }

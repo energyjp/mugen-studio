@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Score Ranking</title>
+<!--
+    THE SCORE RANKING BOARD: an arcade-style attract loop of a leaderboard
+    server's top 8 - the places slide in, the board climbs, 1st place opens up.
+    One of the two leaderboard pages the Studio offers (Settings > Online); the
+    other is the plain standings page beside it. The Website export writes the
+    chosen one next to the game as leaderboard.html and fills in RANKING below.
+
+    Two fetches on load:
+      leaderboard-art/manifest.json   character portraits and win-pose frames,
+                                      optional - without them the rows simply
+                                      have no picture
+      <server>/mugen/leaderboard      live standings
+
+    Everything else is local: no libraries, no build step, system fonts.
+
+    URL flags (they override RANKING, for previews):
+      ?server=<url>          the leaderboard server
+      ?title=<name>          the site's name, shown on the logo card
+      ?credit=<text>         the big logo line (defaults to the title)
+      ?demo=1                sample data
+      ?scenes=board,logo     override the attract rotation (see SCENES below;
+                             'champ' is built and available but not in the
+                             default rotation)
+      ?scene=board|champ|logo   hold one scene, no rotation
+      ?still=1               freeze the board before 1st place expands
+-->
+<script>window.RANKING = window.RANKING || {};</script>
+<style>
+    :root {
+        --ink:    #d0d0e0;
+        --accent: #ff8800;
+        --bg:     #05040a;
+        --rank:   #b98cff;
+        --name:   #ff5533;
+        --score:  #46e07a;
+        --dim:    #6a6a86;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background: var(--bg); color: var(--ink);
+        font-family: 'Bahnschrift', 'Arial Black', 'Segoe UI', sans-serif;
+        overflow: hidden;
+        image-rendering: pixelated;   /* the art is pixel art; never smooth it */
+    }
+
+    /* The board is laid out in a design space 480 units tall whose WIDTH
+       follows the container's aspect (clamped), then scaled to fit. A fixed
+       640x480 stage letterboxed badly in both embeds - a squarish window and
+       a very wide page section - so adapting the width lets the board fill
+       its frame. Content is then capped and centered so a very wide frame
+       doesn't stretch each row into a void. */
+    #stage {
+        position: absolute; left: 0; top: 0;
+        height: 480px;
+        transform-origin: 0 0;
+        background: radial-gradient(ellipse at 50% 44%, #241a3a 0%, #0a0714 64%, #05040a 100%);
+        overflow: hidden;
+    }
+
+    .scene {
+        position: absolute; inset: 0;
+        opacity: 0; visibility: hidden;
+        transition: opacity .55s ease-in-out, visibility .55s;
+    }
+    .scene.on { opacity: 1; visibility: visible; }
+
+    #ghost {
+        position: absolute; left: 50%; top: 55%;
+        transform: translate(-50%, -50%);
+        width: 250px; opacity: 0.05;
+        filter: grayscale(0.55) contrast(1.05);
+        pointer-events: none;
+    }
+
+    .title {
+        position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+        width: min(100%, 880px);
+        text-align: center;
+        font-size: 38px; letter-spacing: 6px; line-height: 1;
+        font-family: 'Arial Black', 'Bahnschrift', sans-serif;
+        background: linear-gradient(#ffe9a8 0%, #ffb02e 42%, #ff6a00 62%, #d23a00 100%);
+        -webkit-background-clip: text; background-clip: text;
+        color: transparent;
+        -webkit-text-stroke: 2px #2a0f00;
+        paint-order: stroke fill;
+        text-shadow: 0 4px 0 rgba(0,0,0,0.55);
+    }
+
+    /* ---------- the standings board ---------- */
+    #listwrap {
+        position: absolute; top: 86px; height: 356px;
+        left: 50%; transform: translateX(-50%);
+        width: min(100%, 880px);
+        overflow: hidden;
+        /* Soften both edges so rows slide in and out of view instead of
+           popping at a hard boundary. */
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+        mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+    }
+    #list { position: absolute; left: 0; right: 0; top: 0; }
+
+    /* Explicit line-heights everywhere: these arcade fonts carry enormous
+       ascent/descent metrics, and self-sizing line boxes made rows ~40%
+       taller than their slot, pushing the last entries off the stage. */
+    .row {
+        position: relative;
+        display: flex; align-items: center; gap: 10px;
+        height: 62px; padding: 0 24px;
+        /* Rows arrive from the right, one after another. */
+        opacity: 0; transform: translateX(70px);
+        transition: opacity .32s ease-out, transform .38s cubic-bezier(.2,.9,.3,1.25);
+    }
+    .row.in { opacity: 1; transform: translateX(0); }
+
+    /* Place numbers. The podium three get medal colors and their own weight,
+       1st biggest and gold - chunky gradient-and-outline lettering, the way an
+       old arcade board or a clip-art trophy graphic would do it. Everyone else
+       keeps the quiet purple. */
+    .row .place {
+        flex: 0 0 auto; width: 62px;
+        font-family: 'Arial Black', 'Bahnschrift', sans-serif; line-height: 1;
+        color: var(--rank);
+        text-shadow: 2px 2px 0 #1a0a2e, 0 0 12px rgba(150,90,255,.45);
+        white-space: nowrap;
+    }
+    .place .num { font-size: 19px; }
+    .place .ord { font-size: 11px; vertical-align: super; margin-left: 1px; }
+
+    /* Solid medal color with a hard four-way outline and a glow - the
+       clip-art numeral look, and robust. Gradient text was tried first and
+       read as near-black: `background-clip:text` maps its stops across the
+       element box (row height, not glyph height), so the letterforms sat in
+       the dark end of the ramp, and the text-stroke swallowed what was left.  */
+    .place.medal .num, .place.medal .ord {
+        color: var(--medal);
+        text-shadow:
+            -1.5px -1.5px 0 var(--edge), 1.5px -1.5px 0 var(--edge),
+            -1.5px  1.5px 0 var(--edge), 1.5px  1.5px 0 var(--edge),
+             0 3px 0 rgba(0,0,0,.45),
+             0 0 14px var(--glow);
+    }
+    .place.p1 { --medal: #ffd447; --edge: #4a2c00; --glow: rgba(255,200,70,.55); }
+    .place.p1 .num { font-size: 36px; }
+    .place.p1 .ord { font-size: 15px; }
+    .place.p2 { --medal: #e6edf8; --edge: #2f3a49; --glow: rgba(205,222,245,.4); }
+    .place.p2 .num { font-size: 26px; }
+    .place.p2 .ord { font-size: 13px; }
+    .place.p3 { --medal: #ef9f52; --edge: #45230a; --glow: rgba(240,165,85,.4); }
+    .place.p3 .num { font-size: 23px; }
+    .place.p3 .ord { font-size: 12px; }
+    .row .who { flex: 1 1 auto; min-width: 0; }
+    .pname {
+        color: var(--name); font-size: 21px; line-height: 1.05; letter-spacing: 2px;
+        text-shadow: 2px 2px 0 #2a0000;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* --- the champion's name ---
+       A gold numeral alone didn't read as "1st". The name itself is larger
+       and breathes between its normal red and the medal's gold, so the top
+       row is alive on a board that is otherwise static. A smooth cycle, not
+       a hard on/off blink: at this size a strobe is unpleasant to sit under
+       (this loops forever on a page someone may leave open), and it would
+       fight the row's own slide-in. Row height is fixed at 62 and this costs
+       ~45 of it, so nothing reflows. */
+    .row.rank1 .pname {
+        font-size: 28px; letter-spacing: 3px;
+        animation: champName 1.9s ease-in-out infinite;
+    }
+    /* Trails the name rather than leading it: at the head it butted straight
+       into the tier badge's label and read as one run-on word. */
+    .row.rank1 .crown {
+        color: #ffd447; font-size: 15px; margin-left: 10px;
+        text-shadow: 0 0 10px rgba(255,200,70,.7);
+        animation: champCrown 1.9s ease-in-out infinite;
+    }
+    @keyframes champName {
+        0%, 100% { color: var(--name); text-shadow: 2px 2px 0 #2a0000; }
+        50%      { color: #ffd447;    text-shadow: 2px 2px 0 #3a2400, 0 0 20px rgba(255,200,70,.75); }
+    }
+    @keyframes champCrown {
+        0%, 100% { opacity: .55; transform: scale(1); }
+        50%      { opacity: 1;   transform: scale(1.12); }
+    }
+    /* Anyone who has asked their OS to calm animations down gets the gold
+       treatment without the motion. */
+    @media (prefers-reduced-motion: reduce) {
+        .row.rank1 .pname, .row.rank1 .crown { animation: none; }
+        .row.rank1 .pname { color: #ffd447; text-shadow: 2px 2px 0 #3a2400, 0 0 14px rgba(255,200,70,.6); }
+    }
+    .pstats {
+        color: var(--dim); font-size: 11px; line-height: 1.1; letter-spacing: 1px;
+        margin-top: 4px; white-space: nowrap; overflow: hidden;
+    }
+    .pstats b { color: #9fd8ff; font-weight: normal; }
+    .pstats .sep { color: #3a3550; margin: 0 6px; }
+
+    /* Vacant slots: the board always shows all 8 places, with unclaimed ones
+       dimmed to read as "space on the ladder" rather than missing data. They
+       are presentation only - a real player entering simply displaces one. */
+    .row.vacant .pname { color: #4a4560; text-shadow: none; letter-spacing: 3px; }
+    .row.vacant .pstats { color: #35314a; }
+    .row.vacant .prating { color: #35314a; text-shadow: none; }
+    .row.vacant .place { opacity: .5; }
+    .row.vacant .tierspace { flex: 0 0 auto; width: 112px; }
+
+    .prating {
+        flex: 0 0 auto; width: 84px; text-align: right;
+        color: var(--score); font-size: 22px; line-height: 1; letter-spacing: 1px;
+        text-shadow: 2px 2px 0 #002a10;
+        font-variant-numeric: tabular-nums;
+    }
+    .face {
+        flex: 0 0 auto; width: 38px; height: 44px;
+        background: #0d0a18; border: 1px solid #3a3550;
+        object-fit: cover; display: block;
+        transition: opacity .4s ease-out;
+    }
+    /* While 1st place is expanded its big win pose supersedes the little
+       thumbnail on the same row - showing both is redundant, and they collide. */
+    .row.expanded .face { opacity: 0; }
+
+    .tier { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; width: 112px; }
+    .tier svg { width: 26px; height: 30px; display: block; flex: 0 0 auto; }
+    .tier .tname { font-size: 9px; letter-spacing: 1.1px; line-height: 1.1; color: var(--tc, #9a93b5); }
+
+    /* ---------- 1st place's expanding detail ----------
+       A sibling right after row 1 in the list flow: growing its height pushes
+       2nd and 3rd down the board (and the rest off the bottom) rather than
+       cutting away to a separate screen. */
+    #detail {
+        position: relative;
+        height: 0; overflow: visible;
+        opacity: 0;
+        transition: height .62s cubic-bezier(.25,.9,.3,1), opacity .4s ease-out;
+    }
+    #detail.open { opacity: 1; }
+    #detail .inner {
+        position: absolute; left: 24px; right: 24px; top: 0;
+        padding: 10px 0 0 74px;   /* line the text up under the name column */
+    }
+    #detail .bar {
+        position: absolute; left: 58px; top: 2px; width: 3px; height: 104px;
+        background: linear-gradient(#ff8800, rgba(255,136,0,0));
+    }
+    #detail .cstats {
+        color: var(--dim); font-size: 12px; letter-spacing: 1px; line-height: 1.95;
+    }
+    #detail .cstats b { color: #9fd8ff; font-weight: normal; }
+    #detail .cstats .big { color: var(--ink); font-size: 13px; }
+    #detail .cstats .chip {
+        display: inline-block; color: var(--accent);
+        border: 1px solid #4a3f6b; padding: 1px 7px; font-size: 11px;
+    }
+
+    /* The pose is a BOX sized to the animation's own bounding box; each frame
+       sits inside it at the position the extractor derived from the sprite
+       axis + AIR frame offset. Frames vary wildly in size and origin within
+       one pose, so anchoring them naively makes the character slide about. */
+    .pose { position: absolute; }
+    .pose img { position: absolute; display: block; }
+    #detailPose {
+        right: 10px; bottom: 4px;
+        opacity: 0; transition: opacity .5s ease-out .18s;
+    }
+    #detail.open #detailPose { opacity: 1; }
+
+    /* ---------- scene: champion spotlight ----------
+       Built and working, but NOT in the default rotation - 1st place now
+       expands in place instead. Kept whole so it can be switched back on
+       with ?scenes=board,champ,logo or by editing SEQUENCE. */
+    #champWrap {
+        position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+        width: min(100%, 880px);
+    }
+    #champInfo { position: absolute; left: 6%; top: 146px; width: 48%; }
+    #champInfo .crown {
+        font-family: 'Arial Black', 'Bahnschrift', sans-serif; font-size: 15px; letter-spacing: 4px;
+        color: var(--accent); line-height: 1; margin-bottom: 12px;
+    }
+    #champInfo .cname {
+        color: var(--name); font-size: 42px; line-height: 1.05; letter-spacing: 3px;
+        text-shadow: 3px 3px 0 #2a0000;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #champInfo .crating {
+        color: var(--score); font-size: 30px; line-height: 1; letter-spacing: 2px;
+        margin-top: 14px; text-shadow: 2px 2px 0 #002a10;
+    }
+    #champInfo .cstats { color: var(--dim); font-size: 12px; letter-spacing: 1px; margin-top: 12px; line-height: 1.9; }
+    #champInfo .cstats b { color: #9fd8ff; font-weight: normal; }
+    #champTier { margin-top: 16px; }
+    #champTier svg { width: 44px; height: 50px; }
+    #champTier .tname { font-size: 15px; letter-spacing: 3px; }
+
+    /* ---------- scene: logo card ---------- */
+    #scene-logo { display: grid; place-items: center; }
+    #logoCard { text-align: center; }
+    #logoCard .lmain {
+        font-family: 'Arial Black', 'Bahnschrift', sans-serif;
+        font-size: 62px; letter-spacing: 4px; line-height: 1;
+        background: linear-gradient(#fff6d8 0%, #ffb02e 45%, #ff6a00 64%, #b32b00 100%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        -webkit-text-stroke: 2px #2a0f00; paint-order: stroke fill;
+        text-shadow: 0 5px 0 rgba(0,0,0,.5);
+    }
+    #logoCard .lsub { margin-top: 18px; font-size: 15px; letter-spacing: 9px; color: #9a93b5; }
+    #logoCard .lfoot { margin-top: 26px; font-size: 11px; letter-spacing: 4px; color: #56506e; }
+    #logoCard .lfoot b { color: var(--accent); font-weight: normal; }
+
+    #msg {
+        position: absolute; inset: 86px 30px 40px;
+        display: grid; place-items: center; text-align: center;
+        font-size: 15px; letter-spacing: 2px; color: var(--dim); line-height: 2.1;
+    }
+    #msg b { color: var(--accent); font-weight: normal; }
+    #msg small { font-size: 11px; color: #4a4560; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div id="stage">
+    <img id="ghost" alt="">
+
+    <div class="scene" id="scene-board">
+        <div class="title">SCORE RANKING</div>
+        <div id="listwrap"><div id="list"></div></div>
+    </div>
+
+    <div class="scene" id="scene-champ">
+        <div class="title">RANK 1</div>
+        <div id="champWrap">
+            <div id="champInfo">
+                <div class="crown">CHAMPION</div>
+                <div class="cname"></div>
+                <div id="champTier"></div>
+                <div class="crating"></div>
+                <div class="cstats"></div>
+            </div>
+            <div class="pose" id="champPose"><img alt=""></div>
+        </div>
+    </div>
+
+    <div class="scene" id="scene-logo">
+        <div id="logoCard">
+            <div class="lmain"></div>
+            <div class="lsub"></div>
+            <div class="lfoot">ONLINE RANKINGS &nbsp;//&nbsp; PLAY A <b>RANKED MATCH</b> TO ENTER</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var QS = new URLSearchParams(location.search);
+    var CFG = window.RANKING || {};
+    var SERVER = String(QS.get('server') || CFG.server || '').replace(/\/+$/, '');
+    var TITLE = String(QS.get('title') || CFG.title || 'WebMUGEN');
+    var CREDIT = String(QS.get('credit') || CFG.credit || TITLE);
+    document.title = TITLE + ' - Score Ranking';
+    document.querySelector('#logoCard .lmain').textContent = CREDIT;
+    // Letter-spaced the way the arcade logo card has always shown the name.
+    document.querySelector('#logoCard .lsub').textContent = TITLE.toUpperCase().split('').join(' ');
+    var ART = 'leaderboard-art/';
+    var ARTV = '';                 // cache-buster, from the manifest stamp
+    var TOP_N = 8;
+    var DEMO = QS.has('demo');
+    var STILL = QS.has('still');
+    var ONLY = QS.get('scene') || '';
+
+    var stage = document.getElementById('stage');
+    var listEl = document.getElementById('list');
+    var ghostImg = document.getElementById('ghost');
+    var detailEl = null;           // rebuilt with each board pass
+
+    var ROW_H = 62;
+    var VISIBLE_ROWS = 5;
+
+    // ---- responsive fit --------------------------------------------------
+    function fit() {
+        var cw = document.documentElement.clientWidth;
+        var ch = document.documentElement.clientHeight;
+        if (!cw || !ch) return;
+        var dw = Math.round(480 * (cw / ch));
+        dw = Math.max(600, Math.min(1150, dw));
+        var s = Math.min(cw / dw, ch / 480);
+        stage.style.width = dw + 'px';
+        stage.style.transform =
+            'translate(' + ((cw - dw * s) / 2) + 'px,' + ((ch - 480 * s) / 2) + 'px) scale(' + s + ')';
+    }
+    window.addEventListener('resize', fit);
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
+    fit();
+    function stageW() { return parseFloat(stage.style.width) || 640; }
+    function contentW() { return Math.min(stageW(), 880); }
+
+    // ---- tier badges -----------------------------------------------------
+    var TIERS = {
+        UNRANKED:    { c1: '#5a5570', c2: '#3a3550', pips: 0 },
+        BRONZE:      { c1: '#d08b4a', c2: '#8a4f22', pips: 1 },
+        SILVER:      { c1: '#dfe6f0', c2: '#9099a8', pips: 2 },
+        GOLD:        { c1: '#ffe07a', c2: '#d79a17', pips: 3 },
+        PLATINUM:    { c1: '#9df3e6', c2: '#3fa79a', pips: 4 },
+        DIAMOND:     { c1: '#b3d4ff', c2: '#4a7fd4', pips: 5 },
+        MASTER:      { c1: '#e0b0ff', c2: '#8a3fd4', pips: 6 },
+        GRANDMASTER: { c1: '#ffb3b3', c2: '#d43f3f', pips: 7 }
+    };
+
+    function tierBadge(tierName, placement) {
+        var t = TIERS[tierName] || TIERS.UNRANKED;
+        var uid = 'g' + Math.random().toString(36).slice(2, 8);
+        var wrap = document.createElement('div');
+        wrap.className = 'tier';
+        wrap.style.setProperty('--tc', t.c1);
+        var pips = '';
+        for (var i = 0; i < t.pips; i++) {
+            var x = t.pips === 1 ? 12 : 12 + (i - (t.pips - 1) / 2) * (15 / (t.pips - 1));
+            pips += '<circle cx="' + x.toFixed(1) + '" cy="17.5" r="1.5" fill="#1a1226" opacity=".75"/>';
+        }
+        wrap.innerHTML =
+            '<svg viewBox="0 0 24 28" aria-hidden="true">' +
+              '<defs><linearGradient id="' + uid + '" x1="0" y1="0" x2="0" y2="1">' +
+                '<stop offset="0" stop-color="' + t.c1 + '"/><stop offset="1" stop-color="' + t.c2 + '"/>' +
+              '</linearGradient></defs>' +
+              '<path d="M12 1.2 L22.4 4.8 V14 c0 7.2 -5.6 11 -10.4 12.6 C7.2 25 1.6 21.2 1.6 14 V4.8 Z" ' +
+                'fill="url(#' + uid + ')" stroke="#15121f" stroke-width="1.4"/>' +
+              '<path d="M12 3.6 L20.2 6.4 V14 c0 5.8 -4.4 9 -8.2 10.3 C8 23 3.8 19.8 3.8 14 V6.4 Z" ' +
+                'fill="none" stroke="rgba(255,255,255,.32)" stroke-width=".9"/>' + pips +
+            '</svg>' +
+            '<div class="tname">' + (placement > 0 ? 'UNRANKED' : tierName) + '</div>';
+        return wrap;
+    }
+
+    // ---- character art ---------------------------------------------------
+    var art = { chars: {} };
+    // The server records what the engine's name() reports: the def's [Info]
+    // NAME field. The manifest is keyed by FOLDER, and also carries defname
+    // and displayname - match against all three, ignoring case and
+    // punctuation, because they routinely disagree (kula: folder "kula",
+    // name "Kula Diamond", displayname "CCI Kula").
+    function artFor(charName) {
+        if (!charName) return null;
+        var want = String(charName).toLowerCase().replace(/[^a-z0-9]/g, '');
+        var chars = art.chars || {};
+        for (var key in chars) {
+            if (!Object.prototype.hasOwnProperty.call(chars, key)) continue;
+            var c = chars[key];
+            var names = [key, c.defname, c.displayname];
+            for (var i = 0; i < names.length; i++) {
+                if (String(names[i] || '').toLowerCase().replace(/[^a-z0-9]/g, '') === want) return c;
+            }
+        }
+        return null;
+    }
+
+    // ---- win-pose playback ----------------------------------------------
+    var animTimer = null;
+    function stopAnim() { clearTimeout(animTimer); animTimer = null; }
+
+    function playWin(win, hostEl, maxW, maxH) {
+        stopAnim();
+        if (!hostEl) return;
+        if (!win || !win.frames || !win.frames.length) { hostEl.style.display = 'none'; return; }
+        hostEl.style.display = '';
+        var s = Math.min(maxW / win.w, maxH / win.h);
+        hostEl.style.width = (win.w * s) + 'px';
+        hostEl.style.height = (win.h * s) + 'px';
+        var img = hostEl.querySelector('img');
+        var i = 0;
+        (function step() {
+            var f = win.frames[i % win.frames.length];
+            img.src = ART + f.src + ARTV;
+            img.style.left = (f.x * s) + 'px';
+            img.style.top = (f.y * s) + 'px';
+            img.style.width = (f.w * s) + 'px';
+            img.style.height = (f.h * s) + 'px';
+            i++;
+            animTimer = setTimeout(step, f.ms || 100);
+        })();
+    }
+
+    function preload(frames) {
+        (frames || []).forEach(function (f) { var im = new Image(); im.src = ART + f.src + ARTV; });
+    }
+
+    // ---- building --------------------------------------------------------
+    var SUFFIX = ['st', 'nd', 'rd'];
+
+    function rowNode(p, idx) {
+        var row = document.createElement('div');
+        // rank1 only for a REAL champion - an empty board's padded top slot
+        // must not sit there pulsing gold for nobody.
+        row.className = 'row' + (p.vacant ? ' vacant' : (idx === 0 ? ' rank1' : ''));
+
+        var place = document.createElement('div');
+        // A vacant slot never wears a medal - 2nd place being an empty row
+        // in silver would read as an award for nobody.
+        place.className = 'place' + (!p.vacant && idx < 3 ? ' medal p' + (idx + 1) : '');
+        // Number and ordinal are separate so the numeral can carry the weight
+        // and the suffix rides small and high, like an arcade board.
+        place.innerHTML = '<span class="num">' + (idx + 1) + '</span>' +
+            '<span class="ord">' + (SUFFIX[idx] || 'th') + '</span>';
+        row.appendChild(place);
+
+        if (p.vacant) {
+            var sp = document.createElement('div');
+            sp.className = 'tierspace';   // keeps the column grid aligned
+            row.appendChild(sp);
+        } else {
+            row.appendChild(tierBadge(p.tier || 'UNRANKED', p.placement || 0));
+        }
+
+        var who = document.createElement('div');
+        who.className = 'who';
+        var nm = document.createElement('div');
+        nm.className = 'pname';
+        // textContent for the name (never innerHTML - a player's name is
+        // user-supplied); the crown is a separate element beside it.
+        if (idx === 0 && !p.vacant) {
+            nm.appendChild(document.createTextNode((p.name || '???').toUpperCase()));
+            var crown = document.createElement('span');
+            crown.className = 'crown';
+            crown.textContent = '★';   // filled star
+            nm.appendChild(crown);
+        } else {
+            nm.textContent = (p.name || '???').toUpperCase();
+        }
+        who.appendChild(nm);
+
+        // No character name here - the portrait at the end of the row says
+        // it, and squeezing it in clipped it to unreadable stubs.
+        var st = document.createElement('div');
+        st.className = 'pstats';
+        if (p.vacant) {
+            st.textContent = 'WAITING FOR A CHALLENGER';
+        } else {
+            var bits = ['<b>' + p.wins + '</b>W&nbsp;<b>' + p.losses + '</b>L', '<b>' + p.winRate + '</b>%'];
+            if (p.streak >= 3) bits.push('<b>' + p.streak + '</b> STRAIGHT');
+            st.innerHTML = bits.join('<span class="sep">·</span>');
+        }
+        who.appendChild(st);
+        row.appendChild(who);
+
+        var rt = document.createElement('div');
+        rt.className = 'prating';
+        rt.textContent = String(p.rating);
+        row.appendChild(rt);
+
+        var a = artFor(p.character);
+        if (a && a.portrait) {
+            var face = document.createElement('img');
+            face.className = 'face';
+            face.src = ART + a.portrait + ARTV;
+            face.alt = p.character || '';
+            row.appendChild(face);
+        }
+        return row;
+    }
+
+    // The panel that grows out of 1st place. Deliberately carries only what
+    // the row above does NOT already show - no repeated name, tier or rating.
+    function detailNode(p) {
+        var d = document.createElement('div');
+        d.id = 'detail';
+        var bits = [
+            '<span class="big"><b>' + p.wins + '</b> WINS &nbsp;/&nbsp; <b>' + p.losses + '</b> LOSSES</span>',
+            '<b>' + p.winRate + '</b>% WIN RATE OVER <b>' + p.games + '</b> GAMES'
+        ];
+        if (p.bestStreak > 1) bits.push('BEST RUN <b>' + p.bestStreak + '</b> STRAIGHT');
+        if (p.peakRating && p.peakRating > p.rating) bits.push('PEAK <b>' + p.peakRating + '</b>');
+        // MAIN is only claimed when the server saw one character take a
+        // majority of their recent matches; a roster-hopper gets no chip.
+        if (p.main) bits.push('MAIN <span class="chip">' + String(p.main).toUpperCase() + '</span>');
+        else if (p.character) bits.push('LAST <span class="chip">' + String(p.character).toUpperCase() + '</span>');
+        d.innerHTML =
+            '<div class="bar"></div>' +
+            '<div class="inner"><div class="cstats">' + bits.join('<br>') + '</div></div>' +
+            '<div class="pose" id="detailPose"><img alt=""></div>';
+        return d;
+    }
+
+    function buildChampScene(p) {
+        var info = document.getElementById('champInfo');
+        info.querySelector('.cname').textContent = (p.name || '???').toUpperCase();
+        info.querySelector('.crating').textContent = p.rating + ' PTS';
+        var bits = [
+            '<b>' + p.wins + '</b> WINS &nbsp;/&nbsp; <b>' + p.losses + '</b> LOSSES',
+            '<b>' + p.winRate + '</b>% WIN RATE OVER <b>' + p.games + '</b> GAMES'
+        ];
+        if (p.bestStreak > 1) bits.push('BEST RUN <b>' + p.bestStreak + '</b> STRAIGHT');
+        if (p.character) bits.push('MAIN &nbsp;<b>' + String(p.character).toUpperCase() + '</b>');
+        info.querySelector('.cstats').innerHTML = bits.join('<br>');
+        var tierHost = document.getElementById('champTier');
+        tierHost.innerHTML = '';
+        tierHost.appendChild(tierBadge(p.tier || 'UNRANKED', p.placement || 0));
+    }
+
+    // ---- scene machinery -------------------------------------------------
+    // Each scene is an element plus an enter() that sets it up and returns
+    // how long it wants to hold. Adding one = add an entry here and put its
+    // key in SEQUENCE (or pass ?scenes=a,b,c).
+    var timers = [];
+    function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+    function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+
+    var ctx = { players: [], champArt: null };
+
+    var SCENES = {
+        board: {
+            el: document.getElementById('scene-board'),
+            enter: function () { return runBoard(); }
+        },
+        champ: {
+            el: document.getElementById('scene-champ'),
+            enter: function () {
+                if (ctx.players[0]) buildChampScene(ctx.players[0]);
+                var pose = document.getElementById('champPose');
+                if (ctx.champArt && ctx.champArt.win) {
+                    playWin(ctx.champArt.win, pose, 300, 330);
+                    pose.style.left = (contentW() * 0.60) + 'px';
+                    pose.style.bottom = '52px';
+                } else if (pose) { pose.style.display = 'none'; }
+                return 7000;
+            }
+        },
+        logo: {
+            el: document.getElementById('scene-logo'),
+            enter: function () { return 5000; }
+        }
+    };
+
+    // 'champ' is deliberately out of the default rotation: 1st place now
+    // expands in place instead. Add it back here or with ?scenes=.
+    var SEQUENCE = (QS.get('scenes') || 'board,logo')
+        .split(',').map(function (s) { return s.trim(); })
+        .filter(function (s) { return SCENES[s]; });
+
+    function showScene(key) {
+        for (var k in SCENES) SCENES[k].el.classList.toggle('on', k === key);
+    }
+
+    // ---- the board's own choreography ------------------------------------
+    // 1. the bottom five slide in from the right, one after another
+    // 2. the board climbs, the top three sliding in the same way as they
+    //    scroll into view
+    // 3. 1st place expands in place: its detail grows downward, pushing 2nd
+    //    and 3rd to the bottom of the frame, with the win pose playing
+    // Returns how long the scene wants to hold.
+    function runBoard() {
+        var top = ctx.players.slice(0, TOP_N);
+
+        listEl.innerHTML = '';
+        listEl.style.transition = 'none';
+        var rows = top.map(function (p, i) {
+            var r = rowNode(p, i);
+            listEl.appendChild(r);
+            // The detail panel lives right after 1st place, so opening it
+            // pushes everything below it down the board.
+            if (i === 0) {
+                detailEl = detailNode(p);
+                listEl.appendChild(detailEl);
+            }
+            return r;
+        });
+        if (!rows.length) return 2000;
+
+        var overflow = Math.max(0, top.length - VISIBLE_ROWS);
+        var startY = -overflow * ROW_H;
+        listEl.style.transform = 'translateY(' + startY + 'px)';
+        // Force the starting offset to apply before any transition is armed.
+        void listEl.offsetHeight;
+
+        var firstVisible = overflow;      // topmost row visible at the start
+        var STAGGER = 300;
+        var t = 350;
+
+        // 1. the bottom five, last place first so the eye reads up the table
+        for (var i = rows.length - 1; i >= firstVisible; i--) {
+            (function (row, delay) { later(function () { row.classList.add('in'); }, delay); })(rows[i], t);
+            t += STAGGER;
+        }
+        var scrollStart = t + 450;
+
+        // 2. the climb: CONSTANT SPEED, linear timing. Duration follows the
+        // distance rather than the other way round, so the board never eases
+        // in or out to land the top three on cue - it just travels at
+        // SCROLL_SPEED until it reaches the top.
+        var SCROLL_SPEED = 78;                       // design units per second
+        var distance = Math.abs(startY);
+        var SCROLL = Math.max(600, Math.round(distance / SCROLL_SPEED * 1000));
+        later(function () {
+            listEl.style.transition = 'transform ' + SCROLL + 'ms linear';
+            listEl.style.transform = 'translateY(0px)';
+        }, scrollStart);
+
+        // Each of the top three slides in as it actually crosses into view.
+        // Row j sits at j*ROW_H, and the list travels linearly from startY to
+        // 0, so it enters when translateY >= -j*ROW_H, i.e. at fraction
+        // 1 - j/overflow of the climb. A small lead starts the slide just
+        // before the row would otherwise pop into the frame.
+        var LEAD = 0.07;
+        for (var j = firstVisible - 1; j >= 0; j--) {
+            var frac = Math.max(0, 1 - (j / Math.max(1, overflow)) - LEAD);
+            (function (row, delay) { later(function () { row.classList.add('in'); }, delay); })(
+                rows[j], scrollStart + SCROLL * frac);
+        }
+        // A beat to read the finished top 8 before 1st place opens up.
+        var settled = scrollStart + SCROLL + 1800;
+
+        if (STILL) return settled + 100000;
+        // Never spotlight a vacant slot (only possible if the whole board is
+        // empty, which the empty-state message already covers - belt and
+        // braces).
+        if (top[0] && top[0].vacant) return settled + 3000;
+
+        // 3. 1st place expands in place. Sized so 1st + the panel + 2nd + 3rd
+        // exactly fill the frame (62 + 168 + 62 + 62 = 354 of 356), which
+        // pushes 4th and below out of view instead of leaving one peeking.
+        var EXPAND_H = 168;
+        later(function () {
+            rows[0].classList.add('expanded');
+            detailEl.style.height = EXPAND_H + 'px';
+            detailEl.classList.add('open');
+            if (ctx.champArt && ctx.champArt.win) {
+                playWin(ctx.champArt.win, document.getElementById('detailPose'), 200, 186);
+            }
+        }, settled);
+
+        var HOLD = 6400;
+        // Collapse before handing over so the next pass starts clean.
+        later(function () {
+            stopAnim();
+            rows[0].classList.remove('expanded');
+            detailEl.classList.remove('open');
+            detailEl.style.height = '0px';
+        }, settled + HOLD);
+
+        return settled + HOLD + 700;
+    }
+
+    // ---- the attract rotation --------------------------------------------
+    var seqPos = 0;
+    function runSequence() {
+        clearTimers();
+        stopAnim();
+        if (!SEQUENCE.length) return;
+        var key = SEQUENCE[seqPos % SEQUENCE.length];
+        seqPos++;
+        showScene(key);
+        var hold = SCENES[key].enter() || 5000;
+        later(runSequence, hold);
+    }
+
+    function startShow(players) {
+        ctx.players = players;
+        ctx.champArt = players[0] ? artFor(players[0].character) : null;
+        if (ctx.champArt && ctx.champArt.portrait) ghostImg.src = ART + ctx.champArt.portrait + ARTV;
+        else ghostImg.removeAttribute('src');
+        if (ctx.champArt && ctx.champArt.win) preload(ctx.champArt.win.frames);
+
+        if (ONLY && SCENES[ONLY]) {
+            clearTimers();
+            showScene(ONLY);
+            SCENES[ONLY].enter();
+            return;
+        }
+        seqPos = 0;
+        runSequence();
+    }
+
+    function showMessage(html) {
+        clearTimers(); stopAnim();
+        showScene('board');
+        listEl.innerHTML = '';
+        var m = document.getElementById('msg');
+        if (!m) { m = document.createElement('div'); m.id = 'msg'; SCENES.board.el.appendChild(m); }
+        m.innerHTML = html;
+    }
+    function hideMessage() { var m = document.getElementById('msg'); if (m) m.remove(); }
+
+    // ---- boot ------------------------------------------------------------
+    var DEMO_PLAYERS = [
+        { place: 1, name: 'champion', rating: 1299, tier: 'GRANDMASTER', peakRating: 1310, main: 'kfm', wins: 110, losses: 17, games: 127, winRate: 86.6, streak: 6, bestStreak: 14, character: 'kfm' },
+        { place: 2, name: 'rival',   rating: 1141, tier: 'DIAMOND',  main: 'ryu', wins: 88, losses: 47, games: 135, winRate: 65.2, streak: 2, bestStreak: 9, character: 'ryu' },
+        { place: 3, name: 'mikel',   rating: 1088, tier: 'PLATINUM', main: '', wins: 40, losses: 30, games: 70, winRate: 57.1, streak: 1, bestStreak: 6, character: 'ken' },
+        { place: 4, name: 'chun',    rating: 1012, tier: 'GOLD',     wins: 25, losses: 24, games: 49, winRate: 51, streak: -1, bestStreak: 4, character: 'chun-li' },
+        { place: 5, name: 'combo',   rating: 988,  tier: 'GOLD',     wins: 18, losses: 20, games: 38, winRate: 47.4, streak: 1, bestStreak: 3, character: 'terry' },
+        { place: 6, name: 'newbie',  rating: 950,  tier: 'SILVER',   wins: 9, losses: 14, games: 23, winRate: 39.1, streak: -2, bestStreak: 2, character: 'kula' },
+        { place: 7, name: 'buttons', rating: 914,  tier: 'BRONZE',   wins: 5, losses: 16, games: 21, winRate: 23.8, streak: -3, bestStreak: 1, character: 'kfm' },
+        { place: 8, name: 'rookie',  rating: 1000, tier: 'UNRANKED', placement: 2, wins: 1, losses: 0, games: 1, winRate: 100, streak: 1, bestStreak: 1, character: 'kfm' }
+    ];
+
+    function start() {
+        if (!DEMO && !SERVER) {
+            showMessage('NO LEADERBOARD ADDRESS SET<br><small>SET ONE IN THE STUDIO: SETTINGS &gt; ONLINE &gt; LEADERBOARD</small>');
+            return;
+        }
+        var artReq = fetch(ART + 'manifest.json', { cache: 'no-cache' })
+            .then(function (r) { return r.ok ? r.json() : { chars: {} }; })
+            .catch(function () { return { chars: {} }; });
+
+        var boardReq = DEMO
+            ? Promise.resolve({ players: DEMO_PLAYERS })
+            : fetch(SERVER + '/mugen/leaderboard?limit=' + TOP_N, { cache: 'no-store' })
+                .then(function (r) { return r.json(); })
+                .catch(function () { return null; });
+
+        Promise.all([artReq, boardReq]).then(function (res) {
+            art = res[0] || { chars: {} };
+            ARTV = art.stamp ? '?v=' + art.stamp : '';
+            var board = res[1];
+            if (!board) {
+                showMessage('COULD NOT REACH THE RANKING SERVER<br><small>IT MAY BE WAKING UP - TRY AGAIN IN A MOMENT</small>');
+                return;
+            }
+            if (!board.players || !board.players.length) {
+                showMessage('NO RANKED MATCHES YET<br><small>PLAY A <b>RANKED MATCH</b> ONLINE TO PUT YOUR NAME HERE</small>');
+                return;
+            }
+            // Fill the remaining places with vacant slots so the board always
+            // shows the full ladder (and the full reveal/scroll choreography)
+            // even while the community is small. Real players entering simply
+            // occupy them: the server only ever returns real entries, so the
+            // padding shrinks by itself.
+            var roster = board.players.slice(0, TOP_N);
+            while (roster.length < TOP_N) {
+                roster.push({ vacant: true, name: 'OPEN', rating: 0, wins: 0, losses: 0, games: 0, winRate: 0, streak: 0 });
+            }
+            hideMessage();
+            startShow(roster);
+        });
+    }
+
+    start();
+
+    // Refresh only while someone is actually looking at the page.
+    //
+    // This used to be an unconditional setInterval, so ANY tab left open here -
+    // a forgotten background tab, a phone in a pocket, a second monitor - kept
+    // fetching every five minutes forever. That is not merely wasted requests:
+    // the ranking server is configured to sleep when idle and is billed by
+    // uptime, so one abandoned tab pins it awake around the clock and turns a
+    // near-zero bill into a full one. The page was the single largest source of
+    // load on a service that otherwise sees a few requests a day.
+    //
+    // Hidden: skip the fetch entirely - nobody is reading it. Visible again:
+    // refresh straight away if what is on screen has gone stale, so coming back
+    // to the tab never shows old standings while it waits for the next tick.
+    var REFRESH_MS = 5 * 60 * 1000;
+    var lastRefresh = Date.now();
+
+    function refresh() {
+        if (DEMO) return;
+        lastRefresh = Date.now();
+        start();
+    }
+
+    setInterval(function () {
+        if (document.hidden) return;
+        refresh();
+    }, REFRESH_MS);
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) return;
+        if (Date.now() - lastRefresh >= REFRESH_MS) refresh();
+    });
+})();
+</script>
+</body>
+</html>

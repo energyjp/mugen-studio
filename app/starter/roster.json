@@ -1,0 +1,20 @@
+{
+  "siteTitle": "WebMUGEN",
+  "siteVersion": "",
+  "siteCredit": "",
+  "hideBootUI": 6,
+  "motif": "data/ikemen1/system.def",
+  "stages": [
+    {
+      "file": "kfm.def",
+      "name": "Training Stage"
+    }
+  ],
+  "chars": [
+    {
+      "folder": "kfm",
+      "select": "kfm/kfm.def",
+      "mountAs": "kfm"
+    }
+  ]
+}

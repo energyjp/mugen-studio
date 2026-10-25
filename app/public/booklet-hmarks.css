@@ -1,0 +1,81 @@
+/* THE H MARKS KEEP THEIR OWN HUES IN EVERY PRINTING (rd-r3-small, 2026-10-18).
+   ---------------------------------------------------------------------------
+   The owner: "H-icons like the heart and giver/receiver roles should keep their
+   bright colors. Pink for the heart and receiver, and blue for giver, no matter
+   the theme." So these marks are CONSTANTS, like --tmpl and the band's hues:
+   the same pink and the same blue on all ten printings, never a printing's ink.
+
+   The values are the brightest that still clear 3:1 (non-text, WCAG 1.4.11)
+   against EVERY printing's paper, plate and ink, day stock and night stock
+   alike - which pins their luminance between about 0.16 and 0.22 (a lighter
+   pink drops under 3:1 on Energy day's plate, a darker one on WB night's):
+     --h-pink #E5308A   lowest 3.15:1 (energy-day plate), on night stock >= 3.74:1 (wb-night plate)
+     --h-blue #2E78F0   lowest 3.19:1 (energy-day plate), on night stock >= 3.69:1 (wb-night plate)
+   Type printed ON them is black (--h-on): 5.12:1 on the pink, 5.06:1 on the blue.
+   (Measured with the sRGB relative-luminance formula over the 30 grounds of
+   tools/printings.js; the lane's hues.js check is in its notes.)
+
+   Where they print - all of it only with the bundle's H-MUGEN module on, as
+   before (hModuleOn / hMugenMode decide; nothing here shows anything):
+   - a tile's heart (.ptile .hmark): the pink heart on a black square, so it
+     reads on any portrait, light or dark;
+   - the role badges on the character page (.badge.giver, .badge.receiver):
+     filled in the role's hue, black caps;
+   - the H role side head on the character page: its square is the pink heart;
+   - the Filter dropdown's H chips (giver, receiver): a square of the role's
+     hue before the word, ruled in black (renderFacetBar tags each chip with
+     data-facet). The black rule is what keeps it 3:1 on that dropdown's chips,
+     whose old see-through ground composites to a mid gray by day;
+   - the pair bench: the roster bar's heart key in pink, the sheet's heart
+     (a black square with the pink heart, as on a tile), a square of the
+     role's hue before "giver" / "receiver", and each scene pane's top rule.
+   Not printed: E-Select has no H mark (grid.html draws none), the index rows
+   carry none, and the heart inside a <select> option's text (the bench's
+   pickers) cannot take a color.
+
+   This file loads after every other area file and BEFORE studio.html's own
+   big <style>, so each rule is scoped under an id to outrank the old ones
+   (`.badge.giver` (0,2,0), `.ptile .hmark` (0,2,0)) and restates
+   booklet-chars.css's at the same weight, later. */
+:root { --h-pink: #E5308A; --h-blue: #2E78F0; --h-on: #000000; }
+
+/* ---- a tile's heart ---- */
+#panel-chars #charGrid .ptile .hmark { background: var(--h-on); color: var(--h-pink); }
+#panel-chars #charGrid .ptile .hmark i { color: inherit; }
+
+/* ---- the role badges (the character page, and anywhere a card prints them) ---- */
+:root .badge.giver, #panel-chars #charDetail .card.char .badge.giver {
+  background: var(--h-blue); color: var(--h-on); border-color: var(--h-blue); box-shadow: none;
+}
+:root .badge.receiver, #panel-chars #charDetail .card.char .badge.receiver {
+  background: var(--h-pink); color: var(--h-on); border-color: var(--h-pink); box-shadow: none;
+}
+/* the heart studio.html adds after the word: a flex item in the booklet's badge, so its
+   leading space collapses - the gap is a margin */
+:root .badge:is(.giver, .receiver)::after { margin-left: .3em; }
+
+/* ---- the H role side head: the heart takes the band square's place ---- */
+#panel-chars #charDetail .dsec.hrole > .h::before {
+  content: '\2665'; width: auto; height: auto; background: none; color: var(--h-pink);
+  font: normal 900 var(--t-16)/1 var(--f-body);
+}
+
+/* ---- the Filter dropdown's H chips ---- */
+:root #facetBar button:is([data-facet="giver"], [data-facet="receiver"])::before {
+  content: ''; display: inline-block; flex: none; width: 9px; height: 9px; margin: 0 7px 0 2px; vertical-align: 0;
+  background: var(--h-blue); outline: 2px solid var(--h-on);
+}
+:root #facetBar button[data-facet="receiver"]::before { background: var(--h-pink); }
+
+/* ---- the pair bench ---- */
+#panel-chars #charBar #benchBtn { color: var(--h-pink); }
+:root #benchDlg > h3 > .hheart {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1.15em; height: 1.15em;
+  background: var(--h-on); color: var(--h-pink); -webkit-text-fill-color: currentColor; font-style: normal; font-size: .82em;
+}
+:root #benchDlg label:is(:has(> #benchGiver), :has(> #benchReceiver))::before {
+  content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: 0; background: var(--h-blue);
+}
+:root #benchDlg label:has(> #benchReceiver)::before { background: var(--h-pink); }
+:root #benchScene #benchPaneG { border-top: 4px solid var(--h-blue); }
+:root #benchScene #benchPaneR { border-top: 4px solid var(--h-pink); }
