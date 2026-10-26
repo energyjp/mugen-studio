@@ -2590,8 +2590,15 @@ function rowGeometry(S) {
     // boxes overlap by a pixel or two - which is why the real grid is
     // seamless. Sizing from cell.size leaves a gap in every seam, the artifact
     // VSelect has.
-    const box = MI.cellBg || { w: S.cellSize[0] / (baseScale[0] || 1),
-                               h: S.cellSize[1] / (baseScale[1] || 1), axisX: 0, axisY: 0 };
+    // NO CELL-BOX SPRITE (cell.bg.spr names nothing the pack has): the engine
+    // draws no box, only each face at its own size, one pitch apart. The cell
+    // is then its whole pitch - cell.size plus a positive spacing - and not
+    // cell.size alone: a MUGEN1 edit with cell.size 2,7 and spacing 20 (Mugen
+    // Adicional Version) clipped every face to a 2x7 sliver and flagged every
+    // one of them as the wrong size. A negative spacing overlaps cells on
+    // purpose and keeps cell.size.
+    const box = MI.cellBg || { w: (S.cellSize[0] + Math.max(0, sp[0])) / (baseScale[0] || 1),
+                               h: (S.cellSize[1] + Math.max(0, sp[1])) / (baseScale[1] || 1), axisX: 0, axisY: 0 };
     const w = box.w * sc[0];
     const h = box.h * sc[1];
     out.push({
