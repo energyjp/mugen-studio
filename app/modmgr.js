@@ -541,20 +541,28 @@ function scanMod(abs, folder, generated) {
     shipped.push({ vpath, abs: f.abs, size: f.size });
   }
 
+  // Each warning is one whole sentence per count (the Studio's languages
+  // translate whole sentences); the folders and files in it are values.
   const warnings = [];
   if (content.size) {
-    const two = content.size > 1;
-    warnings.push('Characters and stages are added on their own tabs: the ' + [...content].sort().join(' and ')
-      + ' folder' + (two ? 's' : '') + ' in this mod ' + (two ? 'are' : 'is') + ' not used.');
+    // CONTENT_ROOTS is chars and stages, so two is both of them
+    const folder = [...content][0];
+    warnings.push(content.size > 1
+      ? 'Characters and stages are added on their own tabs: the chars and stages folders in this mod are not used.'
+      : 'Characters and stages are added on their own tabs: the ' + folder + ' folder in this mod is not used.');
   }
   if (strayDirs.size || strayFiles.length) {
     const what = [...[...strayDirs].sort().map((d) => d + '/'), ...strayFiles];
-    warnings.push(some(what) + (what.length > 1 ? ' are' : ' is') + ' outside the game\'s folders (data, external, font,'
-      + ' sound), so ' + (what.length > 1 ? 'they are' : 'it is') + ' not used.');
+    const list = some(what);
+    warnings.push(what.length > 1
+      ? list + ' are outside the game\'s folders (data, external, font, sound), so they are not used.'
+      : list + ' is outside the game\'s folders (data, external, font, sound), so it is not used.');
     const luas = strayFiles.filter((f) => /\.lua$/i.test(f));
     if (luas.length) {
-      warnings.push('To make ' + some(luas) + ' load, put ' + (luas.length > 1 ? 'them' : 'it') + ' in external/mods/'
-        + safeName(folder) + '/ inside this mod\'s folder (Open folder), beside its data, font or sound folders.');
+      const files = some(luas), name = safeName(folder);
+      warnings.push(luas.length > 1
+        ? 'To make ' + files + ' load, put them in external/mods/' + name + '/ inside this mod\'s folder (Open folder), beside its data, font or sound folders.'
+        : 'To make ' + files + ' load, put it in external/mods/' + name + '/ inside this mod\'s folder (Open folder), beside its data, font or sound folders.');
     }
   }
   const dotted = [], scripts = [], built = [];
@@ -576,7 +584,10 @@ function scanMod(abs, folder, generated) {
     warnings.push(some(dotted) + ' cannot load: the engine loads a mod by a name'
       + ' made from its path, and a dot in a folder or file name (other than .lua) breaks it. Rename without the dot.');
   }
-  if (scripts.length) warnings.push(some(scripts) + (scripts.length > 1 ? ' replace' : ' replaces') + ' the engine\'s own script of that name.');
+  if (scripts.length) {
+    const list = some(scripts);
+    warnings.push(scripts.length > 1 ? list + ' replace the engine\'s own script of that name.' : list + ' replaces the engine\'s own script of that name.');
+  }
   if (built.length) warnings.push('The build writes ' + some(built) + ' itself; the mod\'s copy is not used.');
   if (!runs) warnings.push('Nothing in it runs by itself: it has no .lua file and no +system.def.');
 

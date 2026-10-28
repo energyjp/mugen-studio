@@ -38,6 +38,20 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  // ---- the reader's language ------------------------------------------------
+  //
+  // Only sizeNote's sentence is shown to anyone; everything else here is file
+  // text. In a Studio window it goes through I18n.t (the language the reader
+  // picked); in Node, the web game and studio-lite there is no i18n.js and t()
+  // fills in the English itself, word for word what it always was.
+  function t(en, vars) {
+    var I = typeof I18n !== 'undefined' ? I18n : null;
+    if (I && typeof I.t === 'function') return I.t(en, vars);
+    return String(en).replace(/\{([A-Za-z_$][\w$]*)\}/g, function (m, k) {
+      return vars && Object.prototype.hasOwnProperty.call(vars, k) && vars[k] != null ? String(vars[k]) : m;
+    });
+  }
+
   // The velocity keys the Studios expose. Deliberately not every [Velocity]
   // key: these four are the ones that read as "how fast does this character
   // move" to a player.
@@ -275,12 +289,10 @@
   function sizeNote(mb) {
     var band = sizeBand(mb);
     if (!band) return '';
-    var mbTxt = Number(mb).toFixed(1) + ' MB';
-    if (band === 'ok') return mbTxt + ' - small download, loads quickly.';
-    if (band === 'medium') return mbTxt + ' - medium download. Online, both players wait'
-      + ' for the slower one to finish loading.';
-    return mbTxt + ' - large download. Expect a noticeable wait the first time, and online'
-      + ' both players wait for the slower one. It does not cause lag once the match starts.';
+    var size = { mb: Number(mb).toFixed(1) };
+    if (band === 'ok') return t('{mb} MB - small download, loads quickly.', size);
+    if (band === 'medium') return t('{mb} MB - medium download. Online, both players wait for the slower one to finish loading.', size);
+    return t('{mb} MB - large download. Expect a noticeable wait the first time, and online both players wait for the slower one. It does not cause lag once the match starts.', size);
   }
 
   return {

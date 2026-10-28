@@ -222,7 +222,7 @@ function reason(e, at) {
       : 'that folder could not be read';
   }
   if (code === 'EMFILE' || code === 'ENFILE') return 'too many files are open to read that folder right now';
-  return 'that folder could not be read' + (code ? ' (' + code + ')' : '');
+  return code ? 'that folder could not be read (' + code + ')' : 'that folder could not be read';
 }
 
 // The deadline ran out. Windows has not refused yet and may never; what can be

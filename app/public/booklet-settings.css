@@ -93,6 +93,10 @@
 #panel-settings #settings .filterrow input[type=search]:hover { border-bottom-color: var(--ink); }
 #panel-settings #settings .filterrow input[type=search]:focus-visible { outline: none; border-bottom: 3px solid var(--focus); padding-bottom: 1px; }
 #panel-settings #settings .filterrow input[type=search]::placeholder { color: var(--ink2); opacity: 1; }
+/* a translated window (<html lang>, set only while a language pack is in force): the
+   filter's example placeholder is wider than 460px in Spanish and Portuguese, so the box
+   takes a line of its own sooner, Reset all wrapping under it, and may grow a little wider */
+:root[lang] #panel-settings #settings .filterrow input[type=search] { flex-basis: 500px; max-width: 540px; }
 
 /* ------------------------------------------------------------------ */
 /* 3. GROUPS: a side head (square, caps, run-in rule) that opens; the  */

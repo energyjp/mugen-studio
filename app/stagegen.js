@@ -224,7 +224,8 @@ function makeStage(srcImagePath, destDir, opts = {}) {
   const { w, h } = readPngSize(png);
   if (!w || !h) throw new Error('that PNG reports a zero size');
   if (w > 4096 || h > 4096) {
-    throw new Error('that image is ' + w + 'x' + h + '; stages above 4096 on a side '
+    const size = w + 'x' + h;
+    throw new Error('that image is ' + size + '; stages above 4096 on a side '
       + 'are refused because the engine has to hold every pixel in video memory');
   }
   const floorY = Number.isFinite(opts.floorY) ? opts.floorY : Math.round(h * (200 / 240));

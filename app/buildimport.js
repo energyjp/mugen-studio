@@ -1195,7 +1195,9 @@ function inspectAt(dir, opts) {
   }
   if (!selHit) {
     out.ok = false;
-    out.why.push('no select.def - that is the roster; looked beside the screenpack' + (out.motif ? ' (' + path.posix.dirname(out.motif.rel) + '/)' : '') + ' and in data/');
+    const folder = out.motif ? path.posix.dirname(out.motif.rel) : null;
+    out.why.push(folder !== null ? 'no select.def - that is the roster; looked beside the screenpack (' + folder + '/) and in data/'
+      : 'no select.def - that is the roster; looked beside the screenpack and in data/');
     return out;
   }
   out.select = selHit.rel;
@@ -1475,16 +1477,17 @@ function report(inv) {
   }
   if (inv.unpacked) {
     const u = inv.unpacked;
-    notes.push(u.files + ' files unpacked from ' + u.exe + ' - this build keeps its data/ and stages/ packed inside its program'
-      + (u.refused.length ? '; ' + u.refused.length + ' packed path' + (u.refused.length === 1 ? ' was' : 's were') + ' refused as unsafe' : ''));
+    const refused = u.refused.length;
+    notes.push(!refused ? u.files + ' files unpacked from ' + u.exe + ' - this build keeps its data/ and stages/ packed inside its program'
+      : refused === 1 ? u.files + ' files unpacked from ' + u.exe + ' - this build keeps its data/ and stages/ packed inside its program; 1 packed path was refused as unsafe'
+        : u.files + ' files unpacked from ' + u.exe + ' - this build keeps its data/ and stages/ packed inside its program; ' + refused + ' packed paths were refused as unsafe');
   }
   for (const t of menu.notes) notes.push(t);
   if (c.unrostered) {
     // run() copies the roster's characters only (inv.chars), so these stay behind.
-    const one = c.unrostered === 1;
-    notes.push(c.unrostered + (one ? ' character folder is' : ' character folders are') + ' in chars/ but on no roster line; '
-      + (one ? 'it is' : 'they are') + ' not imported (files the imported characters use from ' + (one ? 'it' : 'them') + ' still come across)'
-      + ' - add ' + (one ? 'it' : 'them') + ' afterwards from the build\'s chars/ folder');
+    notes.push(c.unrostered === 1
+      ? '1 character folder is in chars/ but on no roster line; it is not imported (files the imported characters use from it still come across) - add it afterwards from the build\'s chars/ folder'
+      : c.unrostered + ' character folders are in chars/ but on no roster line; they are not imported (files the imported characters use from them still come across) - add them afterwards from the build\'s chars/ folder');
   }
   const rules = rulesFromCfg(inv.cfg);
   if (Object.keys(rules).length) {
@@ -1492,17 +1495,18 @@ function report(inv) {
       + Object.entries(rules).map(([k, v]) => k.replace(/^Options\./, '') + ' ' + v).join(', '));
   }
   if (inv.cfg && inv.cfg.gameWidth) {
+    const size = inv.cfg.gameWidth + 'x' + inv.cfg.gameHeight;
     notes.push(inv.kind === 'ikemen'
-      ? 'the build runs at ' + inv.cfg.gameWidth + 'x' + inv.cfg.gameHeight + ' - the desktop export takes that render size with the rest of its video settings; the website build picks its own picture size at load'
-      : 'the build runs at ' + inv.cfg.gameWidth + 'x' + inv.cfg.gameHeight + ' - a render size, not content, and this Studio sets its own in Settings');
+      ? 'the build runs at ' + size + ' - the desktop export takes that render size with the rest of its video settings; the website build picks its own picture size at load'
+      : 'the build runs at ' + size + ' - a render size, not content, and this Studio sets its own in Settings');
   }
   if (inv.kind === 'ikemen') {
     notes.push('an Ikemen GO build: its content comes across the same way, and the engine half of the folder - the program, '
       + 'its copies of the engine’s scripts and modules - stays, because this Studio ships its own');
     const f = inv.commonFiles && inv.commonFiles.font;
     if (f && f.found && !f.stock) {
-      notes.push('its readout font (' + f.ref + ', the debug font its training and record text draws with) comes across as a file of this bundle'
-        + (f.bitmap ? ', for the desktop export and the website build alike' : '; the website build cannot draw a TrueType font and keeps its own'));
+      notes.push(f.bitmap ? 'its readout font (' + f.ref + ', the debug font its training and record text draws with) comes across as a file of this bundle, for the desktop export and the website build alike'
+        : 'its readout font (' + f.ref + ', the debug font its training and record text draws with) comes across as a file of this bundle; the website build cannot draw a TrueType font and keeps its own');
     }
   }
   // The starter stage is a decision this import makes, and it is made from
@@ -1536,11 +1540,16 @@ function menuMusicReport(inv) {
   for (const e of list) for (const t of e.tracks) if (!t.found) missing.push({ key: e.key, ref: t.ref });
   const notes = [];
   if (settable.length) {
-    notes.push('the screenpack’s ' + settable.map((e) => e.key).join(' and ')
-      + ' become this bundle’s menu music, and you can change them on the Content page');
+    const [first, second] = settable.map((e) => e.key), keys = settable.map((e) => e.key).join(' and ');
+    notes.push(settable.length === 2 ? 'the screenpack’s ' + first + ' and ' + second + ' become this bundle’s menu music, and you can change them on the Content page'
+      : 'the screenpack’s ' + keys + ' become this bundle’s menu music, and you can change them on the Content page');
   }
   if (noSetting.length) {
-    notes.push(noSetting.map((e) => e.key).join(' and ') + ' come across and keep playing, but this Studio '
+    const [first, second] = noSetting.map((e) => e.key), keys = noSetting.map((e) => e.key).join(' and ');
+    notes.push(noSetting.length === 2 ? first + ' and ' + second + ' come across and keep playing, but this Studio '
+      + 'has no setting for them: the only menu music it can change is the title and character-select tracks, '
+      + 'so those are the screenpack’s own choice until you edit its system.def'
+      : keys + ' come across and keep playing, but this Studio '
       + 'has no setting for them: the only menu music it can change is the title and character-select tracks, '
       + 'so those are the screenpack’s own choice until you edit its system.def');
   }
@@ -1550,8 +1559,9 @@ function menuMusicReport(inv) {
     notes.push(e.key + ' names ' + e.tracks.filter((t) => t.found).length + ' tracks; the Studio’s setting holds one, '
       + 'so the first is used and the rest sit in the music library');
   }
+  const absent = named - found;
   const note = named === found ? 'all of them are in the build'
-    : (named - found) + ' of them ' + (named - found === 1 ? 'is' : 'are') + ' not in the build';
+    : absent === 1 ? '1 of them is not in the build' : absent + ' of them are not in the build';
   return { named, found, note, notes, settable: settable.map((e) => e.key), noSetting: noSetting.map((e) => e.key), missing };
 }
 
@@ -1567,19 +1577,31 @@ function commonReport(inv) {
     // [Config]) lists none: said plainly, not as "lists 0 ...: ." followed by
     // what files that do not exist would do.
     if (!k.states.length) lines.push('This build’s config lists no common state files ([Common] States), so its characters run on this engine’s own common states.');
-    else lines.push('This build’s config lists ' + k.states.length + ' common state file' + (k.states.length === 1 ? '' : 's')
-      + ' ([Common] States): ' + k.states.map((f) => f.ref).join(', ')
-      + '. In that build they take the place of the engine’s own list - the author’s versions of the engine’s files, and extras on top - '
-      + 'and they do here too: the ' + own(k.states).length + ' that are the build’s own are carried into the bundle under engine/' + BUILD_COMMON_DIR
-      + '/ and listed in place of this engine’s own States, so the build’s systems run as its author wrote them, on the website build and the desktop export alike.'
-      + (k.states.some((f) => f.stock) ? ' The rest are the engine’s own files, byte for byte, and stay the engine’s.' : ''));
+    else {
+      const files = k.states.map((f) => f.ref).join(', '), ownCount = own(k.states).length;
+      lines.push(k.states.length === 1 ? 'This build’s config lists 1 common state file ([Common] States): ' + files + '.'
+        : 'This build’s config lists ' + k.states.length + ' common state files ([Common] States): ' + files + '.');
+      lines.push('In that build they take the place of the engine’s own list - the author’s versions of the engine’s files, and extras on top - '
+        + 'and they do here too: the ' + ownCount + ' that are the build’s own are carried into the bundle under engine/' + BUILD_COMMON_DIR
+        + '/ and listed in place of this engine’s own States, so the build’s systems run as its author wrote them, on the website build and the desktop export alike.');
+      if (k.states.some((f) => f.stock)) lines.push('The rest are the engine’s own files, byte for byte, and stay the engine’s.');
+    }
     const extras = [];
     if (own(k.air).length) extras.push('its common animations (' + own(k.air).map((f) => f.ref).join(', ') + ')');
     if (own(k.cmd).length) extras.push('its common commands (' + own(k.cmd).map((f) => f.ref).join(', ') + ')');
-    if (own(k.fx).length) extras.push('the effects pack' + (own(k.fx).length === 1 ? '' : 's') + ' it lists beside the engine’s (' + own(k.fx).map((f) => f.ref).join(', ') + ')');
-    if (extras.length) lines.push('The same goes for ' + extras.join(', ') + '.');
+    if (own(k.fx).length) {
+      const packs = own(k.fx).map((f) => f.ref).join(', ');
+      extras.push(own(k.fx).length === 1 ? 'the effects pack it lists beside the engine’s (' + packs + ')' : 'the effects packs it lists beside the engine’s (' + packs + ')');
+    }
+    // one reason, or several joined (a join is not matched as a whole)
+    const details = extras.join(', ');
+    if (extras.length) lines.push('The same goes for ' + details + '.');
     if (k.const && k.const.found && !k.const.stock) lines.push('Its own common.const (' + k.const.ref + ') becomes this build’s constant overrides: only the keys it sets differently from the engine’s, on the Engine tab, where you can change them.');
-    if (missing.length) lines.push(missing.length + ' of the files it lists ' + (missing.length === 1 ? 'is' : 'are') + ' not in the build and ' + (missing.length === 1 ? 'is' : 'are') + ' left off the line: ' + missing.map((f) => f.ref).join(', ') + '.');
+    if (missing.length) {
+      const refs = missing.map((f) => f.ref).join(', ');
+      lines.push(missing.length === 1 ? '1 of the files it lists is not in the build and is left off the line: ' + refs + '.'
+        : missing.length + ' of the files it lists are not in the build and are left off the line: ' + refs + '.');
+    }
     // The same check every export makes (checkOwnStates), said now.
     let refused = [];
     try {
@@ -1594,7 +1616,7 @@ function commonReport(inv) {
     }
     return {
       has: true, ikemen: true, listable: true, checked: false,
-      files: k.states, missing: missing.map((f) => f.ref), text: lines.join(' '),
+      files: k.states, missing: missing.map((f) => f.ref), text: lines.join(' '), lines,
     };
   }
   if (!inv.common) {
@@ -1629,7 +1651,8 @@ function commonReport(inv) {
       + 'the ENGINE’s version: a character’s stcommon is compiled before any [Common] States file, so nothing '
       + 'listed there can outrank data/common1.cns.zss. There is no position in the list that changes that.');
     if (k.negative.length) {
-      lines.push('Its ' + k.negative.map((n) => 'Statedef ' + n).join(' and ')
+      const statedefs = k.negative.map((n) => 'Statedef ' + n).join(' and ');
+      lines.push('Its ' + statedefs
         + ' is APPENDED to each character’s own rather than replacing it, so this build’s per-frame driver runs on '
         + 'every character in the bundle - and on top of the copy a character already carries, where it carries one.');
     }
@@ -1642,7 +1665,7 @@ function commonReport(inv) {
     kept: k.keptByEngine, own: k.ownStates, negative: k.negative,
     unknownControllers: k.unknownControllers, unknownTriggers: k.unknownTriggers,
     dependents: inv.dependents, key: BUILD_STATES_KEY, vpath: BUILD_STATES_VPATH,
-    text: lines.join(' '),
+    text: lines.join(' '), lines,
   };
 }
 
@@ -1701,10 +1724,11 @@ function runInspected(name, o, inv) {
     return fillImport(name, inv, { L, bundles, modlib, before, bringsStage, entry });
   } catch (e) {
     if (!ours) throw e;
-    let tail;
-    try { require('./lifebars.js').rmTree(entry.dir); tail = ' - nothing was kept; the half-made bundle "' + entry.name + '" was removed'; }
-    catch (e2) { tail = ' - could not remove ' + entry.dir + ': ' + e2.message; }
-    throw new Error(String((e && e.message) || e) + tail, { cause: e });
+    const error = String((e && e.message) || e);
+    let removed = true, stuck;
+    try { require('./lifebars.js').rmTree(entry.dir); } catch (e2) { removed = false; stuck = e2; }
+    throw new Error(removed ? error + ' - nothing was kept; the half-made bundle "' + entry.name + '" was removed'
+      : error + ' - could not remove ' + entry.dir + ': ' + stuck.message, { cause: e });
   }
 }
 
@@ -1855,7 +1879,8 @@ function fillImport(name, inv, { L, bundles, modlib, before, bringsStage, entry 
     }
     return { hit: null, folder };
   };
-  const notThere = (folder) => (folder ? ' - a folder, not a file; the engine finds nothing there either' : ', not in the build');
+  // why: what names the file; the rest says where it is not
+  const notThere = (why, folder) => (folder ? why + ' - a folder, not a file; the engine finds nothing there either' : why + ', not in the build');
   for (const s of inv.stages) {
     if (!s.found) { wrote.skipped.push({ what: s.ref, why: 'named by the roster, not in the build' }); continue; }
     const base = path.basename(s.rel);
@@ -1868,7 +1893,7 @@ function fillImport(name, inv, { L, bundles, modlib, before, bringsStage, entry 
       // The engine resolves a stage's files from the def's own folder, then
       // the build root, then data/ - the same roots this copies from.
       const { hit, folder } = findFile([srcDir, inv.root, path.join(inv.root, 'data')], dep.val, dep.name);
-      if (!hit) { wrote.skipped.push({ what: dep.val, why: 'named by ' + base + notThere(folder) }); continue; }
+      if (!hit) { wrote.skipped.push({ what: dep.val, why: notThere('named by ' + base, folder) }); continue; }
       if (/\.(ogg|mp3)$/i.test(dep.name)) {
         // Named as the DISK spells it, not as the def does: a def routinely
         // writes a track in a case the file does not have (§4.13), and the two
@@ -1887,7 +1912,7 @@ function fillImport(name, inv, { L, bundles, modlib, before, bringsStage, entry 
         const renamed = new Map();
         for (const f of modlib.attachedCharFiles(aText)) {
           const { hit: fh, folder: fFolder } = findFile([aDir, inv.root, path.join(inv.root, 'data')], f.val, f.name);
-          if (!fh) { wrote.skipped.push({ what: f.val, why: 'named by ' + path.basename(hit.rel) + ' (attached to ' + base + ')' + notThere(fFolder) }); continue; }
+          if (!fh) { wrote.skipped.push({ what: f.val, why: notThere('named by ' + path.basename(hit.rel) + ' (attached to ' + base + ')', fFolder) }); continue; }
           const fto = path.basename(fh.rel);
           if (!fs.existsSync(path.join(stagesDir, fto))) fs.copyFileSync(fh.abs, path.join(stagesDir, fto));
           if (fto !== f.val) renamed.set(f.val, fto);
@@ -1905,7 +1930,7 @@ function fillImport(name, inv, { L, bundles, modlib, before, bringsStage, entry 
         // folder: they go beside the copy at the same relative paths.
         for (const g of require('./vfslib.js').gltfFiles(hit.abs)) {
           const { hit: gh, folder: gFolder } = findFile([path.dirname(hit.abs)], g, null);
-          if (!gh) { wrote.skipped.push({ what: g, why: 'named by ' + to + ' (the model of ' + base + ')' + notThere(gFolder) }); continue; }
+          if (!gh) { wrote.skipped.push({ what: g, why: notThere('named by ' + to + ' (the model of ' + base + ')', gFolder) }); continue; }
           const gto = path.join(stagesDir, ...g.split('/'));
           fs.mkdirSync(path.dirname(gto), { recursive: true });
           if (!fs.existsSync(gto)) fs.copyFileSync(gh.abs, gto);
@@ -2718,12 +2743,15 @@ function checkOwnStates(entries, readOwn) {
   }
   const WHY = lint.WHY_TEXT;
   for (const r of out.refused) {
-    const named = r.name && (r.why === 'trigger' || r.why === 'controller') ? ' (' + r.name + ')' : '';
-    out.report.push(r.entry + (r.line ? ' (line ' + r.line + ')' : '') + ' is not used: ' + (WHY[r.why] || r.why) + named + '. '
-      + (r.standIn ? 'The engine’s ' + r.standIn + ' stands in for it'
-        + (r.functions ? ', with the engine’s ' + r.functions + ' listed before it for the functions it calls' : '')
-        : r.already ? 'The engine’s file for its part is already on the list'
-          : 'No engine file plays its part, so it is left off the list'));
+    const named = r.name && (r.why === 'trigger' || r.why === 'controller');
+    const why = WHY[r.why] || r.why;
+    const detail = r.standIn ? (r.functions ? 'The engine’s ' + r.standIn + ' stands in for it, with the engine’s ' + r.functions + ' listed before it for the functions it calls'
+      : 'The engine’s ' + r.standIn + ' stands in for it')
+      : r.already ? 'The engine’s file for its part is already on the list'
+        : 'No engine file plays its part, so it is left off the list';
+    out.report.push(r.line
+      ? (named ? r.entry + ' (line ' + r.line + ') is not used: ' + why + ' (' + r.name + '). ' + detail : r.entry + ' (line ' + r.line + ') is not used: ' + why + '. ' + detail)
+      : (named ? r.entry + ' is not used: ' + why + ' (' + r.name + '). ' + detail : r.entry + ' is not used: ' + why + '. ' + detail));
   }
   return out;
 }

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="/themes.css">
 <script src="/theme.js"></script>
+<script src="/i18n.js"></script>
 <link rel="stylesheet" href="/booklet.css">
 <title>Setting up online play</title>
 <link rel="icon" type="image/png" sizes="32x32" href="icon/app-32.png">
@@ -146,7 +147,9 @@
       out.push('<p>' + inline(buf.join(' ')) + '</p>');
     }
     // The contents list goes right after the title and the opening lines.
-    const tocHtml = toc.length ? '<nav class="toc"><b>In this guide</b><ol>'
+    // Its head is the window's own word, in the reader's language (the guide
+    // itself is English: see below).
+    const tocHtml = toc.length ? '<nav class="toc"><b>' + esc(I18n.t('In this guide')) + '</b><ol>'
       + toc.map((t) => '<li><a href="#' + t.id + '">' + inline(t.txt.replace(/^\d+\.\s*/, '')) + '</a></li>').join('') + '</ol></nav>' : '';
     const firstH2 = out.findIndex((x) => x.startsWith('<h2'));
     if (firstH2 > 0) out.splice(firstH2, 0, tocHtml);
@@ -158,10 +161,15 @@
       const r = await fetch('/api/setup-guide');
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
       const { html, title } = render(await r.text());
+      // THE GUIDE IS AN ENGLISH DOCUMENT (docs/RANKED-SETUP.md), not the
+      // window's words: no language pack carries it, so it is translate="no"
+      // and reads the same in every language. Only the window around it -
+      // the band, the contents head, a failure - follows the language.
+      box.setAttribute('translate', 'no');
       box.innerHTML = html;
       if (title) document.title = title;
     } catch (e) {
-      box.innerHTML = '<p class="err">Could not open the setup guide: ' + esc(e.message) + '</p>';
+      box.innerHTML = '<p class="err">' + esc(I18n.t('Could not open the setup guide: {error}', { error: e.message })) + '</p>';
     }
   })();
 </script>

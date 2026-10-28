@@ -315,7 +315,7 @@
 #panel-mods #mods .mcard.off .mname { color: var(--ink2); }
 #panel-mods #mods .mcard.off .mdesc, #panel-mods #mods .mcard.off .mmeta { color: var(--ink2); }
 #panel-mods #mods .mcard.off .mimg::after {
-  content: 'Off'; position: absolute; left: 0; top: 0; height: 18px; padding: 0 6px; display: flex; align-items: center;
+  content: var(--word-off, 'Off'); position: absolute; left: 0; top: 0; height: 18px; padding: 0 6px; display: flex; align-items: center;
   background: var(--ink); color: var(--paper); font: 800 var(--t-11)/1 var(--f-disp); letter-spacing: .04em; text-transform: uppercase;
 }
 

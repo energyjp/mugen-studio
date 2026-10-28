@@ -167,6 +167,10 @@ const USER_KEYS = ['bundle', 'downloadFolder'];
 const USER_FILE = SETTINGS_DIR ? path.join(SETTINGS_DIR, 'studio-settings.json') : LAYOUT_FILE;
 const LOCAL_CONFIG_FILE = path.join(SETTINGS_DIR || APP, 'local-config.json');
 const LOGS_DIR = path.join(SETTINGS_DIR || APP, 'logs');
+// Language packs a person adds (Options > Language, server.js serveLang):
+// Settings/languages/ in a portable copy, languages/ beside the program in the
+// checkout. Never made by the program - only read when it is there.
+const LANGUAGES_DIR = path.join(SETTINGS_DIR || APP, 'languages');
 const STARTER_DIR = SETTINGS_DIR && PROGRAM.starter ? at(PROGRAM.starter) : '';
 // Where an older copy kept the user's files: the program folder. In a test
 // that is the folder of its own layout file, never this checkout.
@@ -312,8 +316,10 @@ if (SETTINGS_DIR) {
   let user = {};
   const r = readJson(USER_FILE, 5);
   if (r.error || (!r.missing && !isObject(r.value))) {
-    note('error', path.relative(path.dirname(SETTINGS_DIR), USER_FILE) + ' could not be read ('
-      + (r.error ? reasonOf(r.error) : 'it is not a JSON object') + ') - the bundle and the download folder are at their'
+    const userFile = path.relative(path.dirname(SETTINGS_DIR), USER_FILE), reason = r.error ? reasonOf(r.error) : null;
+    note('error', reason !== null ? userFile + ' could not be read (' + reason + ') - the bundle and the download folder are at their'
+      + ' defaults until it is fixed in a text editor or deleted'
+      : userFile + ' could not be read (it is not a JSON object) - the bundle and the download folder are at their'
       + ' defaults until it is fixed in a text editor or deleted');
   } else if (!r.missing) user = r.value;
   cfg = Object.assign({}, PROGRAM, pickUser(user));
@@ -464,8 +470,9 @@ const EXTERNAL = (() => {
   };
   const v = r.value;
   if (r.error || !isObject(v) || typeof v.root !== 'string' || !path.isAbsolute(v.root)) {
-    say(EXTERNAL_FILE + ' could not be read (' + (r.error ? reasonOf(r.error) : 'it names no build folder')
-      + ') - this bundle opens read-only and empty until it is fixed, or switch to another bundle');
+    const reason = r.error ? reasonOf(r.error) : null;
+    say(reason !== null ? EXTERNAL_FILE + ' could not be read (' + reason + ') - this bundle opens read-only and empty until it is fixed, or switch to another bundle'
+      : EXTERNAL_FILE + ' could not be read (it names no build folder) - this bundle opens read-only and empty until it is fixed, or switch to another bundle');
     return { root: '', folders: {} };
   }
   // The build's own spelling of each folder, as openExternal found it; one
@@ -595,7 +602,7 @@ module.exports = {
   LEADERBOARD_ART, isOtherBundleArt,
   // The user's own files (see the top): '' / beside the program without a
   // "settings" key, in Settings/ with one.
-  SETTINGS_DIR, USER_FILE, USER_KEYS, LOCAL_CONFIG_FILE, LOGS_DIR, STARTER_DIR, STARTUP_NOTES,
+  SETTINGS_DIR, USER_FILE, USER_KEYS, LOCAL_CONFIG_FILE, LOGS_DIR, LANGUAGES_DIR, STARTER_DIR, STARTUP_NOTES,
   dir, folderName, engineZip,
   // An external build opened in place (see EXTERNAL above): readOnly is true
   // for every such bundle, externalRoot its folder ('' for every other bundle,

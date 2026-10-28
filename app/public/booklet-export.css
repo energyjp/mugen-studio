@@ -179,7 +179,7 @@ body.xback-open #main > nav.tabs > .tab.bk-thumb[aria-selected="true"]:focus-vis
 #exportDlg .xterm:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 #exportDlg .xent { padding: 5px 12px; }
 #exportDlg .xent:nth-child(even) { background: var(--plate); }
-#exportDlg .xl { display: grid; grid-template-columns: 7ch minmax(0, 1fr); column-gap: 1ch; }
+#exportDlg .xl { display: grid; grid-template-columns: var(--xl-tag-w, 7ch) minmax(0, 1fr); column-gap: 1ch; }   /* --xl-tag-w: a language's longer tags (studio.html cssWords) */
 #exportDlg .xl-tag { font-weight: 700; white-space: nowrap; }
 #exportDlg .xl-txt { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* BREAK in reverse (the flag's fill), so it never reads as the export's own line, whose ink is

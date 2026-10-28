@@ -129,9 +129,9 @@ function downError(e, timeoutMs) {
   }
   // Only the error's code (ECONNREFUSED, ENOTFOUND): an undici message can
   // quote the URL, and the other kind's URLs carry the key.
-  const code = e && e.cause && typeof e.cause.code === 'string' && /^[A-Z_]{2,40}$/.test(e.cause.code) ? ' (' + e.cause.code + ')' : '';
-  return new PlayersError('down', 'The leaderboard server did not answer' + code
-    + '. Check the Leaderboard address above, and that the server is running.');
+  const code = e && e.cause && typeof e.cause.code === 'string' && /^[A-Z_]{2,40}$/.test(e.cause.code) ? e.cause.code : '';
+  return new PlayersError('down', code ? 'The leaderboard server did not answer (' + code + '). Check the Leaderboard address above, and that the server is running.'
+    : 'The leaderboard server did not answer. Check the Leaderboard address above, and that the server is running.');
 }
 
 // Which kind of server is at the address (see the top of this file). Nothing
@@ -270,8 +270,11 @@ async function saveBackup(c, reason) {
   };
   const text = JSON.stringify(doc, null, 2) + '\n';
   const dir = c.backupDir;
-  const refusal = (e) => new PlayersError('backup', 'Could not save the copy in ' + dir + ' (' + String((e && (e.code || e.message)) || e) + ')'
-    + (reason === 'before-reset' ? ', so nothing was reset.' : '.'));
+  const refusal = (e) => {
+    const why = String((e && (e.code || e.message)) || e);
+    return new PlayersError('backup', reason === 'before-reset' ? 'Could not save the copy in ' + dir + ' (' + why + '), so nothing was reset.'
+      : 'Could not save the copy in ' + dir + ' (' + why + ').');
+  };
   if (!dir) throw refusal(new Error('no folder'));
   try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { throw refusal(e); }
   const base = 'leaderboard-' + hostSlug(c.address) + '-' + stampOf(c.now()) + (reason === 'before-reset' ? '-before-reset' : '');
@@ -446,10 +449,17 @@ async function run(input, env) {
         throw err;
       }
       if (r.ok === true) return done({ name: String(r.name || name), removed });
-      const was = removed ? ' Their rating and record were taken off the leaderboard.' : '';
-      if (r.reason === 'unknown') return failed('unknown', 'Nobody has claimed the name ' + name + ', so there is nothing to release.' + was, { removed });
-      if (r.reason === 'invalid') return failed('invalid', name + ' is not a name the server accepts.' + was, { removed });
-      throw new PlayersError('garbled', 'The leaderboard server did not say whether the name was released.' + was);
+      // Said whole, with or without the record already taken off.
+      if (r.reason === 'unknown') {
+        return failed('unknown', removed ? 'Nobody has claimed the name ' + name + ', so there is nothing to release. Their rating and record were taken off the leaderboard.'
+          : 'Nobody has claimed the name ' + name + ', so there is nothing to release.', { removed });
+      }
+      if (r.reason === 'invalid') {
+        return failed('invalid', removed ? name + ' is not a name the server accepts. Their rating and record were taken off the leaderboard.'
+          : name + ' is not a name the server accepts.', { removed });
+      }
+      throw new PlayersError('garbled', removed ? 'The leaderboard server did not say whether the name was released. Their rating and record were taken off the leaderboard.'
+        : 'The leaderboard server did not say whether the name was released.');
     }
 
     if (op === 'remove') {

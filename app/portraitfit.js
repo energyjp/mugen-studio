@@ -243,7 +243,7 @@ function quantizeDithered(rgba, w, h, pal768) {
 // picture, the one built for it).
 function renderFit(src, fit, outPal) {
   const w = fit.w | 0, h = fit.h | 0;
-  if (!(w > 0 && h > 0 && w <= 4096 && h <= 4096)) throw new Error('bad target size ' + fit.w + 'x' + fit.h);
+  if (!(w > 0 && h > 0 && w <= 4096 && h <= 4096)) { const size = fit.w + 'x' + fit.h; throw new Error('bad target size ' + size); }
   if (src.rgba && !src.pal) src.pal = buildPalette(src.rgba, src.w * src.h);
   const r = resample(src, w, h, fit);
   const pal = outPal || src.pal;

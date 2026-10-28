@@ -78,88 +78,95 @@ const charedit = require('./charedit.js');
 //   ipair  two whole numbers      fpair  two decimals
 //   int    one whole number       bool   0 or 1
 //   spr    group, number          font   up to eight whole numbers
-// The first of the three lines of each bar's reader; they run pos, range.x,
-// range.y in that order.
+// `at` is the first of the three lines of each bar's reader; they run pos,
+// range.x, range.y in that order. `does` is its position row's sentence,
+// written whole for each bar (the Studio's languages translate whole
+// sentences), and every label names its player in full for the same reason.
 const BARS = [
-  ['lifebar', 'Life bars', 491, 'the life bar'],
-  ['powerbar', 'Power bars', 868, 'the super meter'],
-  ['guardbar', 'Guard bars', 1248, 'the guard meter'],
-  ['stunbar', 'Stun bars', 1496, 'the stun meter'],
+  { sec: 'lifebar', group: 'Life bars', at: 491,
+    does: 'Where the life bar is drawn, in the fight screen’s own coordinate space. Every part of the bar is drawn relative to this.' },
+  { sec: 'powerbar', group: 'Power bars', at: 868,
+    does: 'Where the super meter is drawn, in the fight screen’s own coordinate space. Every part of the bar is drawn relative to this.' },
+  { sec: 'guardbar', group: 'Guard bars', at: 1248,
+    does: 'Where the guard meter is drawn, in the fight screen’s own coordinate space. Every part of the bar is drawn relative to this.' },
+  { sec: 'stunbar', group: 'Stun bars', at: 1496,
+    does: 'Where the stun meter is drawn, in the fight screen’s own coordinate space. Every part of the bar is drawn relative to this.' },
 ];
 
 const FIELDS = [];
-for (const [sec, group, at, what] of BARS) {
+for (const { sec, group, at, does } of BARS) {
   const cite = (n) => 'fightscreen.go:' + (at + n);
   for (const p of ['p1', 'p2']) {
+    const one = p === 'p1';
     FIELDS.push({
       id: sec + '.' + p + '.pos', sec, key: p + '.pos', kind: 'ipair', group,
-      label: (p === 'p1' ? 'Player 1' : 'Player 2') + ' position', cite: cite(0),
-      does: 'Where ' + what + ' is drawn, in the fight screen’s own coordinate space. Every part of the bar is drawn relative to this.',
+      label: one ? 'Player 1 position' : 'Player 2 position', cite: cite(0),
+      does,
       risk: 'Nothing validates it: a bar put outside the screen is simply never seen.',
     });
     FIELDS.push({
       id: sec + '.' + p + '.range.x', sec, key: p + '.range.x', kind: 'ipair', group,
-      label: (p === 'p1' ? 'Player 1' : 'Player 2') + ' fill range', cite: cite(1),
+      label: one ? 'Player 1 fill range' : 'Player 2 fill range', cite: cite(1),
       does: 'The two x offsets the bar’s fill runs between as the value drops - full at the first, empty at the second. Player 2’s usually mirrors player 1’s.',
       risk: 'Both the same makes a bar with no length: it is drawn and never appears to move.',
     });
     FIELDS.push({
       id: sec + '.' + p + '.range.y', sec, key: p + '.range.y', kind: 'ipair', group,
-      label: (p === 'p1' ? 'Player 1' : 'Player 2') + ' fill height', cite: cite(2),
+      label: one ? 'Player 1 fill height' : 'Player 2 fill height', cite: cite(2),
       does: 'The vertical extent of the fill. Most packs leave it out and let the sprite decide.',
       risk: 'Setting it on a bar whose art was not drawn for it crops the fill.',
     });
   }
 }
 for (const p of ['p1', 'p2']) {
-  const who = p === 'p1' ? 'Player 1' : 'Player 2';
+  const one = p === 'p1';
   FIELDS.push({
     id: 'face.' + p + '.pos', sec: 'face', key: p + '.pos', kind: 'ipair', group: 'Portraits',
-    label: who + ' portrait position', cite: 'fightscreen.go:1764',
+    label: one ? 'Player 1 portrait position' : 'Player 2 portrait position', cite: 'fightscreen.go:1764',
     does: 'Where the portrait and everything behind it is drawn.',
     risk: 'The backgrounds are positioned relative to this, so moving it moves the whole plate.',
   });
   FIELDS.push({
     id: 'face.' + p + '.face.spr', sec: 'face', key: p + '.face.spr', kind: 'spr', group: 'Portraits',
-    label: who + ' portrait sprite', cite: 'fightscreen.go:1772',
+    label: one ? 'Player 1 portrait sprite' : 'Player 2 portrait sprite', cite: 'fightscreen.go:1772',
     does: 'Which sprite of the CHARACTER’s own .sff is drawn as the in-match face. Stock packs use 9000,0; some ask for 9000,20, which standard characters do not ship.',
     risk: 'This one is not in the pack: it is read from each character. A number a character lacks draws nothing at all for that character, and nothing says so.',
     fromChar: true,
   });
   FIELDS.push({
     id: 'face.' + p + '.face.offset', sec: 'face', key: p + '.face.offset', kind: 'fpair', group: 'Portraits',
-    label: who + ' portrait offset', cite: 'common.go:1214',
+    label: one ? 'Player 1 portrait offset' : 'Player 2 portrait offset', cite: 'common.go:1214',
     does: 'Moves the portrait within its plate, without moving the backgrounds.',
     risk: 'Characters draw their portraits at different sizes, so an offset tuned to one roster can be wrong for the next character added.',
   });
   FIELDS.push({
     id: 'face.' + p + '.face.scale', sec: 'face', key: p + '.face.scale', kind: 'fpair', group: 'Portraits',
-    label: who + ' portrait scale', cite: 'common.go:1232',
+    label: one ? 'Player 1 portrait scale' : 'Player 2 portrait scale', cite: 'common.go:1232',
     does: 'Scales the portrait sprite. 1,1 is the sprite’s own size.',
     risk: '0 in either makes the portrait vanish; a negative value mirrors it.',
     refusePair: (a, b) => (a === 0 || b === 0 ? 'a scale of 0 makes the portrait vanish' : null),
   });
   FIELDS.push({
     id: 'face.' + p + '.face.palshare', sec: 'face', key: p + '.face.palshare', kind: 'bool', group: 'Portraits',
-    label: who + ' portrait follows the color pick', cite: 'fightscreen.go:1774', def: 1,
+    label: one ? 'Player 1 portrait follows the color pick' : 'Player 2 portrait follows the color pick', cite: 'fightscreen.go:1774', def: 1,
     does: 'Whether the portrait is drawn through the palette the player picked at the character select, so it changes color with the body.',
     risk: 'This is the switch behind the garbled SFF v1 lifebar face: a portrait carrying its OWN palette is resolved through the body’s when this is on, and stock packs never set it. The engine’s default is ON. Turning it off fixes those portraits and stops every portrait following its color pick.',
   });
   FIELDS.push({
     id: 'name.' + p + '.pos', sec: 'name', key: p + '.pos', kind: 'ipair', group: 'Names',
-    label: who + ' name position', cite: 'fightscreen.go:2071',
+    label: one ? 'Player 1 name position' : 'Player 2 name position', cite: 'fightscreen.go:2071',
     does: 'Where the character’s display name is drawn.',
     risk: 'The name’s alignment comes from its font parameter, so a position that looks centered for one name can run off for a longer one.',
   });
   FIELDS.push({
     id: 'name.' + p + '.name.font', sec: 'name', key: p + '.name.font', kind: 'font', group: 'Names',
-    label: who + ' name font', cite: 'fightscreen.go:250',
+    label: one ? 'Player 1 name font' : 'Player 2 name font', cite: 'fightscreen.go:250',
     does: 'index, bank, alignment, then optionally red, green, blue, alpha and height. Alignment is -1 right, 0 centered, 1 left.',
     risk: 'An index the [Files] section does not declare is logged once and turned into -1, which draws nothing at all.',
   });
   FIELDS.push({
     id: 'name.' + p + '.name.scale', sec: 'name', key: p + '.name.scale', kind: 'fpair', group: 'Names',
-    label: who + ' name scale', cite: 'common.go:1232',
+    label: one ? 'Player 1 name scale' : 'Player 2 name scale', cite: 'common.go:1232',
     does: 'Scales the name text. 1,1 is the font’s own size.',
     risk: '0 in either makes the name vanish.',
     refusePair: (a, b) => (a === 0 || b === 0 ? 'a scale of 0 makes the name vanish' : null),
@@ -397,9 +404,13 @@ function parseValue(f, input, ctx) {
     if (!parts.every(whole)) return { error: 'whole numbers only' };
     const nums = parts.map((p) => parseInt(p, 10));
     if (nums[0] !== -1 && ctx && ctx.fonts && !ctx.fonts.includes(nums[0])) {
+      // (the font names are values: "font3", "font2, font4")
+      const font = 'font' + nums[0];
+      const fonts = ctx.fonts.map((n) => 'font' + n).join(', ');
       return {
-        error: 'this pack declares no font' + nums[0] + '. The engine logs an undefined font once and draws nothing at all'
-          + (ctx.fonts.length ? ' - it has ' + ctx.fonts.map((n) => 'font' + n).join(', ') : ''),
+        error: ctx.fonts.length
+          ? 'this pack declares no ' + font + '. The engine logs an undefined font once and draws nothing at all - it has ' + fonts
+          : 'this pack declares no ' + font + '. The engine logs an undefined font once and draws nothing at all',
       };
     }
     if (nums.length >= 3 && (nums[2] < -1 || nums[2] > 1)) return { error: 'alignment is -1 right, 0 centered or 1 left' };
@@ -542,7 +553,8 @@ function describe(text, opts) {
     } else if (f.kind === 'font') {
       const n = parseInt(partsOf(have.raw)[0], 10);
       if (Number.isFinite(n) && n !== -1 && !fonts.includes(n)) {
-        row.note = 'font' + n + ' is not declared in [Files], so the engine draws nothing here';
+        const font = 'font' + n;
+        row.note = font + ' is not declared in [Files], so the engine draws nothing here';
         row.bad = true;
       }
     }

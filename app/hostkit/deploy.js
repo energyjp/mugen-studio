@@ -165,14 +165,15 @@ function explain(e) {
     case 10007:
       return 'Your Cloudflare account has no workers.dev name yet. Choose one: your addresses will end in <name>.workers.dev.';
     case 10021:
-      return 'Cloudflare rejected the server code' + (msg ? ' (' + msg + ')' : '') + '. This is a Mugen Studio bug; please report it.';
+      return msg ? 'Cloudflare rejected the server code (' + msg + '). This is a Mugen Studio bug; please report it.'
+        : 'Cloudflare rejected the server code. This is a Mugen Studio bug; please report it.';
     case 10031:
       return 'That workers.dev name belongs to someone else. Try another.';
     case 10034:
       return 'Cloudflare wants the email address on your account verified before it runs Workers. Open the email Cloudflare sent you and press its link (or resend it from your Cloudflare profile), then try again.';
     default:
       if (err.status === 429) return 'Cloudflare is limiting how fast this token can make requests. Wait a few minutes, then try again.';
-      return 'Cloudflare said: ' + (msg || 'unknown error') + (c != null && c !== '' ? ' [code ' + c + ']' : '');
+      return c != null && c !== '' ? 'Cloudflare said: ' + (msg || 'unknown error') + ' [code ' + c + ']' : 'Cloudflare said: ' + (msg || 'unknown error');
   }
 }
 
@@ -487,7 +488,7 @@ function loadKit(dir, deps) {
     if (NOT_UPLOADED.includes(name)) throw kitbug((from || 'the kit') + ' imports ' + name + ', which is the Studio side and is never uploaded');
     let content;
     try { content = readFile(path.join(root, name)); } catch (e) {
-      throw kitbug('missing ' + name + (from ? ', imported by ' + from : ''));
+      throw kitbug(from ? 'missing ' + name + ', imported by ' + from : 'missing ' + name);
     }
     seen.add(name);
     modules.push({ name, content });
@@ -560,8 +561,11 @@ async function probeServers(addresses, opts, deps) {
     if (!identity || !identity.ok) identity = await probe({ what: 'identity', identityUrl: addresses.identityUrl }, d.probeDeps);
     if (lobby.ok && identity.ok) break;
     if (now() - t0 + intervalMs > windowMs) break;
-    log('not answering yet (' + (lobby.ok ? '' : 'lobby: ' + (lobby.why || 'no answer')) + (lobby.ok || identity.ok ? '' : '; ')
-      + (identity.ok ? '' : 'leaderboard: ' + (identity.why || 'no answer')) + '), trying again in ' + Math.round(intervalMs / 1000) + ' s');
+    // One line per shape: which of the two did not answer, and why.
+    const secs = Math.round(intervalMs / 1000);
+    log(lobby.ok ? 'not answering yet (leaderboard: ' + (identity.why || 'no answer') + '), trying again in ' + secs + ' s'
+      : identity.ok ? 'not answering yet (lobby: ' + (lobby.why || 'no answer') + '), trying again in ' + secs + ' s'
+        : 'not answering yet (lobby: ' + (lobby.why || 'no answer') + '; leaderboard: ' + (identity.why || 'no answer') + '), trying again in ' + secs + ' s');
     await sleep(intervalMs);
   }
   return { ok: !!(lobby.ok && identity.ok), attempts, waitedMs: now() - t0, lobby, identity };
@@ -588,7 +592,7 @@ function cleanName(v, fallback) {
 function failure(e, extra) {
   const code = e && e.code !== undefined ? e.code : 'error';
   const out = Object.assign({ ok: false, code, why: explain(e) }, extra || {});
-  if (!(e instanceof HostError)) out.why = 'Unexpected error: ' + String((e && e.message) || e);
+  if (!(e instanceof HostError)) { const error = String((e && e.message) || e); out.why = 'Unexpected error: ' + error; }
   return out;
 }
 

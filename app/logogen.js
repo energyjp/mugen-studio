@@ -40,7 +40,8 @@ function readPngSize(buf) {
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
   if (!w || !h || w > 0xffff || h > 0xffff) {
-    throw new Error('that image is ' + w + 'x' + h + '; a logo must be between 1 and 65535 on each side');
+    const size = w + 'x' + h;
+    throw new Error('that image is ' + size + '; a logo must be between 1 and 65535 on each side');
   }
   return { w, h };
 }

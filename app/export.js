@@ -273,12 +273,18 @@ function assertNoHostSecrets(dir, label, extra) {
   if (!r.hits.length) return r;
   const what = [...new Set(r.hits.map((h) => h.name))].map((n) => HOST_SECRET_TEXT[n] || n);
   const files = [...new Set(r.hits.map((h) => h.file))];
-  throw new Error('THIS BUILD CARRIES ' + what.join(' AND ') + ' - ' + (label || dir) + '\n  in: '
-    + files.slice(0, 12).join(', ') + (files.length > 12 ? ', ...' : '')
-    + '\nIt must never leave this computer, so the folder exists but must not be uploaded or sent. It most likely'
-    + ' was pasted into a text field that goes into the build (the site title or credit, say): take it out there and'
-    + ' build again. If the token itself may have been seen, delete it on Cloudflare\'s API Tokens page and make a new one.'
-    + (r.hits.some((h) => h.name === 'LEADERBOARD_ADMIN_KEY') ? ' If a leaderboard\'s admin key may have been seen, change it on that server.' : ''));
+  // detail: one secret's name is a message of its own (two joined are not matched)
+  const detail = what.join(' AND '), where = label || dir, list = files.slice(0, 12).join(', ') + (files.length > 12 ? ', ...' : '');
+  throw new Error(r.hits.some((h) => h.name === 'LEADERBOARD_ADMIN_KEY')
+    ? 'THIS BUILD CARRIES ' + detail + ' - ' + where + '\n  in: ' + list
+      + '\nIt must never leave this computer, so the folder exists but must not be uploaded or sent. It most likely'
+      + ' was pasted into a text field that goes into the build (the site title or credit, say): take it out there and'
+      + ' build again. If the token itself may have been seen, delete it on Cloudflare\'s API Tokens page and make a new one.'
+      + ' If a leaderboard\'s admin key may have been seen, change it on that server.'
+    : 'THIS BUILD CARRIES ' + detail + ' - ' + where + '\n  in: ' + list
+      + '\nIt must never leave this computer, so the folder exists but must not be uploaded or sent. It most likely'
+      + ' was pasted into a text field that goes into the build (the site title or credit, say): take it out there and'
+      + ' build again. If the token itself may have been seen, delete it on Cloudflare\'s API Tokens page and make a new one.');
 }
 
 // A CHOSEN FOLDER IS EMPTIED ONLY WHEN IT HOLDS A WEBSITE EXPORT. Every export
@@ -832,15 +838,17 @@ function zipFolderContents(dir) {
       const got = names ? names.filter((n) => !n.endsWith('/')).length : -1;
       if (got !== want) {
         dropPart();
-        reject(new Error('The zip came out wrong (' + (got < 0 ? 'it could not be read back' : got + ' of ' + want + ' files') + '), so it was not kept.'));
+        reject(new Error(got < 0 ? 'The zip came out wrong (it could not be read back), so it was not kept.'
+          : 'The zip came out wrong (' + got + ' of ' + want + ' files), so it was not kept.'));
         return;
       }
       try {
         fs.renameSync(part, zip);
       } catch (e) {
         dropPart();
-        reject(new Error('Could not put the zip in place (' + (e.code || e.message) + '): ' + zip
-          + (e.code === 'EBUSY' || e.code === 'EPERM' ? '. Is the older zip open in another program?' : '')));
+        const code = e.code || e.message;
+        reject(new Error(e.code === 'EBUSY' || e.code === 'EPERM' ? 'Could not put the zip in place (' + code + '): ' + zip + '. Is the older zip open in another program?'
+          : 'Could not put the zip in place (' + code + '): ' + zip));
         return;
       }
       resolve({ zip, entries: got, bytes: fs.statSync(zip).size, replaced });

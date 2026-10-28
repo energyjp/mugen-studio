@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="/themes.css">
 <script src="/theme.js"></script>
+<script src="/i18n.js"></script>
 <link rel="stylesheet" href="/booklet.css">
 <script src="/booklet.js"></script>
 <title>Animation editor</title>
@@ -186,7 +187,7 @@
 </head>
 <body>
   <header class="bk-secband" id="band">
-    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who">&hellip;</span><span class="an">Action <span id="actno"></span></span><span class="k" lang="ja">アニメ</span></h1>
+    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who" translate="no">&hellip;</span><span class="an">Action <span id="actno"></span></span><span class="k" lang="ja">アニメ</span></h1>
     <div class="bk-secband-meta">Edits write the character's .air; the original is kept for Revert. Drag boxes; [ and ] step elements.</div>
   </header>
   <div id="edited" hidden></div>
@@ -211,8 +212,15 @@
   const name = q.get('name') || char;
   const pal = q.get('pal');
   const $ = (id) => document.getElementById(id);
-  $('who').textContent = name || 'no character';
-  document.title = (name || 'Animation') + ' — animation editor';
+  // IN THE READER'S LANGUAGE (i18n.js). Composed words go through I18n.t -
+  // never a bare t, since this page names ticks, timings and triggers t. The
+  // character's name, the .air's file names and the field names (time, group,
+  // number, xscale...) are translate="no": they are the file's words. Text
+  // the server sends is shown whole (the observer matches it against the
+  // keys), or through I18n.server, or as a message placeholder ({error},
+  // {why}, {detail}) inside an I18n.t sentence, which looks it up too.
+  $('who').textContent = name || I18n.t('no character');
+  document.title = name ? I18n.t('{name} — animation editor', { name }) : I18n.t('Animation — animation editor');
 
   // All user and character text goes in through textContent.
   function el(tag, props, ...kids) {
@@ -310,14 +318,14 @@
   }
   function sendable(snap, label, pinned) {
     const a = act();
-    const drop = (why) => { say(label + ' was not saved: ' + why + '.', 'err'); return null; };
+    const drop = (why) => { say(I18n.t('{label} was not saved: {why}.', { label, why }), 'err'); return null; };
     if (!view || !snap.sha1) return drop('nothing was read');
     if (snap.epoch !== epoch) return drop('the .air was read again since it was made');
     // The write it built on was not saved: that one already said why.
     if (snap.dep && snap.dep.lost) { if ($('msg').className !== 'err') drop('the change it built on was not saved'); return null; }
     if (!a || a.no !== snap.action) {
       if (pinned && view.sha1 === snap.sha1) return view.sha1;
-      return drop('action ' + snap.action + ' is no longer on screen');
+      return drop(I18n.t('action {n} is no longer on screen', { n: snap.action }));
     }
     if (snap.structure !== structure) return drop('the elements were renumbered under it (an insert, delete or move was written first)');
     if (view.sha1 === snap.sha1) return view.sha1;
@@ -371,8 +379,8 @@
     try {
       v = await getJson('/api/char-air?char=' + encodeURIComponent(char) + '&action=' + encodeURIComponent(n));
     } catch (e) {
-      if (!view) { $('side').textContent = ''; $('side').append(el('div', { class: 'none', text: 'Could not read action ' + n + ': ' + e.message })); renderAction(null, n, e.message); }
-      else say('Action ' + n + ': ' + e.message, 'err');
+      if (!view) { $('side').textContent = ''; $('side').append(el('div', { class: 'none', text: I18n.t('Could not read action {n}: {error}', { n, error: e.message }) })); renderAction(null, n, e.message); }
+      else say(I18n.t('Action {n}: {error}', { n, error: e.message }), 'err');
       return false;
     }
     const changedAction = !view || view.action.no !== v.action.no;
@@ -447,17 +455,25 @@
     const others = file === airFile ? listed.filter((x) => x !== airFile) : [airFile];
     return others.length ? { files: others, sure: false } : null;
   }
+  // One whole sentence per case and number, so a language can choose its own
+  // verbs; the file names are data.
   function revertNote(file, p) {
     const names = p.files.join(', '), many = p.files.length > 1;
     const isAir = file === (view && view.file);
     if (p.sure) {
-      return names + (many ? ' were' : ' was') + ' written with it (' + p.label + '): '
-        + (isAir ? 'the AnimElem triggers renumbered there count these elements - revert ' + (many ? 'them' : 'it') + ' too' : 'the AnimElem triggers renumbered here count its elements - revert both')
-        + ', or they fire on other frames';
+      const v = { names, label: p.label };
+      if (isAir) {
+        return many ? I18n.t('{names} were written with it ({label}): the AnimElem triggers renumbered there count these elements - revert them too, or they fire on other frames', v)
+          : I18n.t('{names} was written with it ({label}): the AnimElem triggers renumbered there count these elements - revert it too, or they fire on other frames', v);
+      }
+      return many ? I18n.t('{names} were written with it ({label}): the AnimElem triggers renumbered here count its elements - revert both, or they fire on other frames', v)
+        : I18n.t('{names} was written with it ({label}): the AnimElem triggers renumbered here count its elements - revert both, or they fire on other frames', v);
     }
-    return isAir
-      ? names + (many ? ' are' : ' is') + ' also edited: if an insert, delete or move renumbered AnimElem triggers there, revert ' + (many ? 'them' : 'it') + ' too, or they fire on other frames'
-      : names + ' is also edited: if an insert, delete or move renumbered AnimElem triggers here to match its elements, revert both, or they fire on other frames';
+    if (isAir) {
+      return many ? I18n.t('{names} are also edited: if an insert, delete or move renumbered AnimElem triggers there, revert them too, or they fire on other frames', { names })
+        : I18n.t('{names} is also edited: if an insert, delete or move renumbered AnimElem triggers there, revert it too, or they fire on other frames', { names });
+    }
+    return I18n.t('{names} is also edited: if an insert, delete or move renumbered AnimElem triggers here to match its elements, revert both, or they fire on other frames', { names });
   }
   function renderEdited() {
     const box = $('edited');
@@ -468,12 +484,12 @@
     box.append(el('b', { text: 'Edited' }));
     const listed = ed.map((x) => x.file);
     for (const f of ed) {
-      const btn = el('button', { class: 'warn', text: 'Revert', title: 'Put back the original ' + f.file + ' (every edit to it is discarded)' });
+      const btn = el('button', { class: 'warn', text: 'Revert', title: I18n.t('Put back the original {file} (every edit to it is discarded)', { file: f.file }) });
       let armed = null;
       btn.onclick = () => {
         if (!armed) {
           const p = partnersOf(f.file, listed);
-          btn.textContent = 'Revert ' + f.file + '? ' + (p ? revertNote(f.file, p) + '. Click again' : 'click again');
+          btn.textContent = p ? I18n.t('Revert {file}? {note}. Click again', { file: f.file, note: revertNote(f.file, p) }) : I18n.t('Revert {file}? click again', { file: f.file });
           armed = setTimeout(() => { armed = null; btn.textContent = 'Revert'; }, p ? 9000 : 4000);
           return;
         }
@@ -489,12 +505,15 @@
             const p = partnersOf(f.file, listed);
             const r = await postJson('/api/char-edit-revert', { char, file: f.file });
             const still = p && Array.isArray(r.edited) ? p.files.filter((x) => r.edited.some((y) => y.file === x)) : [];
-            say(f.file + ' is back to the original.' + (still.length ? ' ' + still.join(', ') + (still.length === 1 ? ' is' : ' are') + ' still edited: revert ' + (still.length === 1 ? 'it' : 'them') + ' too if its AnimElem triggers were renumbered with ' + f.file + '.' : ''), still.length ? 'err' : 'ok');
-          } catch (e) { say('Revert failed: ' + e.message, 'err'); }
+            const back = { file: f.file, names: still.join(', ') };
+            say(!still.length ? I18n.t('{file} is back to the original.', back)
+              : still.length === 1 ? I18n.t('{file} is back to the original. {names} is still edited: revert it too if its AnimElem triggers were renumbered with {file}.', back)
+                : I18n.t('{file} is back to the original. {names} are still edited: revert them too if its AnimElem triggers were renumbered with {file}.', back), still.length ? 'err' : 'ok');
+          } catch (e) { say(I18n.t('Revert failed: {error}', { error: e.message }), 'err'); }
           await loadAction(actionNo, true);
         });
       };
-      box.append(el('span', { class: 'f', text: f.file + (f.exists === false ? ' (missing)' : '') }), btn);
+      box.append(el('span', { class: 'f', translate: 'no', text: f.exists === false ? I18n.t('{file} (missing)', { file: f.file }) : f.file }), btn);
     }
   }
 
@@ -505,7 +524,7 @@
     $('actno').textContent = String(v ? v.action.no : n);
     const list = v ? v.actions : [];
     const pick = el('select', { title: 'Every action this .air defines (the first definition of each number)' });
-    for (const no of list) pick.append(el('option', { value: no, text: 'action ' + no }));
+    for (const no of list) pick.append(el('option', { value: no, text: I18n.t('action {n}', { n: no }) }));
     if (v) pick.value = String(v.action.no);
     pick.onchange = () => serial(() => loadAction(Number(pick.value)));
     const at = list.indexOf(v ? v.action.no : n);
@@ -517,11 +536,14 @@
     if (!v) { host.append(el('div', { class: 'note warn', text: error || '' })); return; }
     const a = v.action;
     const f = el('div', { class: 'facts' });
-    f.append(el('code', { text: v.file + ':' + a.header.line }), ' · ' + a.elements.length + ' element' + (a.elements.length === 1 ? '' : 's')
-      + ' · ' + (a.totalTicks < 0 ? 'holds on element ' + (a.holdsOn || a.elements.length) : a.totalTicks + ' ticks')
-      + (a.loopstartLines.length && a.loopstart > 0 ? ' · loops from element ' + (a.loopstart + 1) : '')
-      + ' · localcoord ' + v.localcoord.join('x') + (v.localcoordDeclared ? '' : ' (undeclared)')
-      + ' · [Size] ' + v.size.xscale + ' x ' + v.size.yscale);
+    // After the file:line, a list of facts: each its own phrase in the
+    // reader's language, the · between them punctuation.
+    const facts = [a.elements.length === 1 ? I18n.t('1 element') : I18n.t('{n} elements', { n: a.elements.length }),
+      a.totalTicks < 0 ? I18n.t('holds on element {n}', { n: a.holdsOn || a.elements.length }) : I18n.t('{n} ticks', { n: a.totalTicks })];
+    if (a.loopstartLines.length && a.loopstart > 0) facts.push(I18n.t('loops from element {n}', { n: a.loopstart + 1 }));
+    facts.push(v.localcoordDeclared ? I18n.t('localcoord {size}', { size: v.localcoord.join('x') }) : I18n.t('localcoord {size} (undeclared)', { size: v.localcoord.join('x') }));
+    facts.push(I18n.t('[Size] {x} x {y}', { x: v.size.xscale, y: v.size.yscale }));
+    f.append(el('code', { text: v.file + ':' + a.header.line }), ' · ' + facts.join(' · '));
     host.append(f);
     // THE SCALE IS HONEST WITHOUT BEING APPLIED. Sprite pixels and Clsn
     // coordinates are in the same units; in a match the engine scales both by
@@ -529,14 +551,14 @@
     // clsnScale = size.xscale x animlocalscl, char.go:7854-7875). Drawing both
     // unscaled keeps their relation exact, which is what an edit needs.
     host.append(el('div', { class: 'note', text: 'Drawn in .air units: one sprite pixel = one box unit. In a match both scale together by [Size] and localcoord (char.go:7854-7875).' }));
-    if (copies(a)) host.append(el('div', { class: 'note warn', text: 'Copy Action ' + a.copy.target + ': this action has no frames of its own. Edit action ' + a.copy.target + ' instead.' }));
-    else if (!a.elements.length) host.append(el('div', { class: 'note warn', text: 'No frames: the engine plays action ' + (a.table && a.table.emptyCopyOf) + ' in its place (anim.go:1210-1222).' }));
-    if (a.copy && !copies(a)) host.append(el('div', { class: 'note', text: 'Line ' + a.copy.line + ' "' + a.copy.raw + '" names no action number: the engine ignores it (anim.go:309-318).' }));
+    if (copies(a)) host.append(el('div', { class: 'note warn', text: I18n.t('Copy Action {n}: this action has no frames of its own. Edit action {n} instead.', { n: a.copy.target }) }));
+    else if (!a.elements.length) host.append(el('div', { class: 'note warn', text: I18n.t('No frames: the engine plays action {n} in its place (anim.go:1210-1222).', { n: String(a.table && a.table.emptyCopyOf) }) }));
+    if (a.copy && !copies(a)) host.append(el('div', { class: 'note', text: I18n.t('Line {line} "{raw}" names no action number: the engine ignores it (anim.go:309-318).', { line: a.copy.line, raw: a.copy.raw }) }));
     if (a.table && a.table.unresolved) host.append(el('div', { class: 'note warn', text: 'Its Copy Action chain does not resolve: the engine deletes this action.' }));
-    for (const d of (a.duplicates || [])) host.append(el('div', { class: 'note warn', text: 'A second [Begin Action ' + d.no + '] at line ' + d.line + ' is ignored: the first definition wins (anim.go:1202-1208).' }));
-    if (a.aliases && a.aliases.length) host.append(el('div', { class: 'note warn', text: 'Actions ' + a.aliases.join(', ') + ' play these frames (an empty action or Copy Action) and change with it.' }));
-    for (const b of (a.badFrames || [])) host.append(el('div', { class: 'note warn', text: 'Line ' + b.line + ' is not read as a frame: ' + b.why }));
-    for (const it of (a.interpolate || [])) host.append(el('div', { class: 'note', text: 'Interpolate ' + it.kind + ' before element ' + (it.at + 1) + ' (line ' + it.line + ')' }));
+    for (const d of (a.duplicates || [])) host.append(el('div', { class: 'note warn', text: I18n.t('A second [Begin Action {no}] at line {line} is ignored: the first definition wins (anim.go:1202-1208).', { no: d.no, line: d.line }) }));
+    if (a.aliases && a.aliases.length) host.append(el('div', { class: 'note warn', text: I18n.t('Actions {list} play these frames (an empty action or Copy Action) and change with it.', { list: a.aliases.join(', ') }) }));
+    for (const b of (a.badFrames || [])) host.append(el('div', { class: 'note warn', text: I18n.t('Line {line} is not read as a frame: {why}', { line: b.line, why: b.why }) }));
+    for (const it of (a.interpolate || [])) host.append(el('div', { class: 'note', text: I18n.t('Interpolate {kind} before element {n} (line {line})', { kind: it.kind, n: it.at + 1, line: it.line }) }));
   }
 
   // PLAYBACK IS THE PLAYER, not a second one (animview-core.js). It reads the
@@ -581,12 +603,13 @@
     const a = act();
     if (f.kind === 'animelem' || f.kind === 'animelemtime' || (f.kind === 'conditional' && f.elem)) {
       const e = a && a.elements[f.elem - 1];
-      if (!e) return 'element ' + f.elem + ' - past the end of this action: never fires';
+      if (!e) return I18n.t('element {n} - past the end of this action: never fires', { n: f.elem });
       const t = e.startTick + (f.kind === 'animelemtime' ? (Number(f.offset) || 0) : 0);
-      return (f.kind === 'conditional' ? 'conditional, reads element ' : 'element ') + f.elem + (f.kind === 'animelemtime' ? ' + ' + f.offset : '') + ' → tick ' + t;
+      const n = f.kind === 'animelemtime' ? f.elem + ' + ' + f.offset : f.elem;
+      return f.kind === 'conditional' ? I18n.t('conditional, reads element {n} → tick {tick}', { n, tick: t }) : I18n.t('element {n} → tick {tick}', { n, tick: t });
     }
-    if (f.kind === 'time') return 'state tick ' + f.tick;
-    return 'conditional';
+    if (f.kind === 'time') return I18n.t('state tick {n}', { n: f.tick });
+    return I18n.t('conditional');
   }
   function renderStates() {
     const host = $('states');
@@ -602,18 +625,19 @@
       return;
     }
     for (const h of engine) {
-      const row = el('div', { class: 'st' }, el('span', { class: 'no', text: h.no }), el('span', { class: 'fl', text: 'the engine\'s common state' + (h.name ? ' (' + h.name + ')' : '') + ' · not in this character\'s files' }));
+      const row = el('div', { class: 'st' }, el('span', { class: 'no', text: h.no }), el('span', { class: 'fl', text: h.name ? I18n.t('the engine\'s common state ({name}) · not in this character\'s files', { name: h.name }) : I18n.t('the engine\'s common state · not in this character\'s files') }));
       row.append(hitLine(h));
       host.append(row);
     }
     for (const s of view.states) {
-      const row = el('div', { class: 'st' }, el('span', { class: 'no', text: s.no }), el('span', { class: 'fl', text: s.file + ':' + s.line + (s.movetype ? ' · movetype ' + s.movetype.toUpperCase() : '') }));
+      // file:line and the state's movetype as the .cns writes it: data
+      const row = el('div', { class: 'st' }, el('span', { class: 'no', text: s.no }), el('span', { class: 'fl', translate: 'no', text: s.file + ':' + s.line + (s.movetype ? ' · movetype ' + s.movetype.toUpperCase() : '') }));
       if (s.anim && !s.anim.literal) row.append(el('div', { class: 'fz' }, 'anim = ', el('code', { text: s.anim.raw })));
       for (const b of s.blocks) {
         for (const f of (b.firing || [])) {
-          row.append(el('div', { class: 'fz', title: f.text }, el('b', { text: b.type }), ' line ' + b.line + ': ', el('code', { text: f.text }), ' · ' + firingText(f)));
+          row.append(el('div', { class: 'fz', title: f.text }, el('b', { translate: 'no', text: b.type }), ' ' + I18n.t('line {n}:', { n: b.line }) + ' ', el('code', { text: f.text }), ' · ' + firingText(f)));
         }
-        if (!(b.firing || []).length) row.append(el('div', { class: 'fz' }, el('b', { text: b.type }), ' line ' + b.line + ': no trigger'));
+        if (!(b.firing || []).length) row.append(el('div', { class: 'fz' }, el('b', { translate: 'no', text: b.type }), ' ' + I18n.t('line {n}: no trigger', { n: b.line })));
       }
       const h = hitOf(s.no);
       if (h) row.append(hitLine(h));
@@ -628,29 +652,34 @@
   // from a negative state (negative), or not (none). "Make it hit" writes a
   // HitDef for that state into the character's [Statedef -3] (hitgen.js); its
   // damage is then a plain number edited right here.
-  const stateName = (h) => 'state ' + h.no + (h.name ? ' (' + h.name + ')' : '');
+  const stateName = (h) => (h.name ? I18n.t('state {no} ({name})', { no: h.no, name: h.name }) : I18n.t('state {no}', { no: h.no }));
+  // "a and b and c", in the reader's words
+  const andList = (list) => list.reduce((a, b) => I18n.t('{a} and {b}', { a, b }));
   function hitLine(h) {
     const hits = view.hits;
     const box = el('div', { class: 'hit' });
     if (!hits.boxes.length && h.kind !== 'added') return box;
     if (h.kind === 'none') {
       box.className = 'hit nohit';
-      box.append(el('div', { text: 'These attack boxes do nothing here: ' + stateName(h) + ' has no HitDef, so the engine never tests them.' }));
+      box.append(el('div', { text: I18n.t('These attack boxes do nothing here: {state} has no HitDef, so the engine never tests them.', { state: stateName(h) }) }));
       if (hits.zss) box.append(el('div', { class: 'fh', text: 'This character\'s states are ZSS, which the Studio does not write.' }));
       else box.append(makeHitButton(h));
       return box;
     }
     box.className = 'hit ok';
-    const who = h.kind === 'added' ? 'Hits (added here)' : h.kind === 'own' ? 'Hits with its own ' : 'Hits through a negative state: ';
     for (const b of h.blocks) {
-      const line = el('div', { text: who + (h.kind === 'added' ? '' : b.type + ' line ' + b.line) + ' · damage ' });
+      const at = { type: b.type, line: b.line };
+      const line = el('div', { text: (h.kind === 'added' ? I18n.t('Hits (added here) · damage') : h.kind === 'own' ? I18n.t('Hits with its own {type} line {line} · damage', at)
+        : I18n.t('Hits through a negative state: {type} line {line} · damage', at)) + ' ' });
       line.append(damageInput(b));
       box.append(line);
     }
     if (h.kind === 'added') {
       if (!hits.boxes.length) box.append(el('div', { class: 'warnl', text: 'This action has no attack boxes any more: the hit has nothing to hit with.' }));
       else if (h.missing.length || h.stale) {
-        box.append(el('div', { class: 'warnl', text: (h.missing.length ? 'Element' + (h.missing.length > 1 ? 's ' : ' ') + h.missing.join(', ') + (h.missing.length > 1 ? ' have' : ' has') + ' boxes the hit does not cover.' : 'The hit still arms on element' + (h.covers.length > 1 ? 's ' : ' ') + h.covers.join(', ') + ', which no longer has boxes.') }));
+        box.append(el('div', { class: 'warnl', text: h.missing.length
+          ? (h.missing.length > 1 ? I18n.t('Elements {list} have boxes the hit does not cover.', { list: h.missing.join(', ') }) : I18n.t('Element {list} has boxes the hit does not cover.', { list: h.missing.join(', ') }))
+          : (h.covers.length > 1 ? I18n.t('The hit still arms on elements {list}, which no longer has boxes.', { list: h.covers.join(', ') }) : I18n.t('The hit still arms on element {list}, which no longer has boxes.', { list: h.covers.join(', ') })) }));
         box.append(hitOpButton(h, 'update', 'Update the hit', 'Rewrite the hit for the boxes as they are now (the damage stays)'));
       }
       box.append(hitOpButton(h, 'remove', 'Remove the hit', 'Delete the lines the editor added for this state'));
@@ -658,8 +687,8 @@
     return box;
   }
   function makeHitButton(h) {
-    return hitOpButton(h, 'make', 'Make it hit' + (view.hits.states.length > 1 ? ' in state ' + h.no : ''),
-      'Write a HitDef for ' + stateName(h) + ' into this character\'s [Statedef -3]: it arms on the elements with attack boxes, damage 20, editable here after');
+    return hitOpButton(h, 'make', view.hits.states.length > 1 ? I18n.t('Make it hit in state {no}', { no: h.no }) : 'Make it hit',
+      I18n.t('Write a HitDef for {state} into this character\'s [Statedef -3]: it arms on the elements with attack boxes, damage 20, editable here after', { state: stateName(h) }));
   }
   function hitOpButton(h, op, text, title) {
     const b = el('button', { class: op === 'remove' ? 'danger' : 'warn', text, title });
@@ -679,11 +708,13 @@
   function hitOp(state, op) {
     const action = actionNo;
     return serial(async () => {
-      if (!view || view.action.no !== action) { say('The hit for action ' + action + ' was not changed: another action is on screen.', 'err'); return; }
+      if (!view || view.action.no !== action) { say(I18n.t('The hit for action {n} was not changed: another action is on screen.', { n: action }), 'err'); return; }
       try {
         const r = await postJson('/api/char-hit', { char, action, state, op, sha1: view.sha1, files: view.hits.files });
-        say(op === 'make' ? 'State ' + state + ' now hits with these boxes: wrote ' + r.file + (r.created ? ' (a new [Statedef -3])' : '') + '. Its damage is 20; change it beside the boxes.'
-          : op === 'update' ? 'The hit in state ' + state + ' now covers the boxes as they are.' : 'Removed the hit for state ' + state + ' from ' + r.file + '.', 'ok');
+        const did = { state, file: r.file };
+        say(op === 'make' ? (r.created ? I18n.t('State {state} now hits with these boxes: wrote {file} (a new [Statedef -3]). Its damage is 20; change it beside the boxes.', did)
+          : I18n.t('State {state} now hits with these boxes: wrote {file}. Its damage is 20; change it beside the boxes.', did))
+          : op === 'update' ? I18n.t('The hit in state {state} now covers the boxes as they are.', did) : I18n.t('Removed the hit for state {state} from {file}.', did), 'ok');
         if (r.air && r.air.action.no === actionNo) adopt(r.air); else await loadAction(actionNo, true);
       } catch (err) {
         failed(err, (m) => { say(m, 'err'); renderStates(); renderSide(); });
@@ -693,8 +724,8 @@
   // The damage of a hit block, through the Moves window's route: a plain
   // number only, the file's sha1 as this view read it.
   function damageInput(b) {
-    if (!b.editable) return el('code', { text: b.raw === null ? 'not set' : b.raw, title: b.raw === null ? 'no damage parameter' : 'not a plain number: edit it in Moves' });
-    const inp = el('input', { type: 'text', spellcheck: 'false', value: b.value, title: 'Hit damage (' + b.file + ' line ' + b.line + ')' });
+    if (!b.editable) return el('code', { text: b.raw === null ? I18n.t('not set') : b.raw, title: b.raw === null ? 'no damage parameter' : 'not a plain number: edit it in Moves' });
+    const inp = el('input', { type: 'text', spellcheck: 'false', value: b.value, title: I18n.t('Hit damage ({file} line {line})', { file: b.file, line: b.line }) });
     inp.onkeydown = (ev) => { if (ev.key === 'Escape') inp.value = b.value; };
     inp.onchange = () => {
       const v = inp.value.trim();
@@ -706,12 +737,12 @@
         if (!view || view.action.no !== action) return;
         try {
           await postJson('/api/char-move-edit', { char, file: b.key.file, state: b.key.state, ordinal: b.key.ordinal, param: 'damage', index: 0, value: v, expect: b.raw, sha1 });
-          say('Damage ' + b.value + ' → ' + v + ' (' + b.file + ' line ' + b.line + ').', 'ok');
+          say(I18n.t('Damage {from} → {to} ({file} line {line}).', { from: b.value, to: v, file: b.file, line: b.line }), 'ok');
           await loadAction(actionNo, true);
         } catch (err) {
           inp.classList.remove('busy');
-          if (err.code === 'stale') { say(err.message + ' - reloaded.', 'err'); await loadAction(actionNo, true); return; }
-          say('Damage not saved: ' + err.message, 'err');
+          if (err.code === 'stale') { say(I18n.t('{error} - reloaded.', { error: err.message }), 'err'); await loadAction(actionNo, true); return; }
+          say(I18n.t('Damage not saved: {error}', { error: err.message }), 'err');
           inp.value = b.value;
         }
       });
@@ -728,11 +759,11 @@
     // No state that plays it can hit (the engine's common states included):
     // the debug display would draw these boxes Inactive.
     const hits = view && view.hits;
-    if (hits && hits.states.length && hits.states.every((h) => h.kind === 'none')) return { cls: 'c1not', label: 'Inactive' };
+    if (hits && hits.states.length && hits.states.every((h) => h.kind === 'none')) return { cls: 'c1not', label: I18n.t('Inactive') };
     const st = (view && view.states) || [];
     const blocks = st.flatMap((s) => s.blocks);
     if (blocks.length && blocks.every((b) => /reversal/i.test(b.type))) return { cls: 'c1rev', label: 'ReversalDef' };
-    if (st.length && st.every((s) => s.movetype === 'i' || s.movetype === null || s.movetype === undefined)) return { cls: 'c1not', label: 'Inactive' };
+    if (st.length && st.every((s) => s.movetype === 'i' || s.movetype === null || s.movetype === undefined)) return { cls: 'c1not', label: I18n.t('Inactive') };
     return { cls: 'c1hit', label: 'HitDef' };
   }
   const drawScale = (v) => [v.xscale > 0 ? v.xscale : 1, v.yscale > 0 ? v.yscale : 1];
@@ -837,7 +868,7 @@
     for (const s of ((view && view.states) || [])) for (const b of s.blocks) for (const f of (b.firing || [])) {
       if (f.elem && ['animelem', 'animelemtime', 'conditional'].includes(f.kind)) {
         if (!m.has(f.elem)) m.set(f.elem, []);
-        m.get(f.elem).push(b.type + ' (state ' + s.no + ')' + (f.kind === 'conditional' ? ', conditional' : ''));
+        m.get(f.elem).push(f.kind === 'conditional' ? I18n.t('{type} (state {no}), conditional', { type: b.type, no: s.no }) : I18n.t('{type} (state {no})', { type: b.type, no: s.no }));
       }
     }
     return m;
@@ -862,16 +893,16 @@
       // an open range only on the element the engine holds.
       const range = e.holdsForever ? 't' + e.startTick + '→' : v.time <= 0 ? 't' + e.startTick + ' (' + v.time + ')' : 't' + e.startTick + '-' + (e.startTick + v.time - 1);
       const b = el('div', { class: 'badges' },
-        e.clsn1.rects.length ? el('span', { class: 'badge c1', text: 'C1' + (e.clsn1.source === 'default' ? ' def' : ''), title: e.clsn1.rects.length + ' Clsn1 box(es) from ' + (e.clsn1.source === 'default' ? 'a Default block' : 'its own block') }) : null,
-        e.clsn2.rects.length ? el('span', { class: 'badge c2', text: 'C2' + (e.clsn2.source === 'default' ? ' def' : ''), title: e.clsn2.rects.length + ' Clsn2 box(es) from ' + (e.clsn2.source === 'default' ? 'a Default block' : 'its own block') }) : null,
+        e.clsn1.rects.length ? el('span', { class: 'badge c1', text: e.clsn1.source === 'default' ? 'C1 def' : 'C1', title: e.clsn1.source === 'default' ? I18n.t('{n} Clsn1 box(es) from a Default block', { n: e.clsn1.rects.length }) : I18n.t('{n} Clsn1 box(es) from its own block', { n: e.clsn1.rects.length }) }) : null,
+        e.clsn2.rects.length ? el('span', { class: 'badge c2', text: e.clsn2.source === 'default' ? 'C2 def' : 'C2', title: e.clsn2.source === 'default' ? I18n.t('{n} Clsn2 box(es) from a Default block', { n: e.clsn2.rects.length }) : I18n.t('{n} Clsn2 box(es) from its own block', { n: e.clsn2.rects.length }) }) : null,
         fires.has(e.ordinal) ? el('span', { class: 'badge fires', text: 'fires', title: fires.get(e.ordinal).join('; ') }) : null,
         loopAt === e.ordinal ? el('span', { class: 'badge loopb', text: 'loop', title: 'Loopstart: the action loops back to this element' }) : null,
         e.neverDisplayed ? el('span', { class: 'badge dim', text: 'never shown', title: 'the engine never draws it - its time, the totals of the action or the loop skip it (anim.go:428-452, 638-721, 802-846) - but it still takes an AnimElem number (anim.go:507-520)' }) : null,
         !e.sprite ? el('span', { class: 'badge dim', text: v.group === -1 || v.number === -1 ? 'no sprite' : 'missing' }) : null,
-        e.errors.length ? el('span', { class: 'badge fires', text: '!', title: e.errors.join('; ') }) : null);
-      const cell = el('div', { class: 'cell' + (e.ordinal === sel.elem ? ' on' : '') + (e.neverDisplayed ? ' hiddenel' : ''), title: '.air line ' + e.line },
+        e.errors.length ? el('span', { class: 'badge fires', text: '!', title: e.errors.map((x) => I18n.server(x)).join('; ') }) : null);
+      const cell = el('div', { class: 'cell' + (e.ordinal === sel.elem ? ' on' : '') + (e.neverDisplayed ? ' hiddenel' : ''), title: I18n.t('.air line {n}', { n: e.line }) },
         loopAt === e.ordinal ? el('div', { class: 'loop' }) : null,
-        th, el('div', { class: 'cap' }, el('b', { text: '#' + e.ordinal }), ' ' + v.group + ',' + v.number + ' · ' + (v.time) + 't', el('div', { text: range }), b));
+        th, el('div', { class: 'cap' }, el('b', { text: '#' + e.ordinal }), ' ' + I18n.t('{group},{number} · {time}t', { group: v.group, number: v.number, time: v.time }), el('div', { text: range }), b));
       cell.onclick = () => selectElem(e.ordinal);
       host.append(cell);
     }
@@ -917,7 +948,7 @@
     zoomIn.onclick = () => { userZoom = Math.min(16, userZoom * 2); renderStage(); };
     zoomFit.onclick = () => { userZoom = 1; renderStage(); };
     tools.append(el('div', { class: 'legend' },
-      el('span', {}, el('i', { style: 'border-color:var(--' + c1.cls + ');background:var(--' + c1.cls + ')' }), 'Clsn1 (' + c1.label + ')'),
+      el('span', {}, el('i', { style: 'border-color:var(--' + c1.cls + ');background:var(--' + c1.cls + ')' }), I18n.t('Clsn1 ({label})', { label: c1.label })),
       el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
       el('span', { text: 'dashed = from a Default block · engine debug colors, system.go:4000-4007' })),
       el('span', { class: 'sp' }), zoomOut, el('span', { class: 'mono', text: Math.round(z * 100) + '%' }), zoomIn, zoomFit);
@@ -938,7 +969,8 @@
       const on = sel.which === b.which && sel.box === b.k;
       if (on) b.d.className += ' sel';
       if (defConfirm && defConfirm.which === b.which && defConfirm.box === b.k) b.d.className += ' pend';
-      b.d.title = 'Clsn' + b.which + '[' + b.k + '] ' + b.r.join(', ') + ' - drag to move' + (on ? ', handles resize' : '');
+      const bx = { which: b.which, k: b.k, rect: b.r.join(', ') };
+      b.d.title = on ? I18n.t('Clsn{which}[{k}] {rect} - drag to move, handles resize', bx) : I18n.t('Clsn{which}[{k}] {rect} - drag to move', bx);
       if (editable()) b.d.onpointerdown = (ev) => startDrag(ev, b.which, b.k, 'move');
       if (on && editable()) {
         for (const h of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
@@ -960,11 +992,15 @@
     };
     wrap.append(canvas);
     const v = e.values;
-    read.textContent = 'element ' + e.ordinal + '/' + a.elements.length + ' · sprite ' + v.group + ',' + v.number
-      + (e.sprite ? ' ' + e.sprite.w + 'x' + e.sprite.h + ' axis ' + e.sprite.axisX + ',' + e.sprite.axisY : ' (not in the .sff)')
-      + ' · offset ' + v.x + ',' + v.y + ' · ' + v.time + 't from tick ' + e.startTick
-      + (v.angle ? ' · angle ' + v.angle + ' is not drawn here' : '')
-      + (drag ? ' · ' + normRect(drag.cur).join(', ') : '');
+    // The readout is a list of facts, each its own phrase.
+    const spr = { group: v.group, number: v.number };
+    const facts = [I18n.t('element {n}/{of}', { n: e.ordinal, of: a.elements.length }),
+      e.sprite ? I18n.t('sprite {group},{number} {w}x{h} axis {x},{y}', Object.assign({ w: e.sprite.w, h: e.sprite.h, x: e.sprite.axisX, y: e.sprite.axisY }, spr))
+        : I18n.t('sprite {group},{number} (not in the .sff)', spr),
+      I18n.t('offset {x},{y}', { x: v.x, y: v.y }), I18n.t('{time}t from tick {tick}', { time: v.time, tick: e.startTick })];
+    if (v.angle) facts.push(I18n.t('angle {n} is not drawn here', { n: v.angle }));
+    if (drag) facts.push(normRect(drag.cur).join(', '));
+    read.textContent = facts.join(' · ');
   }
   const normRect = (r) => [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3])];
 
@@ -1019,7 +1055,7 @@
         d.style.left = Math.round(stageGeo.ox + hx * stageGeo.z - 4) + 'px';
         d.style.top = Math.round(stageGeo.oy + hy * stageGeo.z - 4) + 'px';
       }
-      $('readout').textContent = 'Clsn' + drag.which + '[' + drag.box + '] ' + n.join(', ');
+      $('readout').textContent = I18n.t('Clsn{which}[{box}] {rect}', { which: drag.which, box: drag.box, rect: n.join(', ') });
     } else renderStage();
     fillBoxInputs(drag.which, drag.box, n);
   }
@@ -1084,7 +1120,7 @@
     const a = act();
     const el = a && a.no === was.action ? a.elements[was.elem - 1] : null;
     if (leaving && el && el['clsn' + was.which] && el['clsn' + was.which].source === 'default') {
-      say('The arrow-key move on element ' + was.elem + ' was not saved: its box comes from a Default block, which needs a confirm on that element.', 'err');
+      say(I18n.t('The arrow-key move on element {n} was not saved: its box comes from a Default block, which needs a confirm on that element.', { n: was.elem }), 'err');
       return null;
     }
     return commitBox(was.which, was.box, normRect(was.rect), undefined, { action: was.action, elem: was.elem, base: was.base, dep: was.dep });
@@ -1117,7 +1153,7 @@
   function failed(e, where) {
     if (e.code === 'stale' || e.code === 'partial') {
       epoch++;
-      say(e.message + ' - reloaded.', 'err');
+      say(I18n.t('{error} - reloaded.', { error: e.message }), 'err');
       return serial(() => loadAction(actionNo, true));
     }
     if (where) where(e.message); else say(e.message, 'err');
@@ -1140,7 +1176,7 @@
   function commitBox(which, box, rect, scope, target) {
     const a = act();
     if (!a) return;
-    if (target && target.action !== a.no) { say('The box change on action ' + target.action + ' was not saved: another action is on screen.', 'err'); return; }
+    if (target && target.action !== a.no) { say(I18n.t('The box change on action {n} was not saved: another action is on screen.', { n: target.action }), 'err'); return; }
     const e = target ? a.elements[target.elem - 1] : curEl();
     if (!e) return;
     const c = e['clsn' + which];
@@ -1151,7 +1187,7 @@
     const base = dep ? dep.value.slice() : target && target.base && c.source !== 'default' ? normRect(target.base) : (c.rects[box] ? normRect(c.rects[box]) : null);
     const confirmOf = (o) => Object.assign({ which, box, rect, action, elem, dep, base, epoch, structure }, o);
     if (c.source === 'default' && scope !== 'default') {
-      if (elem !== sel.elem) { say('The box change on element ' + elem + ' was not saved: its box comes from a Default block, which needs a confirm on that element.', 'err'); return; }
+      if (elem !== sel.elem) { say(I18n.t('The box change on element {n} was not saved: its box comes from a Default block, which needs a confirm on that element.', { n: elem }), 'err'); return; }
       const B = a.clsn[c.block];
       defConfirm = confirmOf({ affects: B ? B.boundTo.slice() : [], header: B ? B.headerRaw : 'Default', line: B ? B.line : null });
       renderStage(); renderSide();
@@ -1165,13 +1201,16 @@
     if (target && target.confirm) target.confirm.sending = w;
     const mine = () => defConfirm && defConfirm.sending === w;
     return serial(async () => {
-      const sha1 = sendable(snap, 'The box change on element ' + elem, true);
+      const sha1 = sendable(snap, I18n.t('The box change on element {n}', { n: elem }), true);
       if (!sha1) { finish(w, null); if (actionNo === action) { if (mine()) defConfirm = null; renderStage(); renderSide(); } return; }
       try {
         const r = await postJson('/api/char-air-edit', { char, op: 'clsn', action, elem, which, box, coords: rect, scope, sha1 });
         finish(w, boxOf, r.air ? r.air.action : null);
-        if (r.changed) say('Clsn' + which + '[' + box + '] of element ' + elem + ': ' + r.plan.before.join(', ') + ' → ' + r.plan.after.join(', ')
-          + (r.plan.scope === 'default' ? ' (Default block, elements ' + r.plan.affects.join(', ') + ')' : ''), 'ok');
+        if (r.changed) {
+          const did = { which, box, n: elem, before: r.plan.before.join(', '), after: r.plan.after.join(', ') };
+          say(r.plan.scope === 'default' ? I18n.t('Clsn{which}[{box}] of element {n}: {before} → {after} (Default block, elements {list})', Object.assign({ list: r.plan.affects.join(', ') }, did))
+            : I18n.t('Clsn{which}[{box}] of element {n}: {before} → {after}', did), 'ok');
+        }
         // The page moved to another action meanwhile: that view's sha1 is
         // stale now, so it is read again rather than replaced by this one.
         if (r.air && r.air.action.no !== actionNo) await loadAction(actionNo, true);
@@ -1179,8 +1218,8 @@
       } catch (err) {
         finish(w, null);
         if (err.code === 'confirm' && err.body && err.body.needsScope) {
-          if (action !== actionNo || elem !== sel.elem) { say('The box change on element ' + elem + ' was not saved: its box is shared, and needs a confirm on that element.', 'err'); return; }
-          defConfirm = confirmOf({ affects: err.body.affects || [], header: 'Default block', line: null });
+          if (action !== actionNo || elem !== sel.elem) { say(I18n.t('The box change on element {n} was not saved: its box is shared, and needs a confirm on that element.', { n: elem }), 'err'); return; }
+          defConfirm = confirmOf({ affects: err.body.affects || [], header: I18n.t('Default block'), line: null });
           renderStage(); renderSide();
           return;
         }
@@ -1215,15 +1254,19 @@
     const snap = snapOf(reader, undefined, dep);
     const queued = track(key, String(value).trim(), dep);
     return serial(async () => {
-      const sha1 = sendable(snap, field + ' of element ' + elem);
+      const sha1 = sendable(snap, I18n.t('{field} of element {n}', { field, n: elem }));
       if (!sha1) { sentField = null; finish(queued, null); return; }
       try {
         const r = await postJson('/api/char-air-edit', { char, op: 'element', action: snap.action, elem, field, value, sha1 });
         finish(queued, reader, r.air ? r.air.action : null);
         const w = (r.plan && r.plan.warnings) || [];
-        if (r.changed) say(field + ' of element ' + elem + ': ' + (r.plan.before === null ? '(absent)' : '"' + r.plan.before + '"') + ' → "' + r.plan.after + '"'
-          + (r.plan.filled && r.plan.filled.length ? ' (also wrote ' + r.plan.filled.join(', ') + ' = 1, never blank)' : '')
-          + (w.length ? ' · ' + w.join(' · ') : ''), w.length ? 'err' : 'ok');
+        if (r.changed) {
+          // the change, then the server's warnings, each in the reader's words
+          const did = { field, n: elem, before: String(r.plan.before), after: String(r.plan.after) };
+          let said = r.plan.before === null ? I18n.t('{field} of element {n}: (absent) → "{after}"', did) : I18n.t('{field} of element {n}: "{before}" → "{after}"', did);
+          if (r.plan.filled && r.plan.filled.length) said = I18n.t('{change} (also wrote {fields} = 1, never blank)', { change: said, fields: r.plan.filled.join(', ') });
+          say([said].concat(w.map((x) => I18n.server(x))).join(' · '), w.length ? 'err' : 'ok');
+        }
         if (r.air) adopt(r.air); else { delete fieldErr[field]; renderSide(); }
       } catch (err) {
         sentField = null;
@@ -1269,13 +1312,13 @@
     t.saving = queued;
     fillTiming();
     return serial(async () => {
-      const sha1 = sendable(snap, 'time of element ' + t.elem);
+      const sha1 = sendable(snap, I18n.t('{field} of element {n}', { field: 'time', n: t.elem }));
       if (!sha1) { finish(queued, null); t.saving = null; if (timing === t) fillTiming(); return; }
       try {
         const r = await postJson('/api/char-air-edit', { char, op: 'element', action: snap.action, elem: t.elem, field: 'time', value: t.value, sha1 });
         finish(queued, reader, r.air ? r.air.action : null);
-        if (r.changed) say('time of element ' + t.elem + ': ' + r.plan.before + ' → ' + r.plan.after
-          + (r.timing && r.timing.impacts.length ? ' · ' + r.timing.impacts.length + ' attack block(s) now fire at a different tick' : ''), 'ok');
+        if (r.changed) say(I18n.t('{field} of element {n}: {before} → {after}', { field: 'time', n: t.elem, before: String(r.plan.before), after: String(r.plan.after) })
+          + (r.timing && r.timing.impacts.length ? ' · ' + I18n.t('{n} attack block(s) now fire at a different tick', { n: r.timing.impacts.length }) : ''), 'ok');
         if (r.air) adopt(r.air); else { timing = null; renderSide(); }
       } catch (err) {
         finish(queued, null);
@@ -1309,13 +1352,13 @@
     return serial(async () => {
       if (actionNo !== snap.action) return;
       if (snap.epoch !== epoch || snap.structure !== structure || linesOf(act()) !== snap.lines) {
-        say(label + ' was not planned: the elements changed since it was clicked (an insert, delete or move was written first) - click it again.', 'err');
+        say(I18n.t('{label} was not planned: the elements changed since it was clicked (an insert, delete or move was written first) - click it again.', { label }), 'err');
         renderSide();
         return;
       }
       try {
         const r = await postJson('/api/char-air-edit', Object.assign({ char, action: snap.action }, req));
-        if (r.plan && r.plan.noop) { say(label + ': nothing to change.', 'ok'); renderSide(); return; }
+        if (r.plan && r.plan.noop) { say(I18n.t('{label}: nothing to change.', { label }), 'ok'); renderSide(); return; }
         plan = { req, res: r, label, ack: false, error: '', action: snap.action, snap };
       } catch (err) {
         plan = { req, res: null, label, ack: false, error: err.message, needsLoop: /loopstart: 'next'/.test(err.message), snap };
@@ -1348,8 +1391,10 @@
         // Every element number queued before this lands names another frame now.
         if (r.changed && ['insert', 'delete', 'move'].includes(pl0.op)) structure++;
         if (files.length > 1) together.push({ files, label: p.label });
-        say(p.label + ': wrote ' + (files.join(' + ') || 'nothing') + (r.renumbered ? ' · renumbered ' + r.renumbered + ' trigger' + (r.renumbered === 1 ? '' : 's') : '')
-          + (r.leftAsIs && (r.leftAsIs.blocking.length || r.leftAsIs.noSpan.length) ? ' · left ' + (r.leftAsIs.blocking.length + r.leftAsIs.noSpan.length) + ' as written' : ''), 'ok');
+        const said = [files.length ? I18n.t('{label}: wrote {files}', { label: p.label, files: files.join(' + ') }) : I18n.t('{label}: wrote nothing', { label: p.label })];
+        if (r.renumbered) said.push(r.renumbered === 1 ? I18n.t('renumbered 1 trigger') : I18n.t('renumbered {n} triggers', { n: r.renumbered }));
+        if (r.leftAsIs && (r.leftAsIs.blocking.length || r.leftAsIs.noSpan.length)) said.push(I18n.t('left {n} as written', { n: r.leftAsIs.blocking.length + r.leftAsIs.noSpan.length }));
+        say(said.join(' · '), 'ok');
         const pl = r.plan || {};
         let next = {};
         if (pl.op === 'insert') next = { elem: pl.newElem, which: null, box: null };
@@ -1372,7 +1417,7 @@
           try { again = await postJson('/api/char-air-edit', Object.assign({ char }, p.req, { action: snap.action })); } catch (e2) { again = null; }
           if (again && again.plan && !again.plan.noop) {
             p.res = again;
-            p.error = err.message + ' - the state files changed since the plan was made; the triggers below are read again.';
+            p.error = I18n.t('{error} - the state files changed since the plan was made; the triggers below are read again.', { error: err.message });
           } else {
             const pl = (p.res && p.res.plan) || {};
             const rn = pl.renumber || { triggers: [], blocking: [] };
@@ -1393,16 +1438,16 @@
 
   // ---- right: fields, timing, boxes, structure ---------------------------------------------------
   const FIELD_HELP = {
-    time: 'ticks · -1 holds forever · 0 is never drawn but still counts for AnimElem',
-    group: 'sprite group · -1 = no sprite',
-    number: 'sprite number · -1 = no sprite',
-    x: 'moves the sprite only; the boxes stay on the axis',
-    y: 'moves the sprite only; the boxes stay on the axis',
-    flip: 'mirrors the sprite about its axis; the boxes do not flip',
-    blend: 'A add · A1 half add · S subtract · AS<src>D<dst>',
-    xscale: 'Ikemen / MUGEN 1.1 only · the boxes do not scale',
-    yscale: 'Ikemen / MUGEN 1.1 only · the boxes do not scale',
-    angle: 'Ikemen / MUGEN 1.1 only · not drawn here',
+    time: I18n.t('ticks · -1 holds forever · 0 is never drawn but still counts for AnimElem'),
+    group: I18n.t('sprite group · -1 = no sprite'),
+    number: I18n.t('sprite number · -1 = no sprite'),
+    x: I18n.t('moves the sprite only; the boxes stay on the axis'),
+    y: I18n.t('moves the sprite only; the boxes stay on the axis'),
+    flip: I18n.t('mirrors the sprite about its axis; the boxes do not flip'),
+    blend: I18n.t('A add · A1 half add · S subtract · AS<src>D<dst>'),
+    xscale: I18n.t('Ikemen / MUGEN 1.1 only · the boxes do not scale'),
+    yscale: I18n.t('Ikemen / MUGEN 1.1 only · the boxes do not scale'),
+    angle: I18n.t('Ikemen / MUGEN 1.1 only · not drawn here'),
   };
   const EXTRA = ['xscale', 'yscale', 'angle'];
 
@@ -1413,8 +1458,8 @@
     if (!a) return;
     if (!e) { host.append(el('div', { class: 'none', text: 'Nothing to edit in this action.' })); return; }
     const ro = !editable();
-    host.append(el('div', { class: 'blockh', text: 'Element ' + e.ordinal + ' of ' + a.elements.length + ' · .air line ' + e.line }));
-    for (const x of e.errors) host.append(el('div', { class: 'warnl', text: 'The engine logs: ' + x }));
+    host.append(el('div', { class: 'blockh', text: I18n.t('Element {n} of {of} · .air line {line}', { n: e.ordinal, of: a.elements.length, line: e.line }) }));
+    for (const x of e.errors) host.append(el('div', { class: 'warnl', text: I18n.t('The engine logs: {error}', { error: x }) }));
     if (e.flipHoldsBlend) host.append(el('div', { class: 'warnl', text: 'This line writes its transparency in the flip field (the WinMugen "...,5,A" form, anim.go:74-92): flip and blend are read-only here.' }));
 
     const table = el('table', { class: 'fields' });
@@ -1425,7 +1470,7 @@
     if (missing.length && !ro) {
       const ops = el('div', { class: 'ops', style: 'margin-top:4px' }, el('span', { class: 'fh', text: 'Fields 8-10:' }));
       for (const f of missing) {
-        const b = el('button', { text: '+ ' + f, title: 'Show ' + f + ' for this element. Nothing is written until you enter a value; a skipped xscale/yscale is written as 1, never blank (a blank is 0 in MUGEN 1.1, anim.go:198-224).' });
+        const b = el('button', { text: '+ ' + f, translate: 'no', title: I18n.t('Show {field} for this element. Nothing is written until you enter a value; a skipped xscale/yscale is written as 1, never blank (a blank is 0 in MUGEN 1.1, anim.go:198-224).', { field: f }) });
         b.onclick = () => { added.add(f); renderSide(); };
         ops.append(b);
       }
@@ -1447,12 +1492,13 @@
     const err = fieldErr[f];
     let input;
     if (f === 'flip') {
-      input = el('select', { disabled: ro || e.flipHoldsBlend, title: 'flip' });
+      // A field's tooltip is its name, like its label: the file's word.
+      input = el('select', { disabled: ro || e.flipHoldsBlend, title: f });
       for (const o of [['', '(none)'], ['H', 'H'], ['V', 'V'], ['HV', 'HV']]) input.append(el('option', { value: o[0], text: o[1] }));
       input.value = queuedW ? queuedW.value : (e.values.h ? 'H' : '') + (e.values.v ? 'V' : '');
       input.onchange = () => commitField('flip', input.value);
     } else {
-      input = el('input', { type: 'text', spellcheck: 'false', value: err ? err.value : raw, disabled: ro || (f === 'blend' && e.flipHoldsBlend), title: f, list: f === 'blend' ? 'blendlist' : undefined,
+      input = el('input', { type: 'text', spellcheck: 'false', value: err ? err.value : raw, disabled: ro || (f === 'blend' && e.flipHoldsBlend), title: f, translate: 'no', list: f === 'blend' ? 'blendlist' : undefined,
         placeholder: !F.present ? (f === 'angle' ? '0' : f === 'blend' ? '' : '1') : undefined });
       if (err) input.className = 'bad';
       if (f === 'time') timeInput = input;
@@ -1474,11 +1520,11 @@
       td.append(' ', pv);
     }
     if (f === 'group' || f === 'number') {
-      if (!e.sprite && e.values.group !== -1 && e.values.number !== -1) td.append(el('div', { class: 'warnl', text: 'sprite ' + e.values.group + ',' + e.values.number + ' is not in the .sff: nothing draws' }));
+      if (!e.sprite && e.values.group !== -1 && e.values.number !== -1) td.append(el('div', { class: 'warnl', text: I18n.t('sprite {group},{number} is not in the .sff: nothing draws', { group: e.values.group, number: e.values.number }) }));
     }
-    td.append(el('div', { class: 'fh', text: FIELD_HELP[f] + (F.present ? '' : ' · not written') }));
+    td.append(el('div', { class: 'fh', text: F.present ? FIELD_HELP[f] : I18n.t('{help} · not written', { help: FIELD_HELP[f] }) }));
     if (err && f !== 'time') td.append(el('div', { class: 'err', text: err.msg }));
-    return el('tr', {}, el('td', { class: 'nm', text: f }), td);
+    return el('tr', {}, el('td', { class: 'nm', translate: 'no', text: f }), td);
   }
 
   // The time field's message and its timing panel live in one slot under the
@@ -1489,34 +1535,38 @@
     timingSlot.textContent = '';
     const e = curEl();
     if (timeInput) timeInput.className = fieldErr.time ? 'bad' : '';
-    if (fieldErr.time) timingSlot.append(el('div', { class: 'err', text: 'time: ' + fieldErr.time.msg }));
+    if (fieldErr.time) timingSlot.append(el('div', { class: 'err', text: I18n.t('time: {error}', { error: fieldErr.time.msg }) }));
     if (timing && e && timing.elem === e.ordinal) timingSlot.append(timingPanel(timing));
   }
   function timingPanel(t) {
     const tm = t.timing, pl = t.plan;
     const box = el('div', { class: 'panel timing' });
     box.append(el('div', { class: 't', text: 'Timing impact · not saved yet' }));
-    if (!tm) { box.append(el('div', { text: 'time ' + (pl && pl.before) + ' → ' + t.value })); }
+    if (!tm) { box.append(el('div', { text: I18n.t('time {from} → {to}', { from: String(pl && pl.before), to: t.value }) })); }
     else {
-      box.append(el('div', { text: 'Element ' + tm.elem + ': time ' + tm.oldTime + ' → ' + tm.newTime + ' · the action runs '
-        + (tm.totalBefore < 0 ? 'forever' : tm.totalBefore + ' ticks') + ' → ' + (tm.totalAfter < 0 ? 'forever' : tm.totalAfter + ' ticks') }));
+      const runs = (n) => (n < 0 ? I18n.t('forever') : I18n.t('{n} ticks', { n }));
+      box.append(el('div', { text: I18n.t('Element {n}: time {from} → {to} · the action runs {before} → {after}',
+        { n: tm.elem, from: tm.oldTime, to: tm.newTime, before: runs(tm.totalBefore), after: runs(tm.totalAfter) }) }));
       const moved = tm.ticksBefore.map((b, k) => (b !== tm.ticksAfter[k] ? '#' + (k + 1) + ' t' + b + '→t' + tm.ticksAfter[k] : null)).filter(Boolean);
-      if (moved.length) box.append(el('div', { class: 'fh', text: 'Start ticks: ' + moved.join(' · ') }));
+      if (moved.length) box.append(el('div', { class: 'fh', text: I18n.t('Start ticks: {list}', { list: moved.join(' · ') }) }));
       if (tm.impacts.length) {
         const ul = el('ul');
         for (const x of tm.impacts) {
-          ul.append(el('li', {}, el('b', { text: x.type }), ' state ' + x.state + ' (' + x.file + ':' + x.line + '), '
-            + (x.kind === 'animelemtime' ? 'AnimElemTime(' + x.elem + ') = ' + x.offset : 'element ' + x.elem) + ': fires at tick ' + x.before + ' → ' + x.after
-            + (x.conditional ? ' - when its other conditions hold' : '') + (x.anims ? ' - on action ' + actionNo + ' (the state also plays ' + x.anims.filter((n) => n !== actionNo).join(', ') + ')' : '')));
+          const trigger = x.kind === 'animelemtime' ? 'AnimElemTime(' + x.elem + ') = ' + x.offset : I18n.t('element {n}', { n: x.elem });
+          let fires = I18n.t('state {state} ({file}:{line}), {trigger}: fires at tick {from} → {to}', { state: x.state, file: x.file, line: x.line, trigger, from: x.before, to: x.after });
+          if (x.conditional) fires = I18n.t('{fires} - when its other conditions hold', { fires });
+          if (x.anims) fires = I18n.t('{fires} - on action {n} (the state also plays {list})', { fires, n: actionNo, list: x.anims.filter((n) => n !== actionNo).join(', ') });
+          ul.append(el('li', {}, el('b', { translate: 'no', text: x.type }), ' ' + fires));
         }
         box.append(ul);
       } else {
-        box.append(el('div', { text: 'No attack block that plays this action fires at a different tick' + (tm.unchanged ? ' (' + tm.unchanged + ' unchanged)' : '') + '.' }));
+        box.append(el('div', { text: tm.unchanged ? I18n.t('No attack block that plays this action fires at a different tick ({n} unchanged).', { n: tm.unchanged })
+          : I18n.t('No attack block that plays this action fires at a different tick.') }));
       }
       for (const w of tm.warnings || []) box.append(el('div', { class: 'warnl', text: w }));
     }
     for (const w of (pl && pl.warnings) || []) if (!(tm && (tm.warnings || []).includes(w))) box.append(el('div', { class: 'warnl', text: w }));
-    const save = el('button', { class: 'warn', text: 'Save time = ' + t.value, disabled: !!t.saving });
+    const save = el('button', { class: 'warn', text: I18n.t('Save time = {n}', { n: t.value }), disabled: !!t.saving });
     const cancel = el('button', { text: 'Cancel' });
     save.onclick = () => { if (!t.saving) saveTime(); };
     cancel.onclick = () => { timing = null; fillTiming(); };
@@ -1537,10 +1587,11 @@
       const d = defConfirm;
       const p = el('div', { class: 'panel confirm' },
         el('div', { class: 't', text: 'Shared box · not saved yet' }),
-        el('div', { text: 'Clsn' + d.which + '[' + d.box + '] comes from "' + d.header + '"' + (d.line ? ' (line ' + d.line + ')' : '') + '. Changing it applies to elements ' + d.affects.join(', ') + '.' }),
+        el('div', { text: d.line ? I18n.t('Clsn{which}[{box}] comes from "{header}" (line {line}). Changing it applies to elements {list}.', { which: d.which, box: d.box, header: d.header, line: d.line, list: d.affects.join(', ') })
+          : I18n.t('Clsn{which}[{box}] comes from "{header}". Changing it applies to elements {list}.', { which: d.which, box: d.box, header: d.header, list: d.affects.join(', ') }) }),
         el('div', { class: 'fh', text: normRect(d.base || curEl()['clsn' + d.which].rects[d.box] || d.rect).join(', ') + ' → ' + d.rect.join(', ') }));
       // Off while its own write is queued: a second click would send it again.
-      const yes = el('button', { class: 'warn', text: 'Apply to elements ' + d.affects.join(', '), disabled: !!d.sending });
+      const yes = el('button', { class: 'warn', text: I18n.t('Apply to elements {list}', { list: d.affects.join(', ') }), disabled: !!d.sending });
       const no = el('button', { text: 'Cancel' });
       yes.onclick = () => {
         if (d.sending) return;
@@ -1549,7 +1600,7 @@
       };
       no.onclick = () => { defConfirm = null; renderStage(); renderSide(); };
       p.append(el('div', { class: 'btns' }, yes, no),
-        el('div', { class: 'fh', text: 'To change element ' + e.ordinal + ' alone, Cancel and use "+ Clsn' + d.which + '" / remove below: that gives it its own block first.' }));
+        el('div', { class: 'fh', text: I18n.t('To change element {n} alone, Cancel and use "+ Clsn{which}" / remove below: that gives it its own block first.', { n: e.ordinal, which: d.which }) }));
       wrap.append(p);
     }
     if (boxErr) wrap.append(el('div', { class: 'err', text: boxErr }));
@@ -1562,22 +1613,29 @@
         const live = hits.states.filter((h) => h.kind !== 'none');
         const dead = hits.states.filter((h) => h.kind === 'none');
         const p = el('div', { class: 'hit ' + (dead.length && !live.length ? 'nohit' : 'ok') });
-        if (!hits.states.length) p.append(el('div', { text: 'No state found that plays this action, so the Studio cannot tell whether ' + (many ? 'these boxes hit' : 'this box hits') + '.' }));
+        if (!hits.states.length) p.append(el('div', { text: many ? I18n.t('No state found that plays this action, so the Studio cannot tell whether these boxes hit.')
+          : I18n.t('No state found that plays this action, so the Studio cannot tell whether this box hits.') }));
         for (const h of live) {
           for (const b of h.blocks) {
-            const line = el('div', { text: 'Hits in ' + stateName(h) + (h.kind === 'own' ? ' (' + b.type + ' line ' + b.line + ')' : '') + ' · damage ' });
+            const line = el('div', { text: (h.kind === 'own' ? I18n.t('Hits in {state} ({type} line {line}) · damage', { state: stateName(h), type: b.type, line: b.line })
+              : I18n.t('Hits in {state} · damage', { state: stateName(h) })) + ' ' });
             line.append(damageInput(b));
             p.append(line);
           }
           if (h.kind === 'added' && h.missing.includes(e.ordinal)) {
-            p.append(el('div', { class: 'warnl', text: 'The hit added for ' + stateName(h) + ' does not arm on this element yet.' }));
+            p.append(el('div', { class: 'warnl', text: I18n.t('The hit added for {state} does not arm on this element yet.', { state: stateName(h) }) }));
             if (!ro) p.append(hitOpButton(h, 'update', 'Update the hit', 'Rewrite the hit for the boxes as they are now (the damage stays)'));
           }
         }
         if (dead.length) {
+          // whole sentences per number of boxes and of states
+          const states = { states: andList(dead.map(stateName)) }, several = dead.length > 1;
           p.append(el('div', { class: live.length ? 'warnl' : '', text: live.length
-            ? 'Does nothing in ' + dead.map(stateName).join(' and ') + ': ' + (dead.length > 1 ? 'they have' : 'it has') + ' no HitDef.'
-            : 'The attack box' + (many ? 'es' : '') + ' on this element can\'t hit yet: ' + dead.map(stateName).join(' and ') + (dead.length > 1 ? ' have' : ' has') + ' no HitDef, so the engine never tests ' + (many ? 'them' : 'it') + '.' }));
+            ? (several ? I18n.t('Does nothing in {states}: they have no HitDef.', states) : I18n.t('Does nothing in {states}: it has no HitDef.', states))
+            : many ? (several ? I18n.t('The attack boxes on this element can\'t hit yet: {states} have no HitDef, so the engine never tests them.', states)
+              : I18n.t('The attack boxes on this element can\'t hit yet: {states} has no HitDef, so the engine never tests them.', states))
+              : (several ? I18n.t('The attack box on this element can\'t hit yet: {states} have no HitDef, so the engine never tests it.', states)
+                : I18n.t('The attack box on this element can\'t hit yet: {states} has no HitDef, so the engine never tests it.', states)) }));
           if (hits.zss) p.append(el('div', { class: 'fh', text: 'This character\'s states are ZSS, which the Studio does not write.' }));
           else if (!ro) for (const h of dead) p.append(makeHitButton(h));
         }
@@ -1587,11 +1645,11 @@
     for (const which of [1, 2]) {
       const c = e['clsn' + which];
       const B = c.source !== 'none' ? a.clsn[c.block] : null;
-      const srcText = c.source === 'none' ? 'Clsn' + which + ': none'
-        : c.source === 'default' ? 'Clsn' + which + ' from "' + B.headerRaw + '" (line ' + B.line + ') - shared by elements ' + B.boundTo.join(', ')
-        : 'Clsn' + which + ' from its own block "' + B.headerRaw + '" (line ' + B.line + ')';
+      const srcText = c.source === 'none' ? I18n.t('Clsn{which}: none', { which })
+        : c.source === 'default' ? I18n.t('Clsn{which} from "{header}" (line {line}) - shared by elements {list}', { which, header: B.headerRaw, line: B.line, list: B.boundTo.join(', ') })
+        : I18n.t('Clsn{which} from its own block "{header}" (line {line})', { which, header: B.headerRaw, line: B.line });
       wrap.append(el('div', { class: 'src' + (c.source === 'default' ? ' def' : ''), text: srcText }));
-      if (B && B.short) wrap.append(el('div', { class: 'warnl', text: '"' + B.headerRaw + '" counts more boxes than it has lines; the engine fills the rest with 0,0,0,0.' }));
+      if (B && B.short) wrap.append(el('div', { class: 'warnl', text: I18n.t('"{header}" counts more boxes than it has lines; the engine fills the rest with 0,0,0,0.', { header: B.headerRaw }) }));
       c.rects.forEach((r0, k) => {
         // What the box will read: a confirm not yet answered, a nudge not yet
         // written, or the page's own write of it still queued.
@@ -1606,7 +1664,10 @@
         key.onclick = () => { sel.which = which; sel.box = k; renderStage(); renderSide(); };
         row.append(key);
         const ins = ['left', 'top', 'right', 'bottom'].map((nm, j) => {
-          const inp = el('input', { type: 'text', spellcheck: 'false', value: pend[j], title: 'Clsn' + which + '[' + k + '] ' + nm, disabled: ro || (B && k >= B.boxes.length) });
+          const side = { which, k };
+          const tip = nm === 'left' ? I18n.t('Clsn{which}[{k}] left', side) : nm === 'top' ? I18n.t('Clsn{which}[{k}] top', side)
+            : nm === 'right' ? I18n.t('Clsn{which}[{k}] right', side) : I18n.t('Clsn{which}[{k}] bottom', side);
+          const inp = el('input', { type: 'text', spellcheck: 'false', value: pend[j], title: tip, disabled: ro || (B && k >= B.boxes.length) });
           const go = () => {
             const vals = ins.map((x) => x.value.trim());
             if (vals.some((x) => !/^[+-]?\d+$/.test(x))) { boxErr = 'Box coordinates are whole numbers (the engine reads them with Atoi, anim.go:398-417).'; renderSide(); return; }
@@ -1634,14 +1695,14 @@
         row.append(...ins);
         if (!ro) {
           const rm = el('button', { text: '×', title: 'Remove this box (shown as a plan first)' });
-          rm.onclick = () => runPlan({ op: 'removebox', elem: e.ordinal, which, box: k }, 'Remove Clsn' + which + '[' + k + '] of element ' + e.ordinal);
+          rm.onclick = () => runPlan({ op: 'removebox', elem: e.ordinal, which, box: k }, I18n.t('Remove Clsn{which}[{k}] of element {n}', { which, k, n: e.ordinal }));
           row.append(rm);
         }
         wrap.append(row);
       });
       if (!ro) {
-        const add = el('button', { text: '+ Clsn' + which + ' box', title: 'Add a box to this element (shown as a plan first)' });
-        add.onclick = () => runPlan({ op: 'addbox', elem: e.ordinal, which }, 'Add a Clsn' + which + ' box to element ' + e.ordinal);
+        const add = el('button', { text: I18n.t('+ Clsn{which} box', { which }), title: 'Add a box to this element (shown as a plan first)' });
+        add.onclick = () => runPlan({ op: 'addbox', elem: e.ordinal, which }, I18n.t('Add a Clsn{which} box to element {n}', { which, n: e.ordinal }));
         wrap.append(el('div', { class: 'ops' }, add));
       }
     }
@@ -1656,18 +1717,18 @@
     const ops = el('div', { class: 'ops', style: 'margin-top:5px' });
     // Each label names the frame as well as its number: the number is only a
     // position.
-    const frame = ' (sprite ' + e.values.group + ',' + e.values.number + ')';
-    const ins = el('button', { text: 'Insert before #' + e.ordinal, title: 'A copy of element ' + e.ordinal + ' placed before it' });
-    ins.onclick = () => runPlan({ op: 'insert', after: e.ordinal - 1, copyOf: e.ordinal }, 'Insert a copy of element ' + e.ordinal + frame + ' before it');
-    const dup = el('button', { text: 'Duplicate #' + e.ordinal, title: 'A copy of element ' + e.ordinal + ' placed after it' });
-    dup.onclick = () => runPlan({ op: 'insert', after: e.ordinal, copyOf: e.ordinal }, 'Duplicate element ' + e.ordinal + frame);
-    const del = el('button', { class: 'danger', text: 'Delete #' + e.ordinal, disabled: N < 2, title: N < 2 ? 'The only element: an action with no frames plays the NEXT action (anim.go:1210-1222)' : 'Delete element ' + e.ordinal });
-    del.onclick = () => runPlan({ op: 'delete', elem: e.ordinal }, 'Delete element ' + e.ordinal + frame);
+    const frame = { n: e.ordinal, group: e.values.group, number: e.values.number };
+    const ins = el('button', { text: I18n.t('Insert before #{n}', frame), title: I18n.t('A copy of element {n} placed before it', frame) });
+    ins.onclick = () => runPlan({ op: 'insert', after: e.ordinal - 1, copyOf: e.ordinal }, I18n.t('Insert a copy of element {n} (sprite {group},{number}) before it', frame));
+    const dup = el('button', { text: I18n.t('Duplicate #{n}', frame), title: I18n.t('A copy of element {n} placed after it', frame) });
+    dup.onclick = () => runPlan({ op: 'insert', after: e.ordinal, copyOf: e.ordinal }, I18n.t('Duplicate element {n} (sprite {group},{number})', frame));
+    const del = el('button', { class: 'danger', text: I18n.t('Delete #{n}', frame), disabled: N < 2, title: N < 2 ? 'The only element: an action with no frames plays the NEXT action (anim.go:1210-1222)' : I18n.t('Delete element {n}', frame) });
+    del.onclick = () => runPlan({ op: 'delete', elem: e.ordinal }, I18n.t('Delete element {n} (sprite {group},{number})', frame));
     const to = el('select', { title: 'Move to position' });
-    for (let k = 1; k <= N; k++) to.append(el('option', { value: k, text: 'to ' + k }));
+    for (let k = 1; k <= N; k++) to.append(el('option', { value: k, text: I18n.t('to {n}', { n: k }) }));
     to.value = String(e.ordinal);
-    const mv = el('button', { text: 'Move #' + e.ordinal, disabled: N < 2 });
-    mv.onclick = () => { const t = Number(to.value); if (t !== e.ordinal) runPlan({ op: 'move', elem: e.ordinal, to: t }, 'Move element ' + e.ordinal + frame + ' to ' + t); };
+    const mv = el('button', { text: I18n.t('Move #{n}', frame), disabled: N < 2 });
+    mv.onclick = () => { const t = Number(to.value); if (t !== e.ordinal) runPlan({ op: 'move', elem: e.ordinal, to: t }, I18n.t('Move element {n} (sprite {group},{number}) to {to}', Object.assign({ to: t }, frame))); };
     ops.append(ins, dup, del, to, mv);
     wrap.append(ops);
     if (plan) wrap.append(planPanel(plan));
@@ -1676,13 +1737,13 @@
 
   function planPanel(p) {
     const box = el('div', { class: 'panel' });
-    box.append(el('div', { class: 't', text: p.label + (p.res ? ' · plan, not written' : '') }));
+    box.append(el('div', { class: 't', text: p.res ? I18n.t('{label} · plan, not written', { label: p.label }) : p.label }));
     if (!p.res) {
       box.append(el('div', { class: 'err', text: p.error }));
       const btns = el('div', { class: 'btns' });
       if (p.needsLoop) {
         const b = el('button', { class: 'warn', text: 'Loop from the following element instead' });
-        b.onclick = () => runPlan(Object.assign({}, p.req, { loopstart: 'next' }), p.label + ' (loop from the next element)');
+        b.onclick = () => runPlan(Object.assign({}, p.req, { loopstart: 'next' }), I18n.t('{label} (loop from the next element)', { label: p.label }));
         btns.append(b);
       }
       const x = el('button', { text: 'Close' });
@@ -1695,24 +1756,41 @@
     const rn = pl.renumber || { triggers: [], blocking: [] };
     const noSpan = rn.triggers.filter((t) => !t.splices || !t.splices.length);
     const list = (title, items) => { if (!items.length) return; box.append(el('div', { class: 'fh', text: title })); const ul = el('ul'); items.forEach((x) => ul.append(x)); box.append(ul); };
-    if (pl.op === 'insert') box.append(el('div', { text: 'New element ' + pl.newElem + ', a copy of element ' + pl.copyOf + '. Elements after it move up by one.' }));
-    if (pl.op === 'delete') box.append(el('div', { text: 'Element ' + pl.elem + ' goes' + ((pl.removedWith || []).length ? ', with ' + pl.removedWith.map((x) => x.kind + ' (line ' + x.line + ')').join(', ') : '') + '. Elements after it move down by one.' }));
-    if (pl.op === 'move') box.append(el('div', { text: 'Element ' + pl.elem + ' moves to position ' + pl.to + ((pl.movedWith || []).length ? ', carrying ' + pl.movedWith.map((x) => x.kind + ' (line ' + x.line + ')').join(', ') : '') + '.' }));
-    if (pl.op === 'addbox') box.append(el('div', { text: 'Element ' + pl.elem + ' gets Clsn' + pl.which + '[' + pl.box + '] = ' + pl.rect.join(', ') + (pl.materialisedDefault ? ', in its own block holding a copy of the Default boxes (the Default stays as it is for the other elements)' : '') + '.' }));
-    if (pl.op === 'removebox') box.append(el('div', { text: 'Element ' + pl.elem + ' loses Clsn' + pl.which + '[' + pl.box + '] = ' + (pl.removed || []).join(', ') + (pl.materialisedDefault ? ', by getting its own block without it (the Default stays as it is for the other elements)' : '') + '.' }));
-    if (pl.expected && pl.expected.loopstart !== undefined && a0().loopstartLines.length && a0().loopstart > 0) box.append(el('div', { class: 'fh', text: 'Loopstart stays before the same element: element ' + (pl.expected.loopstart + 1) + ' afterwards.' }));
+    // the lines that go with an element: "Loopstart (line 12), Interpolate Offset (line 14)"
+    const carried = (list) => list.map((x) => I18n.t('{kind} (line {line})', { kind: x.kind, line: x.line })).join(', ');
+    if (pl.op === 'insert') box.append(el('div', { text: I18n.t('New element {n}, a copy of element {of}. Elements after it move up by one.', { n: pl.newElem, of: pl.copyOf }) }));
+    if (pl.op === 'delete') box.append(el('div', { text: (pl.removedWith || []).length ? I18n.t('Element {n} goes, with {list}. Elements after it move down by one.', { n: pl.elem, list: carried(pl.removedWith) })
+      : I18n.t('Element {n} goes. Elements after it move down by one.', { n: pl.elem }) }));
+    if (pl.op === 'move') box.append(el('div', { text: (pl.movedWith || []).length ? I18n.t('Element {n} moves to position {to}, carrying {list}.', { n: pl.elem, to: pl.to, list: carried(pl.movedWith) })
+      : I18n.t('Element {n} moves to position {to}.', { n: pl.elem, to: pl.to }) }));
+    if (pl.op === 'addbox') {
+      const got = { n: pl.elem, which: pl.which, box: pl.box, rect: pl.rect.join(', ') };
+      box.append(el('div', { text: pl.materialisedDefault ? I18n.t('Element {n} gets Clsn{which}[{box}] = {rect}, in its own block holding a copy of the Default boxes (the Default stays as it is for the other elements).', got)
+        : I18n.t('Element {n} gets Clsn{which}[{box}] = {rect}.', got) }));
+    }
+    if (pl.op === 'removebox') {
+      const lost = { n: pl.elem, which: pl.which, box: pl.box, rect: (pl.removed || []).join(', ') };
+      box.append(el('div', { text: pl.materialisedDefault ? I18n.t('Element {n} loses Clsn{which}[{box}] = {rect}, by getting its own block without it (the Default stays as it is for the other elements).', lost)
+        : I18n.t('Element {n} loses Clsn{which}[{box}] = {rect}.', lost) }));
+    }
+    if (pl.expected && pl.expected.loopstart !== undefined && a0().loopstartLines.length && a0().loopstart > 0) box.append(el('div', { class: 'fh', text: I18n.t('Loopstart stays before the same element: element {n} afterwards.', { n: pl.expected.loopstart + 1 }) }));
     // RE-PARENTED BOXES (§9): a Clsn block binds to the element that follows
     // it, so inserting or moving a frame line changes which element a block
     // belongs to. The plan writes an explicit own block wherever an element
     // would otherwise lose or gain boxes.
-    list('Boxes kept by writing an explicit block:', (pl.materialized || []).map((m) => el('li', { text: 'element ' + m.elem + (m.from && m.from !== m.elem ? ' (now ' + m.from + ')' : '') + ': Clsn' + m.which + ': ' + m.boxes.length + (m.boxes.length ? ' - ' + m.boxes.map((b) => '[' + b.join(', ') + ']').join(' ') : '') })));
+    // (t is a trigger in these lists; the words are I18n.t)
+    const stateOf = (x) => (x.type ? I18n.t('state {state} {type}:', { state: x.state, type: x.type }) : I18n.t('state {state}:', { state: x.state }));
+    list('Boxes kept by writing an explicit block:', (pl.materialized || []).map((m) => el('li', { text: (m.from && m.from !== m.elem
+      ? I18n.t('element {n} (now {from}): Clsn{which}: {count}', { n: m.elem, from: m.from, which: m.which, count: m.boxes.length })
+      : I18n.t('element {n}: Clsn{which}: {count}', { n: m.elem, which: m.which, count: m.boxes.length }))
+      + (m.boxes.length ? ' - ' + m.boxes.map((b) => '[' + b.join(', ') + ']').join(' ') : '') })));
     list('Triggers renumbered in the state files:', rn.triggers.filter((t) => t.splices && t.splices.length).map((t) => el('li', {},
-      el('code', { text: t.file + ':' + t.line }), ' state ' + t.state + (t.type ? ' ' + t.type : '') + ': ', el('code', { text: t.before }), ' → ', el('code', { text: t.after }),
-      t.ticks && t.ticks.length ? ' · fires at tick ' + t.ticks.map((x) => x.before + ' → ' + x.after).join(', ') : '',
-      t.partial ? ' (partly: see below)' : '')));
+      el('code', { text: t.file + ':' + t.line }), ' ' + stateOf(t) + ' ', el('code', { text: t.before }), ' → ', el('code', { text: t.after }),
+      t.ticks && t.ticks.length ? ' · ' + I18n.t('fires at tick {ticks}', { ticks: t.ticks.map((x) => x.before + ' → ' + x.after).join(', ') }) : '',
+      t.partial ? ' ' + I18n.t('(partly: see below)') : '')));
     list('Triggers left as written (they need you):', rn.blocking.map((b) => el('li', {},
-      el('code', { text: b.file + ':' + b.line }), ' state ' + b.state + (b.type ? ' ' + b.type : '') + ': ', el('code', { text: b.text }), ' - ' + b.why,
-      b.suggested !== undefined ? ' (on this action it would become ' + b.suggested + ')' : '')).concat(noSpan.map((t) => el('li', {},
+      el('code', { text: b.file + ':' + b.line }), ' ' + stateOf(b) + ' ', el('code', { text: b.text }), ' - ' + I18n.server(b.why),
+      b.suggested !== undefined ? ' ' + I18n.t('(on this action it would become {n})', { n: b.suggested }) : '')).concat(noSpan.map((t) => el('li', {},
       el('code', { text: t.file + ':' + t.line }), ' ', el('code', { text: t.before }), ' → ', el('code', { text: t.after }), ' - its position in the file is not exact, so it is not written automatically'))));
     if (!rn.triggers.length && !rn.blocking.length && ['insert', 'delete', 'move'].includes(pl.op)) box.append(el('div', { class: 'fh', text: 'No AnimElem trigger of a state playing this action needs renumbering.' }));
     for (const w of pl.warnings || []) box.append(el('div', { class: 'warnl', text: w }));

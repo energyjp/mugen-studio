@@ -353,7 +353,27 @@ const READ_ONLY_REFUSED = new Map(Object.entries({
 }).flatMap(([what, routes]) => routes.map((r) => [r, what])));
 function readOnlyAnswer(pathname) {
   const what = READ_ONLY_REFUSED.get(pathname) || 'this change';
-  return { error: 'This build is open read-only - ' + what + ' is not available', readOnly: true };
+  return { error: readOnlySays(what), readOnly: true };
+}
+// The refusal as one sentence for each kind of change, so a page can show it
+// in another language; a kind added above without one here still reads right.
+function readOnlySays(what) {
+  switch (what) {
+    case 'changing the roster': return 'This build is open read-only - changing the roster is not available';
+    case 'editing a character': return 'This build is open read-only - editing a character is not available';
+    case 'changing palettes': return 'This build is open read-only - changing palettes is not available';
+    case 'changing portraits': return 'This build is open read-only - changing portraits is not available';
+    case 'editing a stage': return 'This build is open read-only - editing a stage is not available';
+    case 'changing the screenpack': return 'This build is open read-only - changing the screenpack is not available';
+    case 'changing the engine settings': return 'This build is open read-only - changing the engine settings is not available';
+    case 'changing mods': return 'This build is open read-only - changing mods is not available';
+    case 'adding content': return 'This build is open read-only - adding content is not available';
+    case 'removing content': return 'This build is open read-only - removing content is not available';
+    case 'exporting': return 'This build is open read-only - exporting is not available';
+    case 'launching a pair from a desktop export': return 'This build is open read-only - launching a pair from a desktop export is not available';
+    case 'this change': return 'This build is open read-only - this change is not available';
+    default: return 'This build is open read-only - ' + what + ' is not available';
+  }
 }
 const readOnlyRefuses = (req, pathname) => layout.readOnly && WRITES(req) && !READ_ONLY_ALLOWED.has(pathname);
 // /api/studio's first answer in a read-only bundle (modlib.studioInfoLight),
@@ -1289,6 +1309,12 @@ async function handleApi(req, res, pathname) {
       } catch (e) {
         return json(res, 200, { ok: false, why: 'that folder could not be read', at: String(q.path == null ? '' : q.path), parent: '', entries: [], total: 0, more: 0 });
       }
+    }
+
+    // The languages Options > Language offers: the three built in, and the
+    // packs in the languages folder laid over them by code (see serveLang).
+    if (pathname === '/api/langs' && req.method === 'GET') {
+      return json(res, 200, { folder: layout.LANGUAGES_DIR, langs: langList() });
     }
 
     if (pathname === '/api/engine-zip' && req.method === 'GET') {
@@ -3200,10 +3226,9 @@ async function handleApi(req, res, pathname) {
             try { localConfig.saveHost(Object.assign({ accountName: name || null }, rest)); }
             catch (e) { if (e.field !== 'accountName') throw e; localConfig.saveHost(Object.assign({ accountName: null }, rest)); }
             const changed = useHostAddresses({ signalUrl: r.signalUrl, identityUrl: r.identityUrl });
-            line({ type: 'step', step: 'save', text: changed.length
-              ? 'this computer and the ' + layout.ACTIVE_BUNDLE.name + ' bundle now use these servers'
-                + (changed.includes('onlineName') ? ', and the Online menu is on' : '')
-              : 'this computer and the ' + layout.ACTIVE_BUNDLE.name + ' bundle already used these servers' });
+            line({ type: 'step', step: 'save', text: !changed.length ? 'this computer and the ' + layout.ACTIVE_BUNDLE.name + ' bundle already used these servers'
+              : changed.includes('onlineName') ? 'this computer and the ' + layout.ACTIVE_BUNDLE.name + ' bundle now use these servers, and the Online menu is on'
+                : 'this computer and the ' + layout.ACTIVE_BUNDLE.name + ' bundle now use these servers' });
           } else if (r.adminKey) {
             // The upload went through and then a later step failed: the new
             // Worker holds this key, so keep it for the retry (an update).
@@ -3211,7 +3236,8 @@ async function handleApi(req, res, pathname) {
           }
           result = hostResultForPage(r);
         } catch (e) {
-          result = { ok: false, why: 'Unexpected error: ' + String(e && e.message || e) };
+          const error = String(e && e.message || e);
+          result = { ok: false, why: 'Unexpected error: ' + error };
         }
         line({ type: 'done', result, state: hostingState() });
         res.end();
@@ -3254,13 +3280,13 @@ async function handleApi(req, res, pathname) {
             headers: { 'x-admin-key': host.adminKey }, redirect: 'manual', signal: AbortSignal.timeout(30000),
           });
         } catch (e) {
-          return json(res, 502, { error: 'could not reach your servers' + (e && e.cause && e.cause.code ? ' (' + e.cause.code + ')' : '') });
+          return json(res, 502, { error: e && e.cause && e.cause.code ? 'could not reach your servers (' + e.cause.code + ')' : 'could not reach your servers' });
         }
         const text = await r.text();
         if (r.status >= 300 && r.status < 400) {
           return json(res, 502, { error: 'your servers answered with a move to another address, and the Studio sends their admin key only to their own address' });
         }
-        if (!r.ok) return json(res, 502, { error: 'your servers answered ' + r.status + (r.status === 403 ? ' - they do not accept the admin key this Studio has' : '') });
+        if (!r.ok) return json(res, 502, { error: r.status === 403 ? 'your servers answered ' + r.status + ' - they do not accept the admin key this Studio has' : 'your servers answered ' + r.status });
         const n = new Date();
         const day = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
         res.writeHead(200, {
@@ -3620,8 +3646,8 @@ const FILE_ERRORS = {
 };
 function fileErrorText(filePath, e) {
   const known = FILE_ERRORS[e && e.code];
-  return 'Could not open ' + filePath + ': ' + (known ? known[1] : String((e && e.message) || e))
-    + (e && e.code ? ' (' + e.code + ')' : '');
+  const why = known ? known[1] : String((e && e.message) || e);
+  return e && e.code ? 'Could not open ' + filePath + ': ' + why + ' (' + e.code + ')' : 'Could not open ' + filePath + ': ' + why;
 }
 
 // Answers a request that failed, whatever state its response is in. Headers
@@ -3698,8 +3724,10 @@ function explainError(e) {
       if (re instanceof SyntaxError) {
         let at = null;
         try { at = jsonFaultAt(fs.readFileSync(vfslib.ROSTER_PATH, 'utf8')); } catch (x) { at = null; }
-        return 'roster.json is damaged' + (at ? ' at line ' + at.line + ', column ' + at.column : '')
+        return at ? 'roster.json is damaged at line ' + at.line + ', column ' + at.column
           + ': it is not valid JSON. Fix it in a text editor, or put back a copy from the backups folder'
+          + ' beside it if there is one: ' + vfslib.ROSTER_PATH
+          : 'roster.json is damaged: it is not valid JSON. Fix it in a text editor, or put back a copy from the backups folder'
           + ' beside it if there is one: ' + vfslib.ROSTER_PATH;
       }
     }
@@ -3773,6 +3801,88 @@ function serveFile(req, res, filePath, extra) {
   });
 }
 
+// LANGUAGE PACKS FROM THE LANGUAGES FOLDER (Options > Language).
+//
+// A pack a person drops into the languages folder (layout.LANGUAGES_DIR:
+// Settings/languages/ in a portable copy) is offered beside the shipped ones
+// without touching the program's files, and one with a shipped code
+// (es-419.json) is used instead of the shipped pack, so a fix from the
+// community needs no update. GET /lang/<code>.json reads the folder first,
+// then public/lang/ as before. The code is i18n.js's own pattern (a language
+// and up to two subtags): a name with a dot, a slash or anything else is 404,
+// so no path is ever built from a request. A folder pack is used only when it
+// parses and its "lang" is that code; one that does not is passed over (the
+// shipped pack answers, or nothing does). An optional flag beside it,
+// <code>.png or <code>.svg, is served as an image for the Options row's <img>
+// - never inlined - and an SVG goes out sandboxed, so one opened on its own
+// cannot run script on the Studio's origin. i18n.js checks every pack again
+// as it reads it (its tags against the English), whichever folder it came from.
+const I18N_RULES = require('./public/i18n.js');
+function folderPack(code) {
+  if (!I18N_RULES.CODE.test(code)) return null;
+  let text, pack;
+  try { text = fs.readFileSync(path.join(layout.LANGUAGES_DIR, code + '.json'), 'utf8').replace(/^\uFEFF/, ''); } catch (e) { return null; }
+  try { pack = JSON.parse(text); } catch (e) { return null; }
+  if (!pack || typeof pack !== 'object' || pack.lang !== code || !pack.strings || typeof pack.strings !== 'object' || Array.isArray(pack.strings)) return null;
+  return { text, pack };
+}
+function folderFlag(code, only) {
+  for (const ext of only ? [only] : ['png', 'svg']) {
+    const file = path.join(layout.LANGUAGES_DIR, code + '.' + ext);
+    try { if (fs.statSync(file).isFile()) return { file, url: '/lang/' + code + '.' + ext }; } catch (e) { /* not there */ }
+  }
+  return null;
+}
+// [{ code, name, english, source: 'built-in' | 'folder', flag: URL | null }]:
+// the built-in three in their order, then the folder's new codes by code. A
+// pack's own names are cut to 40 characters (a button shows one). An English
+// pack is never asked for (i18n.js: English is no pack), so en.json is not one.
+function langList() {
+  const cut = (s) => String(s == null ? '' : s).trim().slice(0, 40);
+  const out = new Map();
+  for (const code of Object.keys(I18N_RULES.LANGS)) {
+    let english = 'English';
+    if (code !== 'en') {
+      try { english = cut(JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'lang', code + '.json'), 'utf8').replace(/^\uFEFF/, '')).english); } catch (e) { english = ''; }
+    }
+    out.set(code, { code, name: I18N_RULES.LANGS[code].name, english, source: 'built-in', flag: null });
+  }
+  let names = [];
+  try { names = fs.readdirSync(layout.LANGUAGES_DIR); } catch (e) { names = []; }
+  for (const f of names.sort()) {
+    const m = /^(.+)\.json$/i.exec(f);
+    if (!m || m[1] === 'en') continue;
+    const own = folderPack(m[1]);
+    if (!own) continue;
+    const was = out.get(m[1]);
+    const flag = folderFlag(m[1]);
+    out.set(m[1], { code: m[1], name: cut(own.pack.name) || (was ? was.name : m[1]), english: cut(own.pack.english) || (was ? was.english : ''),
+      source: 'folder', flag: flag ? flag.url : null });
+  }
+  return [...out.values()];
+}
+// /lang/<code>.json and the flags. true when it answered; false leaves the
+// request to the static files (the shipped packs, README.md, the glossaries).
+function serveLang(req, res, pathname) {
+  const m = /^\/lang\/([^/]+)\.(json|png|svg)$/.exec(pathname);
+  if (!m) return false;
+  const code = m[1], ext = m[2];
+  if (!I18N_RULES.CODE.test(code)) { res.writeHead(404); res.end(); return true; }
+  if (ext === 'json') {
+    const own = folderPack(code);
+    if (!own) return false;
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.end(own.text);
+    return true;
+  }
+  const flag = folderFlag(code, ext);
+  if (!flag) { res.writeHead(404); res.end(); return true; }
+  serveFile(req, res, flag.file, ext === 'svg'
+    ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'X-Content-Type-Options': 'nosniff' }
+    : { 'X-Content-Type-Options': 'nosniff' });
+  return true;
+}
+
 // API requests still being answered. A restart waits for these (see
 // quitWhenIdle below): a request is where the Studio writes, and a write cut
 // off halfway is a damaged roster or a half-copied character.
@@ -3842,6 +3952,9 @@ function routeRequest(req, res) {
     serveExported(req, res, pathname);
     return;
   }
+
+  // A language pack: the languages folder's first (serveLang).
+  if (pathname.startsWith('/lang/') && serveLang(req, res, pathname)) return;
 
   if (pathname === '/') pathname = '/studio.html';
   const staticPath = path.join(PUBLIC_DIR, path.normalize(pathname).replace(/^(\.\.[/\\])+/, ''));

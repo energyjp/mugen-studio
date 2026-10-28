@@ -271,8 +271,9 @@ function copy(req, opts) {
   const sf = io.statfsSync(themesDir);
   const free = Number(sf.bavail) * Number(sf.bsize);
   if (free < w.bytes * 1.1) {
-    throw refusal('space', 'Not copied: it needs ' + sizeText(w.bytes) + (free >= w.bytes ? ', plus a little room to spare,' : '')
-      + ' and the drive has ' + sizeText(free) + ' free.');
+    const needs = sizeText(w.bytes), has = sizeText(free);
+    throw refusal('space', free >= w.bytes ? 'Not copied: it needs ' + needs + ', plus a little room to spare, and the drive has ' + has + ' free.'
+      : 'Not copied: it needs ' + needs + ' and the drive has ' + has + ' free.');
   }
 
   // The staging root: made by THIS call (a plain mkdir fails on one that is
@@ -309,7 +310,7 @@ function copy(req, opts) {
       }
     }
   } catch (e) {
-    try { lifebars().rmTree(stageRoot); } catch (e2) { e.message += ' - and the staging folder ' + stageRoot + ' could not be removed (' + e2.message + ')'; }
+    try { lifebars().rmTree(stageRoot); } catch (e2) { e.message = e.message + ' - and the staging folder ' + stageRoot + ' could not be removed (' + e2.message + ')'; }
     throw e;
   }
   // Empty now: rmdir, which refuses a folder that is not.

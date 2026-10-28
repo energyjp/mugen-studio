@@ -829,11 +829,14 @@ function planClsnEdit(text, req) {
   // be silently truncated, so only whole numbers are offered.
   if (!coords || coords.some((c) => c === null)) return { error: 'coords must be four whole numbers x1, y1, x2, y2' };
   const c = el['clsn' + which];
-  if (c.source === 'none') return { error: `element ${el.ordinal} has no Clsn${which} - add a box instead` };
+  if (c.source === 'none') return { error: which === 1 ? `element ${el.ordinal} has no Clsn1 - add a box instead` : `element ${el.ordinal} has no Clsn2 - add a box instead` };
   const B = act.clsn[c.block];
   const box = Number(r.box);
-  if (!Number.isInteger(box) || box < 0 || box >= c.rects.length) return { error: `element ${el.ordinal} has no Clsn${which} box ${r.box}` };
-  if (box >= B.boxes.length) return { error: `Clsn${which} box ${box} is counted by "${B.headerRaw}" but has no line - the engine uses [0,0,0,0]; fix the block by hand` };
+  if (!Number.isInteger(box) || box < 0 || box >= c.rects.length) return { error: which === 1 ? `element ${el.ordinal} has no Clsn1 box ${r.box}` : `element ${el.ordinal} has no Clsn2 box ${r.box}` };
+  if (box >= B.boxes.length) {
+    return { error: which === 1 ? `Clsn1 box ${box} is counted by "${B.headerRaw}" but has no line - the engine uses [0,0,0,0]; fix the block by hand`
+      : `Clsn2 box ${box} is counted by "${B.headerRaw}" but has no line - the engine uses [0,0,0,0]; fix the block by hand` };
+  }
   const affects = B.boundTo.slice();
   const scope = B.isDefault ? 'default' : 'own';
   if (B.isDefault && r.scope !== 'default') {
@@ -1162,8 +1165,9 @@ function renumberPlan(act, map, states, startsAfter, opt) {
       let after = t.text;
       const edits = [];
       let blocked = false;
-      // Left as written on an element this op moves past the new end.
-      const pastEnd = (a) => (a.elem > newN ? `; left as written it points past the end of action ${act.no} (${newN} elements after this ${opName}) and never fires` : '');
+      // Left as written on an element this op moves past the new end: the
+      // reason, with that said after it.
+      const pastEnd = (a, why) => (a.elem > newN ? `${why}; left as written it points past the end of action ${act.no} (${newN} elements after this ${opName}) and never fires` : why);
       for (const a of atoms.slice().reverse()) {
         // `elem = N` of a ChangeAnim: the element it jumps to on the action
         // its own value names (bytecode.go:5494-5508, anim.go:605-635); an
@@ -1180,13 +1184,18 @@ function renumberPlan(act, map, states, startsAfter, opt) {
           }
           if (a.elem < 1) continue;
           if (a.elem > oldN) {
-            if (a.elem <= newN) { plan.blocking.push({ ...where, text: t.text, why: lead + `jumps to element ${a.elem}, past the end of action ${act.no} (${oldN} elements), so the engine restarts it at element 1 (char.go:4744-4747); after this ${opName} it has ${newN} and the jump lands on element ${a.elem}` }); blocked = true; }
+            if (a.elem <= newN) {
+              plan.blocking.push({ ...where, text: t.text, why: e.why
+                ? `${e.why}: jumps to element ${a.elem}, past the end of action ${act.no} (${oldN} elements), so the engine restarts it at element 1 (char.go:4744-4747); after this ${opName} it has ${newN} and the jump lands on element ${a.elem}`
+                : `jumps to element ${a.elem}, past the end of action ${act.no} (${oldN} elements), so the engine restarts it at element 1 (char.go:4744-4747); after this ${opName} it has ${newN} and the jump lands on element ${a.elem}` });
+              blocked = true;
+            }
             continue;
           }
           const nw = map(a.elem);
-          if (nw === null) { plan.blocking.push({ ...where, text: t.text, why: lead + `jumps to element ${a.elem}, which this operation removes` }); blocked = true; continue; }
+          if (nw === null) { plan.blocking.push({ ...where, text: t.text, why: e.why ? `${e.why}: jumps to element ${a.elem}, which this operation removes` : `jumps to element ${a.elem}, which this operation removes` }); blocked = true; continue; }
           if (nw === a.elem) continue;
-          if (e.plays !== 'all') { plan.blocking.push({ ...where, text: t.text, why: (e.why || 'the ChangeAnim value may be another action') + pastEnd(a), suggested: nw }); blocked = true; continue; }
+          if (e.plays !== 'all') { plan.blocking.push({ ...where, text: t.text, why: pastEnd(a, e.why || 'the ChangeAnim value may be another action'), suggested: nw }); blocked = true; continue; }
           after = after.slice(0, a.numStart) + String(nw) + after.slice(a.numEnd);
           edits.push({ kind: a.kind, from: a.elem, to: nw, numStart: a.numStart, numEnd: a.numEnd });
           continue;
@@ -1199,20 +1208,23 @@ function renumberPlan(act, map, states, startsAfter, opt) {
         if (a.elem < 1) continue; // Undefined before and after (char.go:5256-5261)
         if (a.elem > oldN) {
           if (a.elem <= newN) {
-            plan.blocking.push({ ...where, text: t.text, why: (outside ? outside.why + ': ' : '') + `never fired - action ${act.no} has ${oldN} elements, so element ${a.elem} is Undefined (char.go:5256-5261); after this ${opName} it has ${newN} and this fires on element ${a.elem}` });
+            plan.blocking.push({ ...where, text: t.text, why: outside
+              ? `${outside.why}: never fired - action ${act.no} has ${oldN} elements, so element ${a.elem} is Undefined (char.go:5256-5261); after this ${opName} it has ${newN} and this fires on element ${a.elem}`
+              : `never fired - action ${act.no} has ${oldN} elements, so element ${a.elem} is Undefined (char.go:5256-5261); after this ${opName} it has ${newN} and this fires on element ${a.elem}` });
             blocked = true;
           }
           continue; // still past the end: stays never-firing
         }
         const nw = map(a.elem);
-        if (nw === null) { plan.blocking.push({ ...where, text: t.text, why: (outside ? outside.why + ': ' : '') + `fires on element ${a.elem}, which this operation removes` }); blocked = true; continue; }
+        if (nw === null) { plan.blocking.push({ ...where, text: t.text, why: outside ? `${outside.why}: fires on element ${a.elem}, which this operation removes` : `fires on element ${a.elem}, which this operation removes` }); blocked = true; continue; }
         if (nw === a.elem) continue;
         if (outside) {
-          plan.blocking.push({ ...where, text: t.text, why: outside.why + pastEnd(a), suggested: nw });
+          plan.blocking.push({ ...where, text: t.text, why: pastEnd(a, outside.why), suggested: nw });
           blocked = true; continue;
         }
         if (others.length) {
-          plan.blocking.push({ ...where, text: t.text, why: `this state also plays action ${others.join(', ')}, where element ${a.elem} is a different frame` + pastEnd(a), suggested: nw });
+          const actions = others.join(', ');
+          plan.blocking.push({ ...where, text: t.text, why: pastEnd(a, `this state also plays action ${actions}, where element ${a.elem} is a different frame`), suggested: nw });
           blocked = true; continue;
         }
         after = after.slice(0, a.numStart) + String(nw) + after.slice(a.numEnd);
@@ -1465,7 +1477,8 @@ function planDeleteElement(text, req) {
   const L = act.loopstart;
   const loopHere = act.loopstartLines.length && L > 0 && L === el.ordinal - 1;
   if (loopHere && (r.loopstart !== 'next' || el.ordinal === N)) {
-    return { error: `the loop starts at element ${el.ordinal}; deleting it would move the Loopstart` + (el.ordinal === N ? '' : " (pass loopstart: 'next' to loop from the following element)") };
+    return { error: el.ordinal === N ? `the loop starts at element ${el.ordinal}; deleting it would move the Loopstart`
+      : `the loop starts at element ${el.ordinal}; deleting it would move the Loopstart (pass loopstart: 'next' to loop from the following element)` };
   }
   const nl = nlOf(text, act), style = styleOf(act);
   // The deleted element's own blocks and interpolate markers go with it:
@@ -1603,7 +1616,7 @@ function planRemoveBox(text, req) {
   if (which !== 1 && which !== 2) return { error: 'which must be 1 or 2' };
   const c = el['clsn' + which];
   const box = Number(r.box);
-  if (!Number.isInteger(box) || box < 0 || box >= c.rects.length) return { error: `element ${el.ordinal} has no Clsn${which} box ${r.box}` };
+  if (!Number.isInteger(box) || box < 0 || box >= c.rects.length) return { error: which === 1 ? `element ${el.ordinal} has no Clsn1 box ${r.box}` : `element ${el.ordinal} has no Clsn2 box ${r.box}` };
   const B = act.clsn[c.block];
   if (B.short) return { error: `"${B.headerRaw}" (line ${B.line}) counts more boxes than it has lines; fix it by hand first` };
   const nl = nlOf(text, act), style = styleOf(act);

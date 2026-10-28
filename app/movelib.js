@@ -729,7 +729,10 @@ function blockModel(ctx, st, sc, ordinal) {
     type: TYPE_NAMES[sc.type], ctrl: sc.type, tag: S.decodeText(sc.tag), label: S.decodeText(sc.label), line: sc.line, endLine: end - 1,
     triggers: [], params: [], duplicates: [], firing: [], derived: null, notes: [],
   };
-  if (sc.gap) b.notes.push(sc.gap === 1 ? 'no trigger1: the engine refuses to load the character (compiler.go:7012-7015)' : 'trigger' + sc.gap + ' is missing: trigger groups from ' + sc.gap + ' on never compile');
+  if (sc.gap) {
+    const trigger = 'trigger' + sc.gap;
+    b.notes.push(sc.gap === 1 ? 'no trigger1: the engine refuses to load the character (compiler.go:7012-7015)' : trigger + ' is missing: trigger groups from ' + sc.gap + ' on never compile');
+  }
   if (sc.neverTrue) b.notes.push('a trigger is a literal 0: this block never runs');
   if (sc.dropped) b.notes.push(sc.dropped + ' malformed trigger line(s) dropped');
   if (!ft) return b;
@@ -1144,7 +1147,8 @@ function movesIn(charDir, defName, opts) {
     try {
       projectiles = projectilesIn({ L, states, outStates, negStates, byNo, animEntry, animsOf, ticksOf, domains, localcoord: L.localcoord || [320, 240] });
     } catch (e) {
-      projectiles = { entries: [], anims: [], notes: ['the projectiles could not be read: ' + (e && e.message ? e.message : String(e))] };
+      const error = e && e.message ? e.message : String(e);
+      projectiles = { entries: [], anims: [], notes: ['the projectiles could not be read: ' + error] };
     }
   }
 
@@ -1171,7 +1175,8 @@ function movesIn(charDir, defName, opts) {
       explodNotes = explodsIn({ L, states, outStates, domains, addAnim, ticksOf }).notes;
     } catch (e) {
       for (const s of outStates) delete s.explods;
-      explodNotes = ['the Explods could not be read: ' + (e && e.message ? e.message : String(e))];
+      const error = e && e.message ? e.message : String(e);
+      explodNotes = ['the Explods could not be read: ' + error];
     }
     if (projectiles) projectiles.anims = [...extra.values()];
   }
@@ -1851,11 +1856,21 @@ function projectilesIn(env) {
       freeze: ptxt && ptxt.values[0] && ptxt.values[0].tier === 'green' ? Math.trunc(Number(ptxt.values[0].raw)) : (ptxt ? null : 0),
       depends: depends.concat(sizeDep), notes: [],
     };
-    if (!sameState && !counted) entry.notes.push(laterWhy.charAt(0).toUpperCase() + laterWhy.slice(1) + ': its active frames, its life and point blank are not worked out here. State ' + hitS.no + ' keeps its own row in the list');
+    if (!sameState && !counted) {
+      const later = laterWhy.charAt(0).toUpperCase() + laterWhy.slice(1);
+      entry.notes.push(later + ': its active frames, its life and point blank are not worked out here. State ' + hitS.no + ' keeps its own row in the list');
+    }
     if (!sameState && counted) entry.notes.push('followed through its states: ' + path.chain.map((sg) => sg.state).join(' → ') + '; its HitDef fires in state ' + hitSeg.state + ' on its frame ' + (hitSeg.hit.tick + 1) + ', and its active frames, life and point blank are counted there');
     if (path && path.end.why === 'cap') entry.notes.push(path.end.states ? 'the walk follows ' + FD.CHAIN_STATES + ' states at most' : 'the walk follows ' + FD.CHAIN_TICKS + ' frames at most: it is still going in state ' + path.chain[path.chain.length - 1].state);
     if (path && path.end.notFollowed) entry.notes.push('it changes to state ' + path.end.to + ' on its frame ' + (path.end.tick + 1) + ', which is not followed: ' + path.end.notFollowed);
-    if (path && path.pauses.length) for (const pz of path.pauses) entry.notes.push('state ' + pz.state + ' calls a ' + pz.kind + ' on its frame ' + (pz.tick + 1) + ' (' + pz.file + ' line ' + pz.line + '): the player and the opponent stand frozen for ' + pz.time + ' frames while it ' + (pz.movetime >= pz.time ? 'goes on moving (movetime ' + pz.movetime + ')' : 'moves for ' + pz.movetime + ' of them (movetime) and then stands still too'));
+    if (path && path.pauses.length) {
+      for (const pz of path.pauses) {
+        const frame = pz.tick + 1;
+        entry.notes.push(pz.movetime >= pz.time
+          ? 'state ' + pz.state + ' calls a ' + pz.kind + ' on its frame ' + frame + ' (' + pz.file + ' line ' + pz.line + '): the player and the opponent stand frozen for ' + pz.time + ' frames while it goes on moving (movetime ' + pz.movetime + ')'
+          : 'state ' + pz.state + ' calls a ' + pz.kind + ' on its frame ' + frame + ' (' + pz.file + ' line ' + pz.line + '): the player and the opponent stand frozen for ' + pz.time + ' frames while it moves for ' + pz.movetime + ' of them (movetime) and then stands still too');
+      }
+    }
     if (makerPause && !sameState && pb && pb.frame !== null) entry.notes.push('the move that makes it pauses the game (Pause / SuperPause): the player\'s frames against the helper\'s are not counted for it, so point blank is ≈');
     if (throwers.some((t) => ['x', 'y'].some((k) => (t.size[k].absent ? null : t.size[k].value) !== (sz[k].absent ? null : sz[k].value)))) entry.notes.push('the states that make it give it different sizes; drawn at the first one\'s (state ' + t0w.state + ')');
     if (!setsSize && t0w.helper) entry.notes.push('its maker is itself a helper, whose own size it starts at; drawn here at [Size]');
@@ -1949,6 +1964,25 @@ const EXPLOD_PER_STATE = 24;   // per state
 const EXPLOD_TICKS = 400;      // ticks of one move followed at most (framedata MAX_METER)
 const EXPLOD_POINTS = 60000;   // timeline points per character
 const EXPLOD_ANIMS = 200;      // animations added to the answer for them
+// An Explod drawn in the character's own layer, against the character's
+// sprpriority: one sentence for each comparison and for how the character's
+// own value was found.
+function prioWhy(prio, charPrio) {
+  const value = charPrio.value;
+  if (charPrio.how === 'assumed') {
+    return prio > value ? 'sprpriority ' + prio + ' over the character\'s ' + value + ' (its statedef sets none: 0 assumed)'
+      : prio === value ? 'sprpriority ' + prio + ' equal to the character\'s ' + value + ' (its statedef sets none: 0 assumed): the character is drawn over it'
+        : 'sprpriority ' + prio + ' under the character\'s ' + value + ' (its statedef sets none: 0 assumed)';
+  }
+  if (charPrio.how === 'depends') {
+    return prio > value ? 'sprpriority ' + prio + ' over the character\'s ' + value + ' (its statedef\'s is a formula: 0 assumed)'
+      : prio === value ? 'sprpriority ' + prio + ' equal to the character\'s ' + value + ' (its statedef\'s is a formula: 0 assumed): the character is drawn over it'
+        : 'sprpriority ' + prio + ' under the character\'s ' + value + ' (its statedef\'s is a formula: 0 assumed)';
+  }
+  return prio > value ? 'sprpriority ' + prio + ' over the character\'s ' + value
+    : prio === value ? 'sprpriority ' + prio + ' equal to the character\'s ' + value + ': the character is drawn over it'
+      : 'sprpriority ' + prio + ' under the character\'s ' + value;
+}
 function explodsIn(env) {
   const t0 = Date.now();
   const { L, states, outStates, domains, addAnim, ticksOf } = env;
@@ -2074,9 +2108,7 @@ function explodsIn(env) {
           : layerno > 0 ? (ontop ? 'ontop = 1: drawn in the layer over every character' : 'layerno = 1: drawn in the layer over every character')
             : layerno < 0 ? 'layerno = -1: drawn under every character'
               : under ? 'under = 1: drawn under the characters of its layer'
-                : 'sprpriority ' + prio + (prio > charPrio.value ? ' over' : prio === charPrio.value ? ' equal to' : ' under') + ' the character\'s ' + charPrio.value
-                  + (charPrio.how === 'assumed' ? ' (its statedef sets none: 0 assumed)' : charPrio.how === 'depends' ? ' (its statedef\'s is a formula: 0 assumed)' : '')
-                  + (prio === charPrio.value ? ': the character is drawn over it' : ''),
+                : prioWhy(prio, charPrio),
       };
       if (prioCtrls.length && front !== null && layerno === 0 && !under) enotes.push('a SprPriority controller in the state (line ' + prioCtrls.map((x) => x.line).join(', ') + ') may change which one is drawn on top');
       const id = has('id') ? one('id', 0) : 0;

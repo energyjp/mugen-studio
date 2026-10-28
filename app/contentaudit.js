@@ -661,7 +661,7 @@ function contentAuditIn(charDir, defName, opts) {
       if (gatedOn(sc, ATOM.ghostHelper)) { out.dead = 'never runs: gated on a helper id no Helper creates'; return out; }
       if (X.evalTriggerSet(sc.trig, { missingRedirect }) === false) { out.dead = 'never runs: it reads helper(N) for an id no Helper creates, which is undefined (bytecode.go:1953-1961)'; return out; }
       if (X.evalTriggerSet(sc.trig, { isHelper: base.isHelper }) === false) {
-        out.dead = 'never runs: ' + (who === 'helper' ? 'IsHelper is 1 for a helper' : 'IsHelper is 0 for her') + ' (char.go:5524-5543)'; return out;
+        out.dead = who === 'helper' ? 'never runs: IsHelper is 1 for a helper (char.go:5524-5543)' : 'never runs: IsHelper is 0 for her (char.go:5524-5543)'; return out;
       }
       if (X.evalTriggerSet(sc.trig, { selfHas: animSet, animHas: base.animHas === null ? null : animSet }) === false) {
         out.dead = 'never runs: it asks SelfAnimExist / AnimExist for an action neither her .air nor common.air holds (char.go:5266-5285)'; return out;
@@ -672,7 +672,8 @@ function contentAuditIn(charDir, defName, opts) {
       if (nd) {
         if (!nd.vars.length) { out.dead = 'never runs: its trigger can never be true for her'; return out; }
         if (!receiver && !nd.opaque.length) { out.dead = 'never runs: false for every value the files give ' + nd.vars.join(', '); return out; }
-        out.latent = 'gated by ' + nd.vars.join(', ') + (nd.opaque.length ? ' (written by VarAdd, VarRandom or a computed value)' : ' (a state the opponent puts her in can set it)');
+        const vars = nd.vars.join(', ');
+        out.latent = nd.opaque.length ? 'gated by ' + vars + ' (written by VarAdd, VarRandom or a computed value)' : 'gated by ' + vars + ' (a state the opponent puts her in can set it)';
       }
     } else {
       // The opponent running her custom state: its `enemy, var(N)` /
@@ -683,7 +684,9 @@ function contentAuditIn(charDir, defName, opts) {
       const nd = names.length ? neverUnder(sc, names, {}, true) : null;
       if (nd) {
         if (!receiver && !nd.opaque.length) { out.dead = 'never runs: false for every value her files give ' + nd.vars.join(', ') + ' (read by the opponent as enemy, var)'; return out; }
-        out.latent = 'gated by her ' + nd.vars.join(', ') + ', read by the opponent in her state' + (nd.opaque.length ? ' (written by VarAdd, VarRandom or a computed value)' : ' (a state the opponent puts her in can set it)');
+        const vars = nd.vars.join(', ');
+        out.latent = nd.opaque.length ? 'gated by her ' + vars + ', read by the opponent in her state (written by VarAdd, VarRandom or a computed value)'
+          : 'gated by her ' + vars + ', read by the opponent in her state (a state the opponent puts her in can set it)';
       }
     }
     // The player she holds in her custom state is a helper only when her
@@ -1169,7 +1172,7 @@ function contentAuditIn(charDir, defName, opts) {
         if (t === 'changestate' || param === 'p1stateno') {
           e.tier = r.owner ? 'freezes' : r.victim ? 'freezes-opponent' : r.helper ? 'helper' : 'dead';
           who = r.owner ? 'owner' : r.victim ? 'victim' : r.helper ? 'helper' : null;
-          e.why = e.tier === 'freezes' ? 'no loaded file defines ' + n + '; she freezes' + (param === 'p1stateno' ? ' on hit' : '')
+          e.why = e.tier === 'freezes' ? (param === 'p1stateno' ? 'no loaded file defines ' + n + '; she freezes on hit' : 'no loaded file defines ' + n + '; she freezes')
             : e.tier === 'freezes-opponent' ? 'no loaded file defines ' + n + '; the opponent she holds freezes (ChangeState reads her table, char.go:6785-6787)'
             : '';
         } else if (t === 'selfstate' || t === 'hitoverride' || t === 'helper') {
@@ -1177,7 +1180,7 @@ function contentAuditIn(charDir, defName, opts) {
           if (e.tier === 'freezes') e.why = 'no loaded file defines ' + n + '; she freezes';
         } else {
           e.tier = p2own ? 'victim-side' : (who ? 'freezes-opponent' : 'dead');
-          if (e.tier === 'freezes-opponent') e.why = 'no loaded file defines ' + n + '; the opponent freezes' + (t === 'targetstate' ? '' : ' on hit');
+          if (e.tier === 'freezes-opponent') e.why = t === 'targetstate' ? 'no loaded file defines ' + n + '; the opponent freezes' : 'no loaded file defines ' + n + '; the opponent freezes on hit';
         }
         if (e.tier === 'helper') {
           e.why = 'a helper is sent to a state no loaded file defines; the engine gives it her standing animation and control and it stays there (char.go:6966, 6667-6674) - not yet confirmed in a match';
@@ -1312,7 +1315,8 @@ function contentAuditIn(charDir, defName, opts) {
   const structure = [];
   for (const n of [0, 5900]) {
     if (!defined(n)) structure.push({ kind: 'no-state-' + n, file: null, line: null, fatal: true,
-      detail: 'no loaded file, stcommon or engine common file defines state ' + n + '; the engine enters it at ' + (n === 0 ? 'round start (system.go:2858, 3438)' : 'round init (system.go:2657)') + ' and she stands frozen' });
+      detail: n === 0 ? 'no loaded file, stcommon or engine common file defines state ' + n + '; the engine enters it at round start (system.go:2858, 3438) and she stands frozen'
+        : 'no loaded file, stcommon or engine common file defines state ' + n + '; the engine enters it at round init (system.go:2657) and she stands frozen' });
   }
   const strays = new Map();
   for (const x of parsed.strayNegative) {
@@ -1331,10 +1335,10 @@ function contentAuditIn(charDir, defName, opts) {
   }
   for (const s of states.values()) for (const sc of s.sctrls) {
     if (!sc.gap) continue;
-    const dropped = [...sc.paramLines.keys()].filter((k) => /^trigger\d+$/.test(k) && +k.slice(7) > sc.gap).length;
+    const dropped = [...sc.paramLines.keys()].filter((k) => /^trigger\d+$/.test(k) && +k.slice(7) > sc.gap).length, trigger = 'trigger' + sc.gap;
     structure.push({ kind: 'trigger-gap', file: sc.file, line: sc.line, count: sc.gap === 1 ? 1 : dropped, fatal: sc.gap === 1,
       detail: sc.gap === 1 ? '[State ' + sc.tag + '] has no trigger1: the engine refuses to load the character (compiler.go:7012-7015)'
-        : '[State ' + sc.tag + '] skips trigger' + sc.gap + ': ' + dropped + ' trigger group(s) after the gap never compile (compiler.go:6922-6947, 7026-7030)' });
+        : '[State ' + sc.tag + '] skips ' + trigger + ': ' + dropped + ' trigger group(s) after the gap never compile (compiler.go:6922-6947, 7026-7030)' });
   }
   for (const x of parsed.droppedNegative) {
     structure.push({ kind: 'dropped-negative', file: x.file, line: x.line, count: x.controllers, no: x.no,

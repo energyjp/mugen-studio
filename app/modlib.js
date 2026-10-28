@@ -156,9 +156,9 @@ function extractZip(zipPath, destDir) {
     // Windows cannot create; a pack whose own folder has such a name has
     // nothing left, and says why.
     if (!fresh().length) {
-      refuse('could not unpack ' + name + (/unreadable filename/i.test(t.err || '')
-        ? ': its file names use characters (Japanese?) that Windows\' unpacker cannot write on this PC. Unpack it with 7-Zip or WinRAR, then add the folder'
-        : ': the archive is empty, damaged or cut short'));
+      refuse(/unreadable filename/i.test(t.err || '')
+        ? 'could not unpack ' + name + ': its file names use characters (Japanese?) that Windows\' unpacker cannot write on this PC. Unpack it with 7-Zip or WinRAR, then add the folder'
+        : 'could not unpack ' + name + ': the archive is empty, damaged or cut short');
     }
   }
   // Flatten a single wrapping folder. It is first moved aside under a name of
@@ -757,14 +757,15 @@ function themeBootMissing(defText, folder, have) {
 function themeBootWhy(key, rel, folder, elsewhere) {
   if (key === 'spr') {
     return rel === null ? 'it names no picture file for its screens (spr), so none of them can be drawn'
-      : 'the picture file for its screens (spr = ' + rel + ') is not in ' + (folder ? 'its folder' : 'data/') + ', so none of them can be drawn';
+      : folder ? 'the picture file for its screens (spr = ' + rel + ') is not in its folder, so none of them can be drawn'
+        : 'the picture file for its screens (spr = ' + rel + ') is not in data/, so none of them can be drawn';
   }
   if (elsewhere) {
     return 'its fight screen (fight = ' + rel + ') is only in another folder under data/, which an export leaves out,'
       + ' and the exported game would stop at startup with "Can\'t load fight screen"';
   }
-  return 'its fight screen (fight = ' + rel + ') is not in ' + (folder ? 'its folder, the game folder or data/' : 'the game folder or data/')
-    + ', and the game stops at startup with "Can\'t load fight screen" when that file is missing';
+  return folder ? 'its fight screen (fight = ' + rel + ') is not in its folder, the game folder or data/, and the game stops at startup with "Can\'t load fight screen" when that file is missing'
+    : 'its fight screen (fight = ' + rel + ') is not in the game folder or data/, and the game stops at startup with "Can\'t load fight screen" when that file is missing';
 }
 
 // A PACK CAN NAME AN ANIMATION IT NEVER DEFINES, AND NOTHING SAYS SO.
@@ -1791,7 +1792,7 @@ function relayChars(rosterChars, layout) {
 
 function removeTheme(folder) {
   const dir = themeFolderDir(folder);
-  if (!dir) throw new Error('bad theme folder: ' + (typeof folder === 'string' && folder ? JSON.stringify(folder) : '(empty)'));
+  if (!dir) throw new Error(typeof folder === 'string' && folder ? 'bad theme folder: ' + JSON.stringify(folder) : 'bad theme folder: (empty)');
   let st = null;
   try { st = fs.lstatSync(dir); } catch (e) { st = null; }
   if (!st) throw new Error('no such theme: ' + folder);
@@ -4484,7 +4485,7 @@ function classifyDef(primary, v) {
   }
   // Otherwise the rename is worth mentioning but is not what the variant IS, so
   // it rides along on whatever the files say below.
-  const alias = renamed ? '; calls itself "' + v.name + '"' : '';
+  const withAlias = (detail) => (renamed ? detail + '; calls itself "' + v.name + '"' : detail);
 
   // ART IS THE SPRITE FILE, NOT THE .AIR.
   //
@@ -4499,13 +4500,14 @@ function classifyDef(primary, v) {
 
   if (!same('sprite')) {
     if (v.sffVer !== null && primary.sffVer !== null && v.sffVer !== primary.sffVer) {
+      const its = 'v' + v.sffVer, theirs = 'v' + primary.sffVer;
       return { kind: 'engine-build', label: 'older engine',
-        note: 'its sprite file is SFF v' + v.sffVer + ' where ' + primary.def + ' uses v'
-          + primary.sffVer + '. Built for an engine that cannot read v' + primary.sffVer
-          + '; Ikemen reads both, so this one only loses whatever the newer file adds.' + alias };
+        note: withAlias('its sprite file is SFF ' + its + ' where ' + primary.def + ' uses '
+          + theirs + '. Built for an engine that cannot read ' + theirs
+          + '; Ikemen reads both, so this one only loses whatever the newer file adds.') };
     }
     return { kind: 'art', label: 'different art',
-      note: 'points at a different sprite file (' + v.sprite + ')' + alias };
+      note: withAlias('points at a different sprite file (' + v.sprite + ')') };
   }
 
   // mugenversion outranks the code diff when the art is shared, because a state
@@ -4515,31 +4517,32 @@ function classifyDef(primary, v) {
   // a difference that is already visible in the files; nothing is inferred from
   // it, because it is stale in 30% of the corpus.
   if (!same('mugenversion')) {
+    const files = codeFiles.join('/');
     return { kind: 'engine-target', label: 'engine target',
-      note: 'same art; declares mugenversion ' + (v.mugenversion || '(none)')
-        + ' instead of ' + (primary.mugenversion || '(none)')
-        + (codeDiffers ? ' and swaps its ' + codeFiles.join('/') : '') + alias };
+      note: withAlias(codeDiffers
+        ? 'same art; declares mugenversion ' + (v.mugenversion || '(none)') + ' instead of ' + (primary.mugenversion || '(none)') + ' and swaps its ' + files
+        : 'same art; declares mugenversion ' + (v.mugenversion || '(none)') + ' instead of ' + (primary.mugenversion || '(none)')) };
   }
 
   if (codeDiffers) {
-    const how = 'same art, its own ' + codeFiles.join('/');
+    const files = codeFiles.join('/');
     if (NOAI_RE.test(v.def)) {
       return { kind: 'no-ai', label: 'AI removed',
-        note: how + ' - the name says the AI is taken out' + alias };
+        note: withAlias('same art, its own ' + files + ' - the name says the AI is taken out') };
     }
     if (AI_RE.test(v.def)) {
       return { kind: 'ai', label: 'AI build',
-        note: how + ' - the name says this one carries an AI patch' + alias };
+        note: withAlias('same art, its own ' + files + ' - the name says this one carries an AI patch') };
     }
-    return { kind: 'gameplay', label: 'different states', note: how + alias };
+    return { kind: 'gameplay', label: 'different states', note: withAlias('same art, its own ' + files) };
   }
 
   if (same('displayname') && same('pals')) {
     return { kind: 'duplicate', label: 'duplicate',
-      note: 'identical to ' + primary.def + ' in every field this can compare' + alias };
+      note: withAlias('identical to ' + primary.def + ' in every field this can compare') };
   }
   return { kind: 'label', label: 'renamed',
-    note: 'same files, different display name or palette list' + alias };
+    note: withAlias('same files, different display name or palette list') };
 }
 
 function charDefs(folder, primaryDef) {
@@ -7788,7 +7791,9 @@ function prepareAction(mountAs, actionNo, o) {
   // the engine tests on that tick; with no sprite loaded yet it is blank.
   const ent = airEntries(raw.map((f) => f.time), sel.loopStart);
   const tl = looped ? ent.loop : ent.full;
-  if (!tl.runs.some((r) => r.spr >= 0)) return { error: 'The engine never draws this ' + (looped ? 'loop' : 'action') + ': every element it lands on has time 0.' };
+  if (!tl.runs.some((r) => r.spr >= 0)) {
+    return { error: looped ? 'The engine never draws this loop: every element it lands on has time 0.' : 'The engine never draws this action: every element it lands on has time 0.' };
+  }
   const notes = new Set();
   const runs = tl.runs.map((r) => {
     const e = raw[r.elem], s = r.spr >= 0 ? geom[r.spr] : null, c = raw[r.clsn !== undefined ? r.clsn : r.elem];
@@ -7807,8 +7812,12 @@ function prepareAction(mountAs, actionNo, o) {
     if (shown.every((x) => x.s.none)) return { error: 'Every element this action shows is sprite -1: it draws nothing, by design.' };
     const missing = [...new Set(shown.filter((x) => !x.s.none && !x.s.w).map((x) => x.s.group + ',' + x.s.index))];
     if (missing.length) {
-      return { error: 'None of the sprites this action draws are in ' + (spritesFrom ? 'the sprite file of ' + spritesFrom : 'this character\'s sprite file')
-        + ' (missing: ' + missing.slice(0, 3).join(' ') + (missing.length > 3 ? ' and ' + (missing.length - 3) + ' more' : '') + ').' };
+      const sprites = missing.slice(0, 3).join(' '), more = missing.length - 3;
+      return { error: spritesFrom
+        ? (more > 0 ? 'None of the sprites this action draws are in the sprite file of ' + spritesFrom + ' (missing: ' + sprites + ' and ' + more + ' more).'
+          : 'None of the sprites this action draws are in the sprite file of ' + spritesFrom + ' (missing: ' + sprites + ').')
+        : (more > 0 ? 'None of the sprites this action draws are in this character\'s sprite file (missing: ' + sprites + ' and ' + more + ' more).'
+          : 'None of the sprites this action draws are in this character\'s sprite file (missing: ' + sprites + ').') };
     }
     return { error: 'Every element this action shows has a scale of 0, which the engine draws as nothing.' };
   }
@@ -8154,7 +8163,7 @@ function finishFrames(ctx, pics, runsOf, o, still) {
   // gigabytes. The frames returned are 1x; `out` gives the final pixels.
   let k = Number.isInteger(o.scale) && o.scale >= 1 && o.scale <= 4 ? o.scale : 1;
   const kMax = Math.max(1, Math.min(Math.floor(2048 / W), Math.floor(2048 / H)));
-  if (k > kMax) { ctx.notes.add('size limited to ' + kMax + 'x by the 2048-pixel canvas'); k = kMax; }
+  if (k > kMax) { const scale = kMax + 'x'; ctx.notes.add('size limited to ' + scale + ' by the 2048-pixel canvas'); k = kMax; }
   const facing = Number(o.facing) === -1 ? -1 : 1;
   const out = (fr) => {
     const bpp = fr.rgba ? 4 : 1;
@@ -8240,7 +8249,7 @@ function charAnimStill(mountAs, actionNo, runIndex, opts) {
   if (ctx.error) return ctx;
   const n = Number(runIndex);
   if (!Number.isInteger(n) || n < 0 || n >= ctx.runs.length) {
-    return { error: 'This entry has ' + ctx.runs.length + ' frame' + (ctx.runs.length === 1 ? '' : 's') + '; there is no frame ' + runIndex + '.' };
+    return { error: ctx.runs.length === 1 ? 'This entry has 1 frame; there is no frame ' + runIndex + '.' : 'This entry has ' + ctx.runs.length + ' frames; there is no frame ' + runIndex + '.' };
   }
   const fin = finishFrames(ctx, [composeRun(ctx, n, 'gif')], [n], o, true);
   const fr = fin.frames[0];

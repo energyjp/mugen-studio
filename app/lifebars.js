@@ -1453,11 +1453,11 @@ function versionMatch(spDefAbs, packDir, f) {
 // What the screenpack's version changes, in words, for the Theme tab.
 function versionChanges(spText, libText) {
   const a = readDefInfo(spText), b = readDefInfo(libText);
-  const out = [];
-  if (a.faces.includes('9000,0') && !b.faces.includes('9000,0')) out.push('faces from each character’s small portrait');
+  const notes = [];
+  if (a.faces.includes('9000,0') && !b.faces.includes('9000,0')) notes.push('faces from each character’s small portrait');
   const lv = (i) => { const k = i.read.keys.get('powerbar|p1.levelbars'); return k ? String(unq(k.raw)).trim() : '0'; };
-  if (lv(a) !== lv(b)) out.push(lv(a) === '0' ? 'level bars off' : 'level bars on');
-  return out;
+  if (lv(a) !== lv(b)) notes.push(lv(a) === '0' ? 'level bars off' : 'level bars on');
+  return notes;
 }
 
 // The screenpack in use's never-read fight defs, each with the library defs
@@ -1733,14 +1733,19 @@ function sharedFAnims(roster) {
 
 // ---- what the Theme card reads -------------------------------------------------------
 
+// What the lifebar's shape does in this build, by case.
+const ASPECT_NOTES = {
+  narrow: 'a 4:3 lifebar in a 16:9 build: the engine draws it in the middle 4:3 of the screen, with the sides empty',
+  wide: 'a widescreen lifebar: on a 4:3 stage the fight takes the stage’s shape and the lifebar shrinks to fit its width, anchored at the top',
+};
 function aspectNote(lc, roster) {
   if (!lc) return null;
   const a = lc[0] / lc[1];
   const s = (roster && roster.settings) || {};
   const gw = Number(s['Video.GameWidth'] || 1280), gh = Number(s['Video.GameHeight'] || 720);
   const g = gw / gh;
-  if (Math.abs(a - 4 / 3) < 0.02 && g > 1.5) return 'a 4:3 lifebar in a 16:9 build: the engine draws it in the middle 4:3 of the screen, with the sides empty';
-  if (a > 1.5 && Number(s['Video.FightAspectWidth'] || -1) <= 0) return 'a widescreen lifebar: on a 4:3 stage the fight takes the stage’s shape and the lifebar shrinks to fit its width, anchored at the top';
+  if (Math.abs(a - 4 / 3) < 0.02 && g > 1.5) return ASPECT_NOTES.narrow;
+  if (a > 1.5 && Number(s['Video.FightAspectWidth'] || -1) <= 0) return ASPECT_NOTES.wide;
   return null;
 }
 
@@ -1770,7 +1775,10 @@ function state(roster) {
   const lbChoice = mix.lifebar ? findDef(mix.lifebar) : null;
   if (mix.lifebar && !lbChoice) problems.push('the lifebars this bundle chose are gone from its library: ' + mix.lifebar.pack + ' / ' + mix.lifebar.def);
   for (const k of ['sparks', 'sounds']) {
-    if (typeof mix[k] === 'object' && !findDef(mix[k])) problems.push('the hit ' + k + ' source this bundle chose is gone: ' + mix[k].pack + ' / ' + mix[k].def);
+    if (typeof mix[k] !== 'object' || findDef(mix[k])) continue;
+    const { pack, def } = mix[k];
+    problems.push(k === 'sparks' ? 'the hit sparks source this bundle chose is gone: ' + pack + ' / ' + def
+      : 'the hit sounds source this bundle chose is gone: ' + pack + ' / ' + def);
   }
   let sp = null;
   try { sp = screenpackBase(r); } catch (e) { sp = null; }

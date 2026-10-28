@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="/themes.css">
 <script src="/theme.js"></script>
+<script src="/i18n.js"></script>
 <link rel="stylesheet" href="/booklet.css">
 <script src="/booklet.js"></script>
 <title>Moves</title>
@@ -96,6 +97,18 @@
   .clh > :nth-child(1) { grid-column: 1; padding-left: 8px; } .clh > :nth-child(2) { grid-column: 2; } .clh > :nth-child(3) { grid-column: 3; }
   .clh > :nth-child(4) { grid-column: 4; } .clh > :nth-child(5) { grid-column: 5; } .clh > :nth-child(6) { grid-column: 6; }
   .clh > :nth-child(7) { grid-column: 7; } .clh > :nth-child(8) { grid-column: 8; } .clh > :nth-child(9) { grid-column: 9; } .clh > :nth-child(10) { grid-column: 10; }
+  /* In another language (GRAIL 3.1c rule 10; this page's markup says lang="en",
+     so a translated-only rule names the other languages) a head longer than
+     its narrow column is cut with an ellipsis instead of running over the
+     next head; the number heads' titles say what they count. */
+  :root[lang]:not([lang="en"]) .clh > span { display: block; overflow: hidden; text-overflow: ellipsis; line-height: var(--bk-row); }
+  :root[lang]:not([lang="en"]) .clh > .r { text-align: right; }
+  /* Before the ellipsis, the head is set in Saira's semi-condensed width with
+     3px sides: that is what Estado, Inicio and Bloqueo (Defesa) need to show
+     whole in the 40-50px number columns at 1400 wide (measured; the narrow
+     window's columns go condensed below). The Move head keeps its 8px. */
+  :root[lang]:not([lang="en"]) .clh > span { font-stretch: 87.5%; letter-spacing: 0; padding: 0 3px; }
+  :root[lang]:not([lang="en"]) .clh > :nth-child(1) { padding-left: 8px; }
   #states.nonames .clh > :nth-child(3) { border-left: 0; }
   .clg { padding: 12px 8px 4px; border-bottom: 2px solid var(--ink); font: 800 var(--t-12)/1 var(--f-disp); text-transform: uppercase; letter-spacing: .02em; }
   .clg > * { grid-column: 1 / -1; }
@@ -252,6 +265,8 @@
   .fdn + .fdn { border-left: 1px solid var(--rule); }
   .fdn.sep { border-left: 2px solid var(--ink); }
   .fdn .k { font: 700 var(--t-11)/1.2 var(--f-disp); color: var(--ink2); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  /* the same for a readout label longer than its sixth of the row (the cell's title explains it) */
+  :root[lang]:not([lang="en"]) .fdn .k { overflow: hidden; text-overflow: ellipsis; font-stretch: 87.5%; letter-spacing: 0; }
   .fdn b { margin-top: 2px; font: italic 800 26px/1 var(--f-disp); font-stretch: 108%; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
   .fdn.plus b { color: var(--good); } .fdn.minus b { color: var(--bad); } .fdn.even b { color: var(--ink); }
   .fdn.kd b { color: var(--warn); font-size: var(--t-20); }
@@ -434,6 +449,7 @@
   @media (max-width: 1180px) {
     #spread { --l: 1fr; --r: 1fr; }
     #states { min-width: 0; font-size: var(--t-12); --cols: minmax(80px, 1fr) minmax(70px, .9fr) 40px 32px 28px 30px 36px 74px 40px 46px; }
+    :root[lang]:not([lang="en"]) .clh > span, :root[lang]:not([lang="en"]) .fdn .k { font-stretch: 75%; }
     #states.nonames { --cols: minmax(90px, 1fr) 0 40px 32px 28px 30px 36px 74px 40px 46px; }
     .cxm { font-size: 9px; padding: 2px 2px 1px; letter-spacing: 0; } .cx { gap: 1px; } #states .n.oh { gap: 2px; padding-left: 1px; }
     .clh > span { padding: 0 3px; font-size: var(--t-11); }
@@ -445,7 +461,7 @@
 </head>
 <body>
   <header class="bk-secband" id="band">
-    <h1 class="bk-secband-t"><span class="no" id="slotNo" hidden></span><span class="t bk-nocaps" id="who">&hellip;</span><span class="k" lang="ja">コマンド表</span></h1>
+    <h1 class="bk-secband-t"><span class="no" id="slotNo" hidden></span><span class="t bk-nocaps" id="who" translate="no">&hellip;</span><span class="k" lang="ja">コマンド表</span></h1>
     <!-- The band's mascot (Booklet.mascot): a click deals the Moves window's tips
          ('moves' in the Studio's tip table) through the opener's deck, as a slip
          over the page. No opener, no mascot. -->
@@ -494,7 +510,65 @@
   // everything that needs the real browser is reached through W.
   const W = typeof window !== 'undefined' ? window : null;
   const BK = typeof Booklet !== 'undefined' ? Booklet : null;
-  $('who').textContent = name || 'no character';
+  // THE STUDIO'S LANGUAGE (public/i18n.js, GRAIL 3.1c). English is the key,
+  // and every sentence this page puts together is ONE t() call with {named}
+  // placeholders, so a pack can move its words; a word or phrase that stands
+  // on its own (a label, a list part joined with " · ") is its own key. Text
+  // the server sends (an error, a `why`, a note) stays English on the wire:
+  // inside a sentence of the page it goes in under a message name ({why},
+  // {error}, {reason}...), which i18n.js looks up in the pack before filling
+  // it in; changed or joined by the page (capitalized, listed) it goes
+  // through I18n.server() first. Data - names, files, states, expressions,
+  // controller and parameter names - is a plain placeholder, never
+  // translated, and an element that shows it is translate="no". The suites
+  // run this script on a stand-in document with no window: there t() fills
+  // in the English itself.
+  const I18n = (W && W.I18n) || {
+    t: (en, vars) => String(en).replace(/\{([A-Za-z_$][\w$]*)\}/g, (m, k) => (vars && Object.prototype.hasOwnProperty.call(vars, k) && vars[k] != null ? String(vars[k]) : m)),
+    server: (s) => s,
+  };
+  // A value the files leave null or undefined prints as that word, as the
+  // page's sentences always printed it (i18n.js's fill would keep {name}).
+  const packT = I18n.t;
+  const t = (en, vars) => packT(en, vars && Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, v === null || v === undefined ? String(v) : v])));
+  // A SENTENCE WITH ELEMENTS IN IT stays one key: a word it prints in bold
+  // or as code is written in the key as <b>...</b> or <code>...</code> (a
+  // pack keeps the same tags), and an element made elsewhere (a glyph, a
+  // file name in <code>, a bold name) is passed as a {placeholder} through
+  // nodes(), which stands a marker in for it:
+  //   el('p', {}, tn(t('read from {file}', nodes({ file: el('code', ...) }))))
+  // tn() hands back the pieces of the translated sentence - text runs and
+  // elements, in the order the language puts them - for el() or append().
+  // Those two plain tags are the only markup ever read out of a string, and
+  // only into textContent. A marker is a private-use character and an index
+  // into `held`, which tn() empties.
+  let held = [];
+  function nodes(vars) {
+    const out = {};
+    for (const k of Object.keys(vars)) {
+      const v = vars[k];
+      if (v !== null && typeof v === 'object') { out[k] = '\uE000' + held.length + '\uE001'; held.push(v); } else out[k] = v;
+    }
+    return out;
+  }
+  function tn(s) {
+    const got = held;
+    held = [];
+    const put = (x, into) => x.split(/\uE000(\d+)\uE001/).forEach((y, i) => {
+      if (!(i % 2)) { if (y) into.push(y); return; }
+      for (const n of [].concat(got[+y])) if (n !== null && n !== undefined && n !== false && n !== '') into.push(n);
+    });
+    const out = [], bits = String(s).split(/<(b|code)>([\s\S]*?)<\/\1>/);
+    for (let i = 0; i < bits.length; i += 3) {
+      put(bits[i], out);
+      if (i + 2 < bits.length) { const kids = []; put(bits[i + 2], kids); out.push(el(bits[i + 1], {}, kids)); }
+    }
+    return out;
+  }
+  // The server's English, translated first, then begun with a capital (a
+  // move's attack type, "standing normal attack", heads a row).
+  const capServer = (s) => { const x = I18n.server(s); return x ? x[0].toUpperCase() + x.slice(1) : x; };
+  $('who').textContent = name || t('no character');
   // The select slot Characters' Moves... passes (?slot=04a&of=31%20cells): the
   // slot LABEL, "No.04a" in the band as the character page prints it (a slot
   // group's mates share a cell and read 04a / 04b; past z, 04-27), and what the
@@ -503,13 +577,13 @@
   {
     const no = q.get('slot'), of = q.get('of'), sn = $('slotNo');
     if (sn && /^\d+([a-z]|-\d+)?$/.test(no || '')) {
-      sn.textContent = 'No.' + String(no).padStart(2, '0');
+      sn.textContent = t('No.{slot}', { slot: String(no).padStart(2, '0') });
       const m = /^(\d+)(?: cells)?$/.exec(of || '');
-      if (m) sn.title = 'Select screen cell ' + String(no).padStart(2, '0') + ' of ' + m[1] + ' cells';
+      if (m) sn.title = t('Select screen cell {slot} of {n} cells', { slot: String(no).padStart(2, '0'), n: m[1] });
       sn.hidden = false;
     }
   }
-  document.title = (name || 'Moves') + ' — moves';
+  document.title = t('{name} — moves', { name: name || t('Moves') });
 
   // All user and character text goes in through textContent.
   function el(tag, props, ...kids) {
@@ -596,7 +670,7 @@
   // those), and its damage is edited like any other.
   const attackStates = () => (model ? [...model.states, ...(model.negativeStates || [])].filter((s) => s.blocks.length) : []);
   const curState = () => attackStates().find((s) => stateKey(s) === sel.key) || null;
-  const MT_NAME = { a: 'attack', i: 'idle', h: 'being hit', u: 'unchanged' };
+  const MT_NAME = { a: t('attack'), i: t('idle'), h: t('being hit'), u: t('unchanged') };
   // The block a printed row reads: the first one that can hit (the server
   // found its startup), else the first.
   const shownBlock = (s) => { const i = s.blocks.findIndex((b) => b.frame && b.frame.startup); return i < 0 ? 0 : i; };
@@ -617,24 +691,40 @@
   const rawInput = (no) => (cl && Array.isArray(cl.inputs) ? cl.inputs.find((x) => x.state === no) || null : null);
   const rangeOf = (no) => { const x = rawInput(no); return x && x.range ? x.range : null; };
   // 'within 25 of the opponent (P2BodyDist X <= 25)' / 'farther than 25 from the opponent (P2BodyDist X > 25)'
-  const rangeDesc = (r) => (r.kind === 'close'
-    ? (r.op === '<' ? 'under ' : 'within ') + r.dist + ' of the opponent (' + r.by + ' ' + r.op + ' ' + r.dist + ')'
-    : 'farther than ' + (r.op === '<' ? r.dist - 1 : r.dist) + ' from the opponent (' + r.by + ' ' + (r.op === '<' ? '>=' : '>') + ' ' + r.dist + ')');
-  const rangeTag = (no) => { const r = rangeOf(no); return r ? el('span', { class: 'rng ' + r.kind, title: (r.kind === 'close' ? 'Close: ' : 'Far: ') + rangeDesc(r) }, r.kind === 'close' ? 'close' : 'far') : null; };
+  const rangeDesc = (r) => {
+    if (r.kind === 'close') {
+      const v = { dist: r.dist, test: r.by + ' ' + r.op + ' ' + r.dist };
+      return r.op === '<' ? t('under {dist} of the opponent ({test})', v) : t('within {dist} of the opponent ({test})', v);
+    }
+    return t('farther than {dist} from the opponent ({test})', { dist: r.op === '<' ? r.dist - 1 : r.dist, test: r.by + ' ' + (r.op === '<' ? '>=' : '>') + ' ' + r.dist });
+  };
+  // The tag itself is command-list notation, like the button chips, and stays
+  // as printed (translate="no"): "close" is also the main window's Close
+  // button's word, and a pack can give one English word only one translation
+  // (it read "cerrar"). Its title, already through t(), says it in the reader's
+  // language.
+  const rangeTag = (no) => { const r = rangeOf(no); return r ? el('span', { class: 'rng ' + r.kind, translate: 'no', title: r.kind === 'close' ? t('Close: {range}', { range: rangeDesc(r) }) : t('Far: {range}', { range: rangeDesc(r) }) }, r.kind === 'close' ? 'close' : 'far') : null; };
   // THE CANCELS (GET /api/movelist cancels): which specials, supers and normals
   // can cancel this state, read from the [State -1] (cmdlist.js THE CANCELS).
-  const KIND = { SP: 'Special cancel', SU: 'Super cancel', CH: 'Chain' };
+  const KIND = { SP: t('Special cancel'), SU: t('Super cancel'), CH: t('Chain') };
   const cancelsTo = (no) => (cl && Array.isArray(cl.cancels) ? ((cl.cancels.find((c) => c.state === no) || {}).to || []) : []);
   const moveName = (no) => {
     const r = clRow(no);
     if (r && r.name) return r.name;
     const s = model && model.states.find((x) => x.no === no);
     const b = s && s.blocks[shownBlock(s)], f = b && b.frame;
-    return f && f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : 'State ' + no;
+    return f && f.attr ? capServer(f.attr) : t('State {no}', { no });
   };
-  const cancelTitle = (k, ts) => KIND[k] + (ts.every((x) => x.hit && x.block) ? ' on hit and block' : ' on hit') + ' into: '
-    + ts.map((x) => moveName(x.state) + ' (' + x.state + ')' + (x.exact ? '' : ' ≈')).join(', ')
-    + (ts.some((x) => !x.exact) ? '. ≈ = through ' + [...new Set(ts.filter((x) => !x.exact).flatMap((x) => x.via))].join(', ') + ', which this state sets itself.' : '.');
+  // "Special cancel on hit into: Kung Fu Palm (1000), ...", one sentence per
+  // kind and side, then what an approximate one goes through.
+  const cancelInto = (k, both, moves) => (k === 'SP' ? (both ? t('Special cancel on hit and block into: {moves}.', { moves }) : t('Special cancel on hit into: {moves}.', { moves }))
+    : k === 'SU' ? (both ? t('Super cancel on hit and block into: {moves}.', { moves }) : t('Super cancel on hit into: {moves}.', { moves }))
+      : (both ? t('Chain on hit and block into: {moves}.', { moves }) : t('Chain on hit into: {moves}.', { moves })));
+  const cancelTitle = (k, ts) => {
+    const line = cancelInto(k, ts.every((x) => x.hit && x.block), ts.map((x) => moveName(x.state) + ' (' + x.state + ')' + (x.exact ? '' : ' ≈')).join(', '));
+    if (!ts.some((x) => !x.exact)) return line;
+    return line + ' ' + t('≈ = through {vars}, which this state sets itself.', { vars: [...new Set(ts.filter((x) => !x.exact).flatMap((x) => x.via))].join(', ') });
+  };
   // the marks beside the on-hit number: only what can cancel it ON HIT
   function cancelMarks(no) {
     const to = cancelsTo(no).filter((x) => x.hit);
@@ -683,7 +773,8 @@
     if (refocus) { try { const b = document.querySelector('.xsw'); if (b) b.focus(); } catch (e) { /* stays where it is */ } }
   }
   const xplSwitch = () => el('button', { type: 'button', class: 'xsw', 'aria-pressed': explodArt ? 'true' : 'false',
-    title: 'Explod art: the effects this move\'s own state spawns (Explod controllers), drawn under the boxes. ' + (explodArt ? 'Click to hide them.' : 'Click to show them.'),
+    title: explodArt ? t('Explod art: the effects this move\'s own state spawns (Explod controllers), drawn under the boxes. Click to hide them.')
+      : t('Explod art: the effects this move\'s own state spawns (Explod controllers), drawn under the boxes. Click to show them.'),
     onclick: () => setExplodArt(!explodArt) }, el('i', { class: 'xsq', 'aria-hidden': 'true' }), 'Explod art', el('span', { class: 'xst', text: explodArt ? 'on' : 'off' }));
   // An animation by number: the shared list (projectiles' and Explods'), else
   // any attack state's own (an action the server sends once).
@@ -747,7 +838,9 @@
     for (const { e, A, pt } of explodsAt(s, action, tick)) {
       if (!!e.layer.front !== front) continue;
       const [k1, k2] = xplK(e), [x, y] = xplAxis(pt);
-      const img = spriteAt(A.frames[pt[0]], ox + x * z, oy + y * z, k1 * z, k2 * z, 'xpl', 'Explod: action ' + e.anim.action + ' element ' + (pt[0] + 1) + ' (' + e.file + ' line ' + e.line + ')' + (pt[3] ? ', bound to the character' : ', no longer bound'));
+      const xv = { action: e.anim.action, elem: pt[0] + 1, file: e.file, line: e.line };
+      const img = spriteAt(A.frames[pt[0]], ox + x * z, oy + y * z, k1 * z, k2 * z, 'xpl', pt[3] ? t('Explod: action {action} element {elem} ({file} line {line}), bound to the character', xv)
+        : t('Explod: action {action} element {elem} ({file} line {line}), no longer bound', xv));
       if (img) host.append(img);
     }
   }
@@ -760,19 +853,23 @@
     if (!xs.length) return;
     const action = sel.action !== null && sel.action !== undefined ? sel.action : ((s.anims || [])[0] || {}).action;
     const r = (v) => String(Math.round(v * 100) / 100);
-    const box = el('div', { class: 'fdx' }, el('div', { class: 'h' }, 'Explod art',
-      el('span', { class: 'aside', text: xs.length + (xs.length === 1 ? ' Explod' : ' Explods') + ' in this state' + (hasDrawnExplods(s) ? (explodArt ? ', drawn under the boxes' : ', hidden: the switch is off') : '') })));
+    const n = xs.length, one = n === 1;
+    const aside = !hasDrawnExplods(s) ? (one ? t('1 Explod in this state') : t('{n} Explods in this state', { n }))
+      : explodArt ? (one ? t('1 Explod in this state, drawn under the boxes') : t('{n} Explods in this state, drawn under the boxes', { n }))
+        : (one ? t('1 Explod in this state, hidden: the switch is off') : t('{n} Explods in this state, hidden: the switch is off', { n }));
+    const box = el('div', { class: 'fdx' }, el('div', { class: 'h' }, 'Explod art', el('span', { class: 'aside', text: aside })));
     const ul = el('ul');
     let assumed = null, unknown = null;
     for (const e of xs) {
       const spawns = (e.spawns || {})[action] || [];
       for (const sp of spawns) { if (sp.assumed && e.drawn && e.bindtime >= 0) assumed = sp.assumed; if (sp.unknownWhy && e.drawn && sp.pts.some((p) => p[1] === null)) unknown = sp.unknownWhy; }
+      // Its facts, each a phrase of its own, joined with " · ".
       const parts = [];
       const fr = spawns.filter((sp) => !sp.after).map((sp) => sp.T + 1);
-      if (fr.length) parts.push('from frame ' + fr.join(', '));
-      else if (spawns.some((sp) => sp.after)) parts.push('made after this animation ends');
-      if (e.conditional && e.conditional.length) parts.push('when ' + e.conditional.join(' or '));
-      if (!spawns.length && !(e.conditional && e.conditional.length)) parts.push('no frame its triggers settle (' + (e.triggers || 'no trigger') + ')');
+      if (fr.length) parts.push(t('from frame {n}', { n: fr.join(', ') }));
+      else if (spawns.some((sp) => sp.after)) parts.push(t('made after this animation ends'));
+      if (e.conditional && e.conditional.length) parts.push(t('when {conditions}', { conditions: e.conditional.reduce((a, b) => t('{a} or {b}', { a, b })) }));
+      if (!spawns.length && !(e.conditional && e.conditional.length)) parts.push(t('no frame its triggers settle ({triggers})', { triggers: e.triggers || t('no trigger') }));
       if (e.drawn) {
         // Its life and binding as the server walked them tick by tick (one
         // point per frame it lives, [elem, x, y, bound]): an Explod removed
@@ -783,40 +880,54 @@
         const life = walked.length ? Math.max(...walked.map((sp) => sp.pts.length)) : null;
         const outlives = walked.some((sp) => sp.outlives);
         const freed = walked.some((sp) => sp.pts.some((p) => !p[3]));
-        const nf = (n) => n + (n === 1 ? ' frame' : ' frames');
         const boundAll = e.bindtime > 0 && walked.length > 0 && !freed;
-        parts.push(e.bindtime < 0 ? 'bound to the character for its whole life' : e.bindtime === 0 ? 'not bound: it stays where it appears'
-          : boundAll ? (outlives ? 'bound for ' + nf(e.bindtime) + ': still bound when this animation ends' : 'bound for its whole life (removed before its bindtime of ' + e.bindtime + ' runs out)')
-          : 'bound for ' + nf(e.bindtime) + ', then on its own');
+        parts.push(e.bindtime < 0 ? t('bound to the character for its whole life') : e.bindtime === 0 ? t('not bound: it stays where it appears')
+          : boundAll ? (outlives ? t('bound for {time}: still bound when this animation ends', { time: nFrames(e.bindtime) }) : t('bound for its whole life (removed before its bindtime of {n} runs out)', { n: e.bindtime }))
+            : t('bound for {time}, then on its own', { time: nFrames(e.bindtime) }));
         const still = e.vel.every((v) => v === 0) && e.accel.every((v) => v === 0);
+        // accel and friction are the Explod's own parameter names, printed as written
         const more = (e.accel.some((v) => v !== 0) ? ', accel ' + r(e.accel[0]) + ', ' + r(e.accel[1]) : '') + (e.friction.some((v) => v !== 1) ? ', friction ' + e.friction.map(r).join(', ') : '');
-        parts.push(still ? 'no motion of its own'
-          : e.bindtime < 0 || boundAll ? 'its own motion (vel ' + r(e.vel[0]) + ', ' + r(e.vel[1]) + more + ') never applies: it is bound while it lives'
-          : 'moves ' + r(e.vel[0]) + ', ' + r(e.vel[1]) + ' game units a frame once free' + more);
-        parts.push('at ' + r(e.pos[0]) + ', ' + r(e.pos[1]) + ' game units from the axis');
-        if (e.scale[0] !== 1 || e.scale[1] !== 1) parts.push('scale ' + e.scale.map(r).join(' × '));
-        if (e.facing < 0 || e.vfacing < 0) parts.push('mirrored' + (e.facing < 0 ? ' (facing -1)' : '') + (e.vfacing < 0 ? ' (vfacing -1)' : ''));
-        const ends = life === null ? '' : outlives ? ' (it outlives this animation)' : ', after ' + nf(life);
-        parts.push(e.removetime === -1 ? 'never removed on its own' : e.removetime >= 0 ? 'removed after ' + nf(e.removetime) : 'removed when its animation ends' + ends);
+        parts.push(still ? t('no motion of its own')
+          : e.bindtime < 0 || boundAll ? t('its own motion (vel {vel}) never applies: it is bound while it lives', { vel: r(e.vel[0]) + ', ' + r(e.vel[1]) + more })
+            : t('moves {x}, {y} game units a frame once free{more}', { x: r(e.vel[0]), y: r(e.vel[1]), more }));
+        parts.push(t('at {x}, {y} game units from the axis', { x: r(e.pos[0]), y: r(e.pos[1]) }));
+        if (e.scale[0] !== 1 || e.scale[1] !== 1) parts.push(t('scale {scale}', { scale: e.scale.map(r).join(' × ') }));
+        if (e.facing < 0 || e.vfacing < 0) parts.push(e.facing < 0 && e.vfacing < 0 ? t('mirrored (facing -1) (vfacing -1)') : e.facing < 0 ? t('mirrored (facing -1)') : t('mirrored (vfacing -1)'));
+        parts.push(e.removetime === -1 ? t('never removed on its own') : e.removetime >= 0 ? t('removed after {time}', { time: nFrames(e.removetime) })
+          : life === null ? t('removed when its animation ends') : outlives ? t('removed when its animation ends (it outlives this animation)')
+            : t('removed when its animation ends, after {time}', { time: nFrames(life) }));
       }
-      parts.push((e.layer.front === null ? 'layer unknown' : e.layer.front ? 'over the character' : 'under the character') + ': ' + e.layer.why);
-      const name = e.anim.action !== null ? 'action ' + e.anim.action : e.anim.how === 'fightfx' ? 'common effect ' + e.anim.raw : 'animation ' + (e.anim.raw || '?');
+      parts.push(e.layer.front === null ? t('layer unknown: {why}', { why: e.layer.why }) : e.layer.front ? t('over the character: {why}', { why: e.layer.why }) : t('under the character: {why}', { why: e.layer.why }));
+      const name = e.anim.action !== null ? t('action {action}', { action: e.anim.action }) : e.anim.how === 'fightfx' ? t('common effect {anim}', { anim: e.anim.raw }) : t('animation {anim}', { anim: e.anim.raw || '?' });
       const li = el('li', {}, el('b', { text: name }), ' · ' + parts.join(' · ') + ' · ', el('code', { text: e.file + ':' + e.line }));
-      if (!e.drawn) li.append(el('div', { class: 'xwhy', text: 'Not drawn: ' + e.why + '.' }));
+      if (!e.drawn) li.append(el('div', { class: 'xwhy', text: t('Not drawn: {why}.', { why: e.why }) }));
       for (const n of (e.notes || [])) li.append(el('div', { class: 'xwhy', text: n }));
       ul.append(li);
     }
     box.append(ul);
-    if (assumed) box.append(el('div', { class: 'fdnote', text: 'An Explod no longer bound stays where it was while the character moves on, so it is drawn against the character\'s own motion in this move (the move whiffs: contact reads 0); ' + assumed + '.' }));
-    if (unknown) box.append(el('div', { class: 'fdnote', text: 'Not drawn where it is no longer bound: ' + unknown + '.' }));
+    if (assumed) box.append(el('div', { class: 'fdnote', text: t('An Explod no longer bound stays where it was while the character moves on, so it is drawn against the character\'s own motion in this move (the move whiffs: contact reads 0); {reason}.', { reason: assumed }) }));
+    if (unknown) box.append(el('div', { class: 'fdnote', text: t('Not drawn where it is no longer bound: {why}.', { why: unknown }) }));
     for (const n of (model.explodNotes || [])) box.append(el('div', { class: 'fdnote', text: n }));
     host.append(box);
   }
   // (A helper whose hit is in a LATER state keeps that state's row: its entry
   // cannot count those frames - `stands` false.)
   const shownAsProj = (s) => !!(s.thrownBy && s.thrownBy.stands !== false && projById(s.thrownBy.id) && !clRow(s.no));
-  const PJ_KIND = { projectile: 'a Projectile', helper: 'a helper', explod: 'a helper drawn by an Explod' };
-  const nFrames = (n) => n + (n === 1 || n === -1 ? ' frame' : ' frames');
+  const PJ_KIND = { projectile: t('a Projectile'), helper: t('a helper'), explod: t('a helper drawn by an Explod') };
+  const nFrames = (n) => (n === 1 || n === -1 ? t('{n} frame', { n }) : t('{n} frames', { n }));
+  // The words the server's codes stand for where the page prints them
+  // (armHow, an animation's `how`): a code it does not know prints as it is.
+  const HOW = { conditional: t('conditional'), assumed: t('assumed'), default: t('default'), depends: t('depends'),
+    'from projhitanim': t('from projhitanim'), 'from projremanim': t('from projremanim') };
+  const howWord = (h) => String(HOW[h] || h);
+  // "throws a Projectile: see Projectiles (point blank +3 / -2)": a named
+  // move whose state only throws, in the list.
+  const throwsLine = (e) => {
+    const pb = e.pointBlank, v = { pb: '' };
+    if (pb && pb.onHit !== null) v.pb = ' ' + (pb.onBlock !== null ? t('(point blank {hit} / {block})', { hit: signed(pb.onHit), block: signed(pb.onBlock) }) : t('(point blank {hit})', { hit: signed(pb.onHit) }));
+    return e.kind === 'projectile' ? tn(t('throws a Projectile: <b>see Projectiles</b>{pb}', nodes(v)))
+      : e.kind === 'helper' ? tn(t('throws a helper: <b>see Projectiles</b>{pb}', nodes(v))) : tn(t('throws a helper drawn by an Explod: <b>see Projectiles</b>{pb}', nodes(v)));
+  };
   // The frame it appears on, counted on the PLAYER's frames (frame 1 = the
   // throw's first): a helper's state that throws counts on its maker's move.
   const pjAppears = (e) => {
@@ -826,36 +937,46 @@
   };
   const pjAppearsTip = (e) => {
     const via = e.thrower.via, tm = e.thrower.timing;
-    if (via && via.frame) return 'the frame of state ' + via.state + ' it appears on: that move makes the helper, which throws on its own frame ' + via.helperFrame;
-    if (via) return 'unknown: ' + via.why;
-    return 'the frame it appears on, counted on the throw' + (tm && tm.how !== 'file' ? ' (' + tm.how + ')' : '');
+    if (via && via.frame) return t('the frame of state {state} it appears on: that move makes the helper, which throws on its own frame {frame}', { state: String(via.state), frame: String(via.helperFrame) });
+    if (via) return t('unknown: {why}', { why: via.why });
+    return tm && tm.how !== 'file' ? t('the frame it appears on, counted on the throw ({how})', { how: howWord(tm.how) }) : t('the frame it appears on, counted on the throw');
   };
   // Ticks its hit box is out while it flies; '→' when it flies on until it hits
   // or leaves the screen; '?' when its path depends on something the files do
   // not settle, or its hit box is unknown (its animation is not read).
   function pjActive(e) {
     const p = e.path;
-    if (!p) return { text: '?', tip: 'its path depends on a value the files do not settle' };
-    if (p.hitUnknown) return { text: '?', tip: 'its hit box is unknown: ' + p.hitUnknown };
-    if (p.end.why === 'cap' && chainOf(e)) return { text: p.activeTicks + '+', tip: 'frames its hit box is out in its first ' + p.end.tick + ' frames, where the walk stops: it is still going in state ' + chainOf(e)[chainOf(e).length - 1].state };
-    if (p.end.why === 'cap') return { text: '→', tip: 'out until it hits' + (e.kind === 'projectile' ? ' or leaves the screen' : '') };
-    if (p.end.why === 'depends') return { text: p.end.tick && p.activeTicks ? p.activeTicks + '+' : '?', tip: (p.end.tick ? 'what it does after frame ' + p.end.tick : 'how it moves') + ' depends on ' + p.end.text };
-    return { text: String(p.activeTicks), tip: 'frames its hit box is out before it ' + pjEndWords(e) + (p.cut && e.kind === 'projectile' ? ', unless it leaves the screen first' : '') };
+    if (!p) return { text: '?', tip: t('its path depends on a value the files do not settle') };
+    if (p.hitUnknown) return { text: '?', tip: t('its hit box is unknown: {why}', { why: p.hitUnknown }) };
+    if (p.end.why === 'cap' && chainOf(e)) return { text: p.activeTicks + '+', tip: t('frames its hit box is out in its first {n} frames, where the walk stops: it is still going in state {state}', { n: p.end.tick, state: chainOf(e)[chainOf(e).length - 1].state }) };
+    if (p.end.why === 'cap') return { text: '→', tip: e.kind === 'projectile' ? t('out until it hits or leaves the screen') : t('out until it hits') };
+    // p.end.text: what the walk could not settle - a trigger or a value as written, or a phrase
+    if (p.end.why === 'depends') return { text: p.end.tick && p.activeTicks ? p.activeTicks + '+' : '?', tip: p.end.tick ? t('what it does after frame {n} depends on {cause}', { n: p.end.tick, cause: p.end.text }) : t('how it moves depends on {cause}', { cause: p.end.text }) };
+    return { text: String(p.activeTicks), tip: p.cut && e.kind === 'projectile' ? t('frames its hit box is out before it {end}, unless it leaves the screen first', { end: pjEndWords(e) }) : t('frames its hit box is out before it {end}', { end: pjEndWords(e) }) };
   }
   function pjLife(e) {
     const p = e.path;
-    if (!p) return { text: '?', tip: 'its path depends on a value the files do not settle' };
-    if (e.hitLater) return { text: '?', tip: 'it goes on in state ' + e.hitState + ', where it hits; its time there is not worked out (see that state\'s own row)' };
-    if (p.end.why === 'cap' && chainOf(e)) return { text: p.end.tick + '+', tip: 'still going after ' + p.end.tick + ' frames (in state ' + chainOf(e)[chainOf(e).length - 1].state + '), where the walk through its states stops' };
-    if (p.end.why === 'cap') return { text: '∞', tip: 'it never ends on its own: it flies until it hits' + (e.kind === 'projectile' ? ' or leaves the screen' : '') };
-    if (p.end.why === 'depends') return { text: p.end.tick ? p.end.tick + '+' : '?', tip: (p.end.tick ? 'after frame ' + p.end.tick + ' it' : 'how it moves') + ' depends on ' + p.end.text };
-    return { text: String(p.end.tick), tip: 'frames before it ' + pjEndWords(e) + (p.cut && e.kind === 'projectile' ? ', unless it leaves the screen first' : '') };
+    if (!p) return { text: '?', tip: t('its path depends on a value the files do not settle') };
+    if (e.hitLater) return { text: '?', tip: t('it goes on in state {state}, where it hits; its time there is not worked out (see that state\'s own row)', { state: e.hitState }) };
+    if (p.end.why === 'cap' && chainOf(e)) return { text: p.end.tick + '+', tip: t('still going after {n} frames (in state {state}), where the walk through its states stops', { n: p.end.tick, state: chainOf(e)[chainOf(e).length - 1].state }) };
+    if (p.end.why === 'cap') return { text: '∞', tip: e.kind === 'projectile' ? t('it never ends on its own: it flies until it hits or leaves the screen') : t('it never ends on its own: it flies until it hits') };
+    if (p.end.why === 'depends') return { text: p.end.tick ? p.end.tick + '+' : '?', tip: p.end.tick ? t('after frame {n} it depends on {cause}', { n: p.end.tick, cause: p.end.text }) : t('how it moves depends on {cause}', { cause: p.end.text }) };
+    return { text: String(p.end.tick), tip: p.cut && e.kind === 'projectile' ? t('frames before it {end}, unless it leaves the screen first', { end: pjEndWords(e) }) : t('frames before it {end}', { end: pjEndWords(e) }) };
   }
+  // How it ends, as the verb phrase the sentences around it take ("it {end}").
   function pjEndWords(e) {
     const end = e.path && e.path.end;
-    if (!end) return 'ends';
-    return ({ removetime: 'times out (projremovetime)', 'anim end': 'times out at the end of its animation', 'below heightbound': 'falls below its height bound (y ' + end.bound + ')',
-      'above heightbound': 'rises above its height bound (y ' + end.bound + ')', destroyself: 'destroys itself', changestate: 'changes to state ' + (end.to || '?'), lands: 'lands' })[end.why] || 'ends';
+    if (!end) return t('ends');
+    switch (end.why) {
+      case 'removetime': return t('times out (projremovetime)');
+      case 'anim end': return t('times out at the end of its animation');
+      case 'below heightbound': return t('falls below its height bound (y {y})', { y: end.bound });
+      case 'above heightbound': return t('rises above its height bound (y {y})', { y: end.bound });
+      case 'destroyself': return t('destroys itself');
+      case 'changestate': return t('changes to state {state}', { state: end.to || '?' });
+      case 'lands': return t('lands');
+      default: return t('ends');
+    }
   }
   const pbStamp = (tip) => el('span', { class: 'pbm', title: tip, 'aria-label': tip }, 'PB');
   const PB_TIP = 'point blank: if the projectile connects on the first frame it can, right in front of the thrower (its hitstop freezes the projectile, not the thrower). Later hits leave the thrower further ahead.';
@@ -881,7 +1002,7 @@
       model = await getJson('/api/char-moves?char=' + encodeURIComponent(char));
     } catch (e) {
       $('states').textContent = '';
-      $('states').append(el('div', { class: 'none', text: 'Could not read this character: ' + e.message }));
+      $('states').append(el('div', { class: 'none', text: t('Could not read this character: {error}', { error: e.message }) }));
       return;
     }
     if (firstLoad) await loadMovelist();
@@ -908,8 +1029,10 @@
     src.textContent = '';
     const cmd = (model.files || []).find((f) => f.key === 'cmd' && f.found);
     const air = model.air && model.air.path ? String(model.air.path).split(/[\\/]/).pop() : null;
-    if (cmd) src.append('read from ', el('code', { text: cmd.rel }));
-    if (air) src.append(cmd ? ', frames from ' : 'frames from ', el('code', { text: air }));
+    const cmdC = cmd ? el('code', { text: cmd.rel }) : null, airC = air ? el('code', { text: air }) : null;
+    if (cmd && air) src.append(...tn(t('read from {cmd}, frames from {air}', nodes({ cmd: cmdC, air: airC }))));
+    else if (cmd) src.append(...tn(t('read from {cmd}', nodes({ cmd: cmdC }))));
+    else if (air) src.append(...tn(t('frames from {air}', nodes({ air: airC }))));
   }
 
   // "Edited: kfm.cns · Revert". Revert puts the pristine backup back byte for
@@ -923,33 +1046,34 @@
     if (!ed.length) return;
     box.append(el('b', { text: 'Edited' }));
     for (const f of ed) {
-      const btn = el('button', { class: 'warn', text: 'Revert', title: 'Put back the original ' + f.file + ' (every edit to it is discarded)' });
+      const btn = el('button', { class: 'warn', text: 'Revert', title: t('Put back the original {file} (every edit to it is discarded)', { file: f.file }) });
       let armed = null;
       btn.onclick = async () => {
         if (!armed) {
-          btn.textContent = 'Revert ' + f.file + '? click again';
-          armed = setTimeout(() => { armed = null; btn.textContent = 'Revert'; }, 4000);
+          btn.textContent = t('Revert {file}? click again', { file: f.file });
+          armed = setTimeout(() => { armed = null; btn.textContent = t('Revert'); }, 4000);
           return;
         }
         clearTimeout(armed); armed = null;
         btn.disabled = true;
         try {
           await postJson('/api/char-edit-revert', { char, file: f.file });
-          say(f.file + ' is back to the original.', 'ok');
-        } catch (e) { say('Revert failed: ' + e.message, 'err'); }
+          say(t('{file} is back to the original.', { file: f.file }), 'ok');
+        } catch (e) { say(t('Revert failed: {error}', { error: e.message }), 'err'); }
         await load(true);
       };
-      box.append(el('span', { class: 'f', text: f.file + (f.exists === false ? ' (missing)' : '') }), btn);
+      box.append(el('span', { class: 'f', translate: 'no', text: f.exists === false ? t('{file} (missing)', { file: f.file }) : f.file }), btn);
     }
     box.append(el('span', { class: 'fx', text: 'the original is kept beside each as .edit.bak' }));
   }
 
   function animLabel(s) {
-    if (s.negative) return 'every tick' + ((s.anims || []).length ? ' · anim ' + s.anims.map((a) => a.action).join('/') : '');
-    if (!s.anim) return 'no anim';
+    // `anim` is the statedef's own parameter, named as written
+    if (s.negative) return (s.anims || []).length ? t('every tick · anim {anim}', { anim: s.anims.map((a) => a.action).join('/') }) : t('every tick');
+    if (!s.anim) return t('no anim');
     const c = s.anim.candidates || [];
-    if (s.anim.literal) return 'anim ' + s.anim.raw;
-    return c.length ? 'anim ' + c.join('/') + ' (expr)' : 'anim: expression';
+    if (s.anim.literal) return t('anim {anim}', { anim: s.anim.raw });
+    return c.length ? t('anim {anim} (expr)', { anim: c.join('/') }) : t('anim: expression');
   }
 
   // "5f · +3 / +2": startup of the first block that can hit, and the last
@@ -959,7 +1083,7 @@
     const fr = s.blocks.map((b) => b.frame).filter((f) => f && f.startup);
     if (!fr.length) return null;
     const last = fr[fr.length - 1];
-    const out = el('span', { class: 'fdsum' }, fr[0].startup + 'f');
+    const out = el('span', { class: 'fdsum' }, t('{n}f', { n: fr[0].startup }));
     const adv = (n) => el('span', { class: n > 0 ? 'p' : n < 0 ? 'm' : '', text: (last.approx ? '≈' : '') + signed(n) });
     if (last.knockdown) out.append(' · KD');
     else if (last.onHit !== undefined && last.onHit !== null) out.append(' · ', adv(last.onHit));
@@ -985,7 +1109,10 @@
     host.className = cl && Array.isArray(cl.rows) ? '' : 'nonames';
     const list = attackStates().slice().sort((a, b) => a.no - b.no || (a.file < b.file ? -1 : 1));
     const files = new Set(list.map((s) => s.file));
-    $('listAside') && ($('listAside').textContent = list.length ? list.length + (list.length === 1 ? ' attack state' : ' attack states') + (cl && cl.rows ? '' : ', listed by state') : '');
+    const byState = !(cl && cl.rows), nl = list.length;
+    $('listAside') && ($('listAside').textContent = !nl ? ''
+      : nl === 1 ? (byState ? t('1 attack state, listed by state') : t('1 attack state'))
+        : (byState ? t('{n} attack states, listed by state', { n: nl }) : t('{n} attack states', { n: nl })));
     if (!list.length) host.append(el('div', { class: 'none', text: 'No state of this character holds a HitDef, ReversalDef, Projectile or a Modify of one.' }));
     // MOVES THAT CANNOT BE CHARTED (modlib charMovesIn blankAttacks): not one
     // animation the attack states name draws a sprite, so the frame data below
@@ -994,12 +1121,13 @@
     // states (movelib helperRunStates): all of them, or how many.
     const ba = model && model.blankAttacks;
     if (list.length && ba && ba.states) {
-      const absent = ba.absent ? ' (' + ba.absent + ' of them are not in its .air)' : '';
+      const bv = { named: ba.named, states: ba.states, absent: ba.absent, n: ba.inHelpers };
+      const none = ba.absent ? t('None of the {named} animations this character’s {states} attack states name draws a sprite ({absent} of them are not in its .air), so its moves cannot be charted from its files.', bv)
+        : t('None of the {named} animations this character’s {states} attack states name draws a sprite, so its moves cannot be charted from its files.', bv);
       const who = !ba.inHelpers ? ''
-        : ba.inHelpers === ba.states ? ' The files show a helper entering every one of those states.'
-          : ' The files show a helper entering ' + ba.inHelpers + ' of those ' + ba.states + ' states.';
-      host.append(el('div', { class: 'none blanknote', role: 'note', text: 'None of the ' + ba.named + ' animations this character’s '
-        + ba.states + ' attack states name draws a sprite' + absent + ', so its moves cannot be charted from its files.' + who }));
+        : ba.inHelpers === ba.states ? ' ' + t('The files show a helper entering every one of those states.')
+          : ' ' + t('The files show a helper entering {n} of those {states} states.', bv);
+      host.append(el('div', { class: 'none blanknote', role: 'note', text: none + who }));
     }
     if (list.length) host.append(el('div', { class: 'clh', role: 'row' },
       el('span', { text: 'Move' }), el('span', { text: 'Command' }), el('span', { text: 'State' }),
@@ -1017,7 +1145,7 @@
       const adv = (cls, n) => (n === null || n === undefined ? num(cls, null) : el('span', { class: 'n ' + cls + (n > 0 ? ' plus' : n < 0 ? ' minus' : '') }, tilde + signed(n)));
       const dmg = f.values && f.values.damage;
       const dmgText = !dmg || dmg.value === null || dmg.value === undefined ? null : (dmg.how === 'computed' ? '≈' : '') + dmg.value;
-      const dmgCell = num('dm', dmgText, dmg && dmg.text ? 'a formula: ' + dmg.text : null);
+      const dmgCell = num('dm', dmgText, dmg && dmg.text ? t('a formula: {formula}', { formula: dmg.text }) : null);
       if (editing) {
         // Edit on: the damage printed with its tier (GRAIL 3.10's three kinds).
         const p = b && b.params.find((x) => x.name === 'damage');
@@ -1026,8 +1154,8 @@
         if (tier) dmgCell.className += ' bk-tier ' + tier;
       }
       const mvCell = el('span', { class: 'mv' });
-      if (r && r.name) { mvCell.append(el('b', { text: r.name })); if (r.hidden) mvCell.append(el('small', { text: 'hidden in the game' })); }
-      else mvCell.append(el('span', { class: 'desc', text: f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : (b ? b.type : 'State ' + s.no) }));
+      if (r && r.name) { mvCell.append(el('b', { translate: 'no', text: r.name })); if (r.hidden) mvCell.append(el('small', { text: 'hidden in the game' })); }
+      else mvCell.append(el('span', { class: 'desc', translate: 'no', text: f.attr ? capServer(f.attr) : (b ? b.type : t('State {no}', { no: s.no })) }));
       // A row that throws a projectile: its own Active / On hit / On block are
       // the projectile's, read from its entry and labeled (PB = point blank).
       const pj = f.proj && projById(f.proj.id) ? f.proj : null;
@@ -1038,7 +1166,7 @@
         mvCell,
         el('span', { class: 'cm' }, inp && (inp.glyphs || inp.input) ? glyph(inp.glyphs || inp.input, false, true) : null, rangeTag(s.no)),
         num('su', f.startup),
-        pje && (f.active === null || f.active === undefined) ? num('ac', pjActive(pje).text, 'the projectile\'s hit box: ' + pjActive(pje).tip + ' (see Projectiles)') : num('ac', f.active),
+        pje && (f.active === null || f.active === undefined) ? num('ac', pjActive(pje).text, t('the projectile\'s hit box: {tip} (see Projectiles)', { tip: pjActive(pje).tip })) : num('ac', f.active),
         num('rc', f.recovery), num('tt', f.total),
         (() => {
           const c = f.knockdown ? el('span', { class: 'n oh kd', title: 'knockdown' }, 'KD')
@@ -1048,10 +1176,10 @@
         pj && (f.onBlock === null || f.onBlock === undefined) ? pbCell('ob', pj.onBlock, pj.approx) : adv('ob', f.onBlock),
         dmgCell,
         el('span', { class: 'eline ed' },
-          el('span', { class: 'an' }, el('span', { class: 'mt ' + (s.movetype || ''), text: (s.movetype || '-').toUpperCase(), title: 'movetype ' + (MT_NAME[s.movetype] || 'not set (I)') }), animLabel(s)),
-          el('span', { class: 'n', text: s.blocks.length + (s.blocks.length === 1 ? ' blk' : ' blks') }),
+          el('span', { class: 'an' }, el('span', { class: 'mt ' + (s.movetype || ''), translate: 'no', text: (s.movetype || '-').toUpperCase(), title: t('movetype {type}', { type: MT_NAME[s.movetype] || t('not set (I)') }) }), animLabel(s)),
+          el('span', { class: 'n', text: s.blocks.length === 1 ? t('{n} blk', { n: 1 }) : t('{n} blks', { n: s.blocks.length }) }),
           stateSummary(s),
-          files.size > 1 ? el('span', { class: 'fl', text: s.file }) : null));
+          files.size > 1 ? el('span', { class: 'fl', translate: 'no', text: s.file }) : null));
       row.onclick = () => { sel.proj = null; sel.key = stateKey(s); sel.ordinal = shownBlock(s); sel.action = null; renderStates(); renderSelection(); const rp = $('right'); if (rp) rp.scrollTop = 0; };
       row.onkeydown = (ev) => {
         if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); row.onclick(); focusRow(stateKey(s)); }
@@ -1084,11 +1212,10 @@
           const thrown = projsOf(r.state);
           const nh = el('div', { class: 'nohit' + (thrown.length ? ' pjt' : '') + (zi++ % 2 ? ' zb' : ''), role: 'row', tabindex: thrown.length ? '0' : null },
             el('span', { class: 'no', text: r.state }),
-            el('span', { class: 'mv' }, el('b', { text: r.name || '' })),
+            el('span', { class: 'mv' }, el('b', { translate: 'no', text: r.name || '' })),
             el('span', { class: 'cm' }, r.glyphs || r.input ? glyph(r.glyphs || r.input, false, true) : null),
-            thrown.length ? el('span', { class: 'why' }, 'throws ' + PJ_KIND[thrown[0].kind] + ': ', el('b', { text: 'see Projectiles' }),
-              thrown[0].pointBlank && thrown[0].pointBlank.onHit !== null ? ' (point blank ' + signed(thrown[0].pointBlank.onHit) + (thrown[0].pointBlank.onBlock !== null ? ' / ' + signed(thrown[0].pointBlank.onBlock) : '') + ')' : '')
-              : el('span', { class: 'why', text: plain ? 'no attack block in this state' : 'no state ' + r.state + ' in the files the engine loads' }));
+            thrown.length ? el('span', { class: 'why' }, throwsLine(thrown[0]))
+              : el('span', { class: 'why', text: plain ? 'no attack block in this state' : t('no state {state} in the files the engine loads', { state: r.state }) }));
           if (thrown.length) { nh.onclick = () => openProj(thrown[0].id); nh.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openProj(thrown[0].id); } }; }
           host.append(nh);
         }
@@ -1109,10 +1236,10 @@
     if (foot) {
       foot.textContent = '';
       if (list.length) {
-        foot.append(el('b', { text: 'Frames' }), ' follow GRAIL 3.10: frame 1 is the first frame of the move; startup is the first frame the block is armed on an element with a hit box; total runs to the end trigger plus one. ',
-          el('b', { text: '≈' }), ' marks a number that rests on a formula read as a fresh first hit, or on an armed or end frame the files do not settle. ');
-        if (!cl) foot.append(el('b', { text: 'Names' }), ' come from the Command List reader, which this build does not have: each attack state is described by its attack type.');
-        else foot.append(el('b', { text: 'Names' }), ' are the Command List\'s (where each came from is listed under it).');
+        foot.append(...tn(t('<b>Frames</b> follow GRAIL 3.10: frame 1 is the first frame of the move; startup is the first frame the block is armed on an element with a hit box; total runs to the end trigger plus one.')), ' ',
+          ...tn(t('<b>≈</b> marks a number that rests on a formula read as a fresh first hit, or on an armed or end frame the files do not settle.')), ' ');
+        if (!cl) foot.append(...tn(t('<b>Names</b> come from the Command List reader, which this build does not have: each attack state is described by its attack type.')));
+        else foot.append(...tn(t('<b>Names</b> are the Command List\'s (where each came from is listed under it).')));
       }
     }
 
@@ -1124,12 +1251,12 @@
       host.append(el('h3', { class: 'bk-sh deadh', text: 'Dead (never compiled)' }));
       for (const d of dead) {
         host.append(el('div', { class: 'dead', title: d.reason },
-          el('span', { class: 'no', text: (d.state === null ? '?' : d.state) + ' ' }), d.type + ' · ' + d.file + ':' + d.line,
+          el('span', { class: 'no', text: (d.state === null ? '?' : d.state) + ' ' }), el('span', { translate: 'no' }, d.type + ' · ' + d.file + ':' + d.line),
           el('div', { text: d.reason })));
       }
     }
     const ns = (model && model.notScanned) || [];
-    if (ns.length) host.append(el('div', { class: 'dead', text: 'Not scanned (ZSS): ' + ns.join(', ') }));
+    if (ns.length) host.append(el('div', { class: 'dead', text: t('Not scanned (ZSS): {files}', { files: ns.join(', ') }) }));
   }
   // THE PROJECTILES SECTION, at the foot of the list: one row per projectile,
   // in the order the list prints their throwers. Columns: its name (the
@@ -1160,9 +1287,9 @@
       const hitsN = e.life && e.life.hits ? e.life.hits.value : null;
       const n = (cls, val, tip) => el('span', { class: 'n ' + cls, title: tip || null }, val === null || val === undefined ? '—' : val);
       const adv = (cls, x) => (x === null || x === undefined ? n(cls, null, 'point blank: unknown') : el('span', { class: 'n ' + cls + (x > 0 ? ' plus' : x < 0 ? ' minus' : ''), title: PB_TIP }, (pb.approx ? '≈' : '') + signed(x)));
-      const look = e.kind === 'explod' ? 'Explod' : e.kind === 'helper' ? 'helper' : null;
+      const look = e.kind === 'explod' ? t('Explod') : e.kind === 'helper' ? t('helper') : null;
       const invisible = e.look && (e.look.blank || (projAnim(e.look.action) || {}).noSprite) && e.kind === 'projectile';
-      const mv = el('span', { class: 'mv' }, el('b', { text: moveName(th.state) }),
+      const mv = el('span', { class: 'mv' }, el('b', { translate: 'no', text: moveName(th.state) }),
         look ? el('span', { class: 'pjk', text: look, title: PJ_KIND[e.kind] }) : null,
         invisible ? el('span', { class: 'pjk', text: 'invisible', title: 'its animation draws nothing' }) : null);
       const act = pjActive(e), life = pjLife(e);
@@ -1173,7 +1300,7 @@
         n('su', pjAppears(e), pjAppearsTip(e)),
         n('ac', act.text, act.tip), n('rc', hitsN, e.kind === 'projectile' ? (hitsN === null ? 'projhits depends on a formula' : 'projhits: hits before it is gone') : 'a helper hits as often as its own code lets it'),
         n('tt', life.text, life.tip), adv('oh', pb.onHit), adv('ob', pb.onBlock),
-        n('dm', dm, v.damage && v.damage.text ? 'a formula: ' + v.damage.text : null));
+        n('dm', dm, v.damage && v.damage.text ? t('a formula: {formula}', { formula: v.damage.text }) : null));
       row.onclick = () => openProj(e.id);
       row.onkeydown = (ev) => {
         if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openProj(e.id); }
@@ -1187,7 +1314,7 @@
       host.append(row);
     }
     const notes = (model.projNotes || []);
-    if (notes.length) host.append(el('div', { class: 'dead', text: notes.join('; ') }));
+    if (notes.length) host.append(el('div', { class: 'dead', text: notes.map((x) => I18n.server(x)).join('; ') }));
   }
 
   function focusRow(key) {
@@ -1222,10 +1349,10 @@
     const r = clRow(s.no), inp = r || inputOf(s.no);
     const k = s.blocks.indexOf(b);
     const head = el('div', { class: 'mvhead' },
-      el('div', { class: 'where' }, el('span', { class: 'sn', text: 'State ' + s.no }),
-        b.type + ', block ' + (k + 1) + ' of ' + s.blocks.length + ', ' + b.file + ' line ' + b.line));
+      el('div', { class: 'where' }, el('span', { class: 'sn', text: t('State {no}', { no: s.no }) }),
+        t('{type}, block {n} of {of}, {file} line {line}', { type: b.type, n: k + 1, of: s.blocks.length, file: b.file, line: b.line })));
     const f = b.frame || {};
-    head.append(el('h2', { class: 'bk-title bk-nocaps', text: r && r.name ? r.name : (f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : 'State ' + s.no) }));
+    head.append(el('h2', { class: 'bk-title bk-nocaps', translate: 'no', text: r && r.name ? r.name : (f.attr ? capServer(f.attr) : t('State {no}', { no: s.no })) }));
     // the input as the game's Command List draws it (the writer's tokens), its .cmd text beside it
     if (inp && (inp.glyphs || inp.input)) head.append(el('div', { class: 'inp' }, glyph(inp.glyphs || inp.input, true), el('code', { text: inp.input || inp.glyphs })));
     const rg = rangeOf(s.no);
@@ -1233,24 +1360,29 @@
       // its twin: the other state the same button enters at the other distance
       const mine = rawInput(s.no) || {};
       const twin = cl.inputs.find((x) => x.state !== s.no && x.range && x.range.kind !== rg.kind && x.glyphs === mine.glyphs && x.range.dist === rg.dist);
-      head.append(el('div', { class: 'from rngline' }, el('b', { text: rg.kind === 'close' ? 'Close version' : 'Far version' }), ': ' + rangeDesc(rg) + '.',
-        twin ? ' ' + (twin.range.kind === 'close' ? 'Up close' : 'Farther out') + ', the same button is state ' + twin.state + ' (' + moveName(twin.state) + ').' : ''));
+      const rv = { range: rangeDesc(rg) };
+      const tv = twin ? { state: twin.state, name: moveName(twin.state) } : null;
+      head.append(el('div', { class: 'from rngline' }, rg.kind === 'close' ? tn(t('<b>Close version</b>: {range}.', nodes(rv))) : tn(t('<b>Far version</b>: {range}.', nodes(rv))),
+        !twin ? '' : ' ' + (twin.range.kind === 'close' ? t('Up close, the same button is state {state} ({name}).', tv) : t('Farther out, the same button is state {state} ({name}).', tv))));
     }
     if (r) {
-      const FROM = { owner: 'the name you gave it', label: 'its [State -1] label', command: 'its command name', comment: 'the comment above its block', readme: 'the character\'s readme' };
+      const FROM = { owner: t('the name you gave it'), label: t('its [State -1] label'), command: t('its command name'), comment: t('the comment above its block'), readme: t('the character\'s readme') };
       const raw = r.raw || {};
-      head.append(el('div', { class: 'from' }, 'Name from ' + (FROM[r.nameFrom] || r.nameFrom || 'the files'),
-        raw.label ? [' (', el('code', { text: raw.label }), ')'] : null,
-        raw.command ? ['; command ', el('code', { text: raw.command })] : null, '.'));
-      if (r.partOf) head.append(el('div', { class: 'from' }, 'In the game\'s Command List it is one line with its other ' + (r.partOf.of - 1 === 1 ? 'strength' : r.partOf.of - 1 + ' strengths') + ': ',
-        el('b', { text: r.partOf.name }), ' ', glyph(r.partOf.glyphs), '.'));
+      const nv = { source: FROM[r.nameFrom] || r.nameFrom || t('the files'), label: raw.label ? el('code', { text: raw.label }) : null, command: raw.command ? el('code', { text: raw.command }) : null };
+      head.append(el('div', { class: 'from' }, nv.label && nv.command ? tn(t('Name from {source} ({label}); command {command}.', nodes(nv)))
+        : nv.label ? tn(t('Name from {source} ({label}).', nodes(nv))) : nv.command ? tn(t('Name from {source}; command {command}.', nodes(nv))) : tn(t('Name from {source}.', nodes(nv)))));
+      if (r.partOf) {
+        const pv = { n: r.partOf.of - 1, name: el('b', { translate: 'no', text: r.partOf.name }), input: glyph(r.partOf.glyphs) };
+        head.append(el('div', { class: 'from' }, r.partOf.of - 1 === 1 ? tn(t('In the game\'s Command List it is one line with its other strength: {name} {input}.', nodes(pv)))
+          : tn(t('In the game\'s Command List it is one line with its other {n} strengths: {name} {input}.', nodes(pv)))));
+      }
     } else if (inp) {
-      head.append(el('div', { class: 'from' }, 'Input from its [State -1] block, ' + inp.file + ' line ' + inp.line + '. ',
+      head.append(el('div', { class: 'from' }, t('Input from its [State -1] block, {file} line {line}.', { file: inp.file, line: inp.line }) + ' ',
         inp.listed ? 'The game\'s Command List prints it on another state\'s line. ' : (cl && cl.own ? 'This character ships a Command List of its own. ' : s.no < 1000 ? 'Plain normals stay out of the game\'s Command List. ' : 'Not a line of the game\'s Command List: its block can enter more than one state, and the list prints the one it enters by default. '),
         animLabel(s) + '.'));
     } else if (cl === null && clWhy === 'absent') {
       head.append(el('div', { class: 'from' }, 'No name: the Command List reader is not in this build. ', animLabel(s) + '.'));
-    } else head.append(el('div', { class: 'from', text: 'The Command List does not name this state. ' + animLabel(s) + '.' }));
+    } else head.append(el('div', { class: 'from', text: t('The Command List does not name this state. {anim}.', { anim: animLabel(s) }) }));
     // What it throws: each projectile's entry, one click away.
     const thrown = projsOf(s.no);
     if (thrown.length) {
@@ -1258,17 +1390,19 @@
       // A WinMUGEN-era state can throw dozens: the first 6, the rest counted.
       for (const e of thrown.slice(0, 6)) {
         const pb = e.pointBlank || {};
+        // its facts, each a phrase of its own, joined with ", "
+        const facts = [e.kind === 'explod' ? t('Projectile (drawn by an Explod)') : e.kind === 'helper' ? t('Projectile (a helper)') : t('Projectile'),
+          pjAppears(e) ? t('appears frame {n}', { n: pjAppears(e) }) : t('line {line}', { line: e.thrower.line })];
+        if (pb.onHit !== null && pb.onHit !== undefined) facts.push(pb.onBlock !== null && pb.onBlock !== undefined ? t('point blank {hit} / {block}', { hit: signed(pb.onHit), block: signed(pb.onBlock) }) : t('point blank {hit}', { hit: signed(pb.onHit) }));
         links.append(el('button', { class: 'pjlink', type: 'button', title: 'Open the projectile\'s own frames, path and numbers',
-          onclick: () => openProj(e.id) }, 'Projectile' + (e.kind === 'explod' ? ' (drawn by an Explod)' : e.kind === 'helper' ? ' (a helper)' : '')
-          + (pjAppears(e) ? ', appears frame ' + pjAppears(e) : ', line ' + e.thrower.line)
-          + (pb.onHit !== null && pb.onHit !== undefined ? ', point blank ' + signed(pb.onHit) + (pb.onBlock !== null && pb.onBlock !== undefined ? ' / ' + signed(pb.onBlock) : '') : '') + ' →'));
+          onclick: () => openProj(e.id) }, facts.join(', ') + ' →'));
       }
-      if (thrown.length > 6) links.append(el('span', { text: 'and ' + (thrown.length - 6) + ' more under Projectiles' }));
+      if (thrown.length > 6) links.append(el('span', { text: t('and {n} more under Projectiles', { n: thrown.length - 6 }) }));
       head.append(links);
     }
     if (s.thrownBy && projById(s.thrownBy.id)) {
       const e = projById(s.thrownBy.id);
-      head.append(el('div', { class: 'pjlinks' }, el('b', { text: 'A projectile' }), 'this state is a helper\'s, thrown by state ' + s.thrownBy.states.join(', ') + ':',
+      head.append(el('div', { class: 'pjlinks' }, el('b', { text: 'A projectile' }), t('this state is a helper\'s, thrown by state {states}:', { states: s.thrownBy.states.join(', ') }),
         el('button', { class: 'pjlink', type: 'button', onclick: () => openProj(e.id) }, 'its projectile entry →')));
     }
     host.append(head);
@@ -1287,38 +1421,45 @@
     const th = e.thrower;
     const head = el('div', { class: 'mvhead' },
       el('div', { class: 'where' }, el('span', { class: 'sn', text: 'Projectile' }),
-        (e.kind === 'projectile' ? 'a Projectile controller' : PJ_KIND[e.kind]) + ', thrown by state ' + th.state + ', ' + th.file + ' line ' + th.line));
-    head.append(el('h2', { class: 'bk-title bk-nocaps', text: moveName(th.state) }));
+        t('{what}, thrown by state {state}, {file} line {line}', { what: e.kind === 'projectile' ? t('a Projectile controller') : PJ_KIND[e.kind], state: th.state, file: th.file, line: th.line })));
+    head.append(el('h2', { class: 'bk-title bk-nocaps', translate: 'no', text: moveName(th.state) }));
     const inp = inputOf(th.state);
     if (inp && (inp.glyphs || inp.input)) head.append(el('div', { class: 'inp' }, glyph(inp.glyphs || inp.input, true), el('code', { text: inp.input || inp.glyphs })));
     // Back to the move(s) that throw it.
     const links = el('div', { class: 'pjlinks' }, el('b', { text: 'Thrown by' }));
-    for (const t of (e.throwers || [th])) {
-      const ts = attackStates().find((x) => x.no === t.state) || null;
-      const label = moveName(t.state) + ' (state ' + t.state + ')' + (t.timing && t.timing.frame ? ', frame ' + t.timing.frame : '');
+    for (const tw of (e.throwers || [th])) {
+      const ts = attackStates().find((x) => x.no === tw.state) || null;
+      const lv = { name: moveName(tw.state), state: tw.state, frame: tw.timing && tw.timing.frame };
+      const label = lv.frame ? t('{name} (state {state}), frame {frame}', lv) : t('{name} (state {state})', lv);
       if (ts) links.append(el('button', { class: 'pjlink', type: 'button', onclick: () => openState(ts) }, '← ' + label));
-      else links.append(el('span', { text: label + ' (no attack of its own)' }));
+      else links.append(el('span', { text: t('{label} (no attack of its own)', { label }) }));
     }
     head.append(links);
     if (th.helper) {
       const via = th.via;
-      head.append(el('div', { class: 'from' }, 'The state that ' + (e.kind === 'projectile' ? 'throws it' : 'makes it') + ' is itself a helper\'s, made by state ' + [...new Set(th.helper.flatMap((h) => h.by))].join(', ') + '. '
-        + (via && via.frame ? 'It appears on frame ' + via.frame + ' of state ' + via.state + ' (the helper\'s own frame ' + via.helperFrame + '), and point blank is counted on state ' + via.state + '\'s frames: the player\'s, not the helper\'s.'
-          : 'Point blank is the player\'s advantage, and ' + ((via && via.why) || 'the player\'s frames are not settled') + ', so it is left out.')));
+      const makers = [...new Set(th.helper.flatMap((h) => h.by))].join(', ');
+      head.append(el('div', { class: 'from' }, (e.kind === 'projectile' ? t('The state that throws it is itself a helper\'s, made by state {states}.', { states: makers }) : t('The state that makes it is itself a helper\'s, made by state {states}.', { states: makers })) + ' '
+        + (via && via.frame ? t('It appears on frame {frame} of state {state} (the helper\'s own frame {helperFrame}), and point blank is counted on state {state}\'s frames: the player\'s, not the helper\'s.', { frame: via.frame, state: String(via.state), helperFrame: String(via.helperFrame) })
+          : t('Point blank is the player\'s advantage, and {why}, so it is left out.', { why: (via && via.why) || t('the player\'s frames are not settled') }))));
     }
     if (e.kind !== 'projectile') {
-      head.append(el('div', { class: 'from' }, 'A helper in state ' + e.entryState + (e.hitState !== e.entryState ? ', its hit in state ' + e.hitState : '') + ' (' + e.block.file + '). '
-        + 'Its frames are counted from the frame it appears, and its advantage is the thrower\'s, not its own.'));
+      const hv = { entry: e.entryState, hit: e.hitState, file: e.block.file };
+      head.append(el('div', { class: 'from' }, (e.hitState !== e.entryState ? t('A helper in state {entry}, its hit in state {hit} ({file}).', hv) : t('A helper in state {entry} ({file}).', hv)) + ' '
+        + t('Its frames are counted from the frame it appears, and its advantage is the thrower\'s, not its own.')));
       // A hit in a later state: that state's own row is where its frames are counted.
       const hs = e.hitLater ? attackStates().find((x) => x.no === e.hitState) : null;
-      if (hs) head.append(el('div', { class: 'pjlinks' }, el('b', { text: 'Its hit' }), 'the helper changes to state ' + e.hitState + ' before it hits, at a time the files do not settle:',
-        el('button', { class: 'pjlink', type: 'button', onclick: () => openState(hs) }, 'state ' + e.hitState + '\'s own frames →')));
+      if (hs) head.append(el('div', { class: 'pjlinks' }, el('b', { text: 'Its hit' }), t('the helper changes to state {state} before it hits, at a time the files do not settle:', { state: e.hitState }),
+        el('button', { class: 'pjlink', type: 'button', onclick: () => openState(hs) }, t('state {state}\'s own frames →', { state: e.hitState }))));
     }
     if (e.kind === 'explod' && e.explod) {
       const x = e.explod;
-      head.append(el('div', { class: 'from' }, el('b', { text: 'Drawn by an Explod' }), ': ' + x.file + ' line ' + x.line + ' in ' + x.where
-        + (x.anim.foreign ? ', animation ' + x.anim.raw + ' from the common effects (not drawn here)' : ', action ' + x.anim.action + (x.anim.candidates ? ' (one of ' + x.anim.candidates.join(', ') + ')' : ''))
-        + ', scale ' + pairText(x.scale) + (x.bindtime !== null ? ', bindtime ' + x.bindtime : '') + '. The helper that hits plays a blank animation (action ' + e.look.action + '), so its boxes are drawn on the Explod\'s frames. Matched by state, not by ID.'));
+      // its facts, each a phrase of its own, joined with ", "; `where` is the server's words
+      const facts = [t('{file} line {line} in {where}', { file: x.file, line: x.line, where: I18n.server(x.where) }),
+        x.anim.foreign ? t('animation {anim} from the common effects (not drawn here)', { anim: x.anim.raw })
+          : x.anim.candidates ? t('action {action} (one of {list})', { action: x.anim.action, list: x.anim.candidates.join(', ') }) : t('action {action}', { action: x.anim.action }),
+        t('scale {scale}', { scale: pairText(x.scale) })];
+      if (x.bindtime !== null) facts.push(t('bindtime {n}', { n: x.bindtime }));
+      head.append(el('div', { class: 'from' }, ...tn(t('<b>Drawn by an Explod</b>: {facts}. The helper that hits plays a blank animation (action {action}), so its boxes are drawn on the Explod\'s frames. Matched by state, not by ID.', nodes({ facts: facts.join(', '), action: e.look.action })))));
     }
     host.append(head);
     renderProjData(host, e);
@@ -1327,8 +1468,8 @@
     // Edit on: its values are the block's, edited where the block lives.
     const hs = attackStates().find((x) => x.no === e.block.state && x.blocks.some((b) => b.file === e.block.file && b.ordinal === e.block.ordinal));
     if (bk && hs) {
-      bk.append(el('h2', { class: 'bk-sh' }, 'Values', el('span', { class: 'k', lang: 'ja', text: '数値' }), el('span', { class: 'aside', text: (e.kind === 'projectile' ? 'its Projectile block' : 'its helper\'s HitDef') + ', state ' + hs.no })),
-        el('div', { class: 'pjlinks' }, el('button', { class: 'pjlink', type: 'button', onclick: () => openState(hs, e.block.ordinal) }, 'Edit its values in state ' + hs.no + ' →')));
+      bk.append(el('h2', { class: 'bk-sh' }, 'Values', el('span', { class: 'k', lang: 'ja', text: '数値' }), el('span', { class: 'aside', text: e.kind === 'projectile' ? t('its Projectile block, state {state}', { state: hs.no }) : t('its helper\'s HitDef, state {state}', { state: hs.no }) })),
+        el('div', { class: 'pjlinks' }, el('button', { class: 'pjlink', type: 'button', onclick: () => openState(hs, e.block.ordinal) }, t('Edit its values in state {state} →', { state: hs.no }))));
     }
     drawGlyphs(host);
   }
@@ -1339,20 +1480,20 @@
     const tilde = pb.approx ? '≈' : '';
     const card = el('div', { class: 'fd' });
     card.append(el('div', { class: 'fdh' }, el('span', { class: 't', text: 'Frame data' }),
-      el('span', { class: 'tag', text: [v.attr ? v.attr[0].toUpperCase() + v.attr.slice(1) : null, v.guard ? v.guard.level : null, 'advantage at point blank'].filter(Boolean).join(' · ') })));
+      el('span', { class: 'tag', translate: 'no', text: [v.attr ? capServer(v.attr) : null, v.guard ? I18n.server(v.guard.level) : null, t('advantage at point blank')].filter(Boolean).join(' · ') })));
     const n = (label, value, tip, cls) => el('div', { class: 'fdn' + (cls ? ' ' + cls : ''), title: tip }, el('span', { class: 'k', text: label }), el('b', { text: value === null || value === undefined ? '—' : String(value) }));
     const advCls = (x) => (x === null || x === undefined ? '' : x > 0 ? 'plus' : x < 0 ? 'minus' : 'even');
     const act = pjActive(e), life = pjLife(e);
     card.append(el('div', { class: 'fdrow' },
-      n('Appears', pjAppears(e), pjAppearsTip(e) + ' (frame 1 = the throw\'s first)'),
-      n('Active', act.text, act.tip),
-      n('Life', life.text, life.tip),
-      n('Hits', e.kind === 'projectile' && e.life ? e.life.hits.value : null, e.kind === 'projectile' ? 'projhits' : 'a helper hits as often as its own code lets it'),
+      n(t('Appears'), pjAppears(e), t('{tip} (frame 1 = the throw\'s first)', { tip: pjAppearsTip(e) })),
+      n(t('Active'), act.text, act.tip),
+      n(t('Life'), life.text, life.tip),
+      n(t('Hits'), e.kind === 'projectile' && e.life ? e.life.hits.value : null, e.kind === 'projectile' ? 'projhits' : 'a helper hits as often as its own code lets it'),
       n('PB hit', pb.onHit === null || pb.onHit === undefined ? null : tilde + signed(pb.onHit), PB_TIP, 'sep ' + advCls(pb.onHit)),
       n('PB block', pb.onBlock === null || pb.onBlock === undefined ? null : tilde + signed(pb.onBlock), PB_TIP, advCls(pb.onBlock))));
     // One cell per frame it flies: its hit box out (red) or not (open). Not
     // drawn when its hit box is unknown (an empty meter would say "none").
-    if (e.path && e.path.hitUnknown) card.append(el('div', { class: 'fdnote', text: 'Its hit box frame by frame: unknown, because ' + e.path.hitUnknown + '.' }));
+    if (e.path && e.path.hitUnknown) card.append(el('div', { class: 'fdnote', text: t('Its hit box frame by frame: unknown, because {why}.', { why: e.path.hitUnknown }) }));
     else if (e.path && e.path.pts.length && chainOf(e)) {
       // A chain: 180 frames from the state its hit is in (or its first), a
       // dark edge where it enters a state.
@@ -1361,57 +1502,82 @@
       const meter = el('div', { class: 'meter', title: 'one cell per frame of its life' });
       e.path.pts.slice(from, from + 180).forEach((p, j) => {
         const i = from + j, sb = i > 0 && e.path.pts[i - 1] && e.path.pts[i - 1][5] !== p[5];
-        meter.append(el('i', { class: (p[3] ? 'a' : 's') + ((i + 1) % 5 === 0 ? ' n5' : '') + (sb ? ' sb' : ''), title: 'frame ' + (i + 1) + ' of its life, state ' + (ch2[p[5]] ? ch2[p[5]].state : '?') + ': ' + (p[3] ? 'hit box out' : 'no hit box') }));
+        const fv = { n: i + 1, state: ch2[p[5]] ? ch2[p[5]].state : '?' };
+        meter.append(el('i', { class: (p[3] ? 'a' : 's') + ((i + 1) % 5 === 0 ? ' n5' : '') + (sb ? ' sb' : ''), title: p[3] ? t('frame {n} of its life, state {state}: hit box out', fv) : t('frame {n} of its life, state {state}: no hit box', fv) }));
       });
       const n = Math.min(180, e.path.pts.length - from);
+      const lv = { a: from + 1, b: from + n, state: from ? ch2[e.path.pts[from][5]].state : null };
       card.append(meter, el('div', { class: 'mkey' }, el('span', {}, el('i', { class: 'a' }), 'its hit box out'), el('span', {}, el('i', { class: 's' }), 'no hit box'),
         el('span', {}, el('i', { class: 's sb' }), 'it enters a state'),
-        el('span', { text: 'one cell per frame of its life, frames ' + (from + 1) + '–' + (from + n) + (from ? ' (from state ' + ch2[e.path.pts[from][5]].state + ', where it hits)' : '') })));
+        el('span', { text: from ? t('one cell per frame of its life, frames {a}–{b} (from state {state}, where it hits)', lv) : t('one cell per frame of its life, frames {a}–{b}', lv) })));
     }
     else if (e.path && e.path.pts.length) {
       const meter = el('div', { class: 'meter', title: 'one cell per frame it flies' });
-      e.path.pts.slice(0, 180).forEach((p, i) => meter.append(el('i', { class: (p[3] ? 'a' : 's') + ((i + 1) % 5 === 0 ? ' n5' : ''), title: 'frame ' + (i + 1) + ' of its flight: ' + (p[3] ? 'hit box out' : 'no hit box') })));
+      e.path.pts.slice(0, 180).forEach((p, i) => meter.append(el('i', { class: (p[3] ? 'a' : 's') + ((i + 1) % 5 === 0 ? ' n5' : ''), title: p[3] ? t('frame {n} of its flight: hit box out', { n: i + 1 }) : t('frame {n} of its flight: no hit box', { n: i + 1 }) })));
       card.append(meter, el('div', { class: 'mkey' }, el('span', {}, el('i', { class: 'a' }), 'its hit box out'), el('span', {}, el('i', { class: 's' }), 'no hit box'),
-        el('span', { text: 'one cell per frame of its flight' + (e.path.pts.length > 180 ? ', the first 180' : '') })));
+        el('span', { text: e.path.pts.length > 180 ? t('one cell per frame of its flight, the first 180') : t('one cell per frame of its flight') })));
     }
+    // Its numbers, a label each (`k`, a t() word) and a value the page has
+    // already put in words; the server's own words go through I18n.server.
     const props = el('div', { class: 'fdprops' });
-    const prop = (k, val) => { if (val !== null && val !== undefined && val !== '') props.append(el('div', {}, el('b', { text: k + ': ' }), String(val))); };
-    const val = (x) => (!x || x.value === null || x.value === undefined ? (x && x.text ? 'depends on ' + x.text : '—') : (x.how === 'computed' ? '≈' + x.value + ' (depends on ' + x.text + ')' : String(x.value)));
+    const prop = (k, val) => { if (val !== null && val !== undefined && val !== '') props.append(el('div', { translate: 'no' }, el('b', { text: k + ': ' }), String(val))); };
+    const val = (x) => (!x || x.value === null || x.value === undefined ? (x && x.text ? t('depends on {formula}', { formula: x.text }) : '—') : (x.how === 'computed' ? t('≈{value} (depends on {formula})', { value: x.value, formula: x.text }) : String(x.value)));
     const via = e.thrower.via;
-    if (pb.frame !== null && pb.frame !== undefined) prop('Point blank', 'it can connect on frame ' + pb.frame + ' of ' + (via && via.frame ? 'state ' + via.state + ' (the move that makes the helper that throws it)' : 'the throw') + '; ' + (pb.after < 0 ? 'the player has been able to act for ' + nFrames(-pb.after) + ' by then' : 'the player acts ' + nFrames(pb.after) + ' later') + '. On hit: hitstun ' + val(v.hitstun) + ' + 2 + their hitstop ' + val(v.hitstopP2) + (pb.after < 0 ? ' + ' + (-pb.after) : ' - ' + pb.after) + '. On block: blockstun ' + val(v.blockstun) + ' + 1 + their blockstop ' + val(v.blockstopP2) + (pb.after < 0 ? ' + ' + (-pb.after) : ' - ' + pb.after) + '. Its own hitstop freezes the projectile, not the player.');
-    else prop('Point blank', 'unknown: ' + (pb.why || (e.firstHit === null || e.firstHit === undefined ? 'the frame it first shows a hit box is not settled' : 'the thrower\'s frames are not settled')));
-    prop('Damage', val(v.damage) + (v.chip ? ', chip ' + val(v.chip) : ''));
-    prop('Hitstun / blockstun', val(v.hitstun) + ' / ' + val(v.blockstun));
-    prop('Their hitstop / blockstop', val(v.hitstopP2) + ' / ' + val(v.blockstopP2));
-    if (e.freeze !== null && e.freeze !== undefined) prop('It freezes on contact', nFrames(e.freeze) + ' (its pausetime' + (e.kind === 'projectile' && model.projMugen && model.projMugen.win ? ' less one: a WinMUGEN character\'s projectile, char.go 13963' : '') + '); the thrower does not freeze');
-    if (v.guard) prop('Blocked', v.guard.text);
-    prop('Knockdown', v.knockdown === true ? 'yes' : v.knockdown === false ? 'no' : 'depends on a formula');
-    if (v.juggle !== null && v.juggle !== undefined) prop('Juggle cost', v.juggle + (e.kind === 'projectile' ? ' (air.juggle is read for projectiles)' : ''));
+    if (pb.frame !== null && pb.frame !== undefined) {
+      const adj = pb.after < 0 ? '+ ' + (-pb.after) : '- ' + pb.after;
+      const when = pb.after < 0 ? t('the player has been able to act for {time} by then', { time: nFrames(-pb.after) }) : t('the player acts {time} later', { time: nFrames(pb.after) });
+      prop(t('Point blank'), (via && via.frame ? t('it can connect on frame {frame} of state {state} (the move that makes the helper that throws it); {when}.', { frame: pb.frame, state: String(via.state), when })
+        : t('it can connect on frame {frame} of the throw; {when}.', { frame: pb.frame, when }))
+        + ' ' + t('On hit: hitstun {hitstun} + 2 + their hitstop {hitstop} {adj}.', { hitstun: val(v.hitstun), hitstop: val(v.hitstopP2), adj })
+        + ' ' + t('On block: blockstun {blockstun} + 1 + their blockstop {blockstop} {adj}.', { blockstun: val(v.blockstun), blockstop: val(v.blockstopP2), adj })
+        + ' ' + t('Its own hitstop freezes the projectile, not the player.'));
+    } else prop(t('Point blank'), t('unknown: {why}', { why: pb.why || (e.firstHit === null || e.firstHit === undefined ? t('the frame it first shows a hit box is not settled') : t('the thrower\'s frames are not settled')) }));
+    prop(t('Damage'), v.chip ? t('{damage}, chip {chip}', { damage: val(v.damage), chip: val(v.chip) }) : val(v.damage));
+    prop(t('Hitstun / blockstun'), val(v.hitstun) + ' / ' + val(v.blockstun));
+    prop(t('Their hitstop / blockstop'), val(v.hitstopP2) + ' / ' + val(v.blockstopP2));
+    if (e.freeze !== null && e.freeze !== undefined) prop(t('It freezes on contact'), e.kind === 'projectile' && model.projMugen && model.projMugen.win
+      ? t('{time} (its pausetime less one: a WinMUGEN character\'s projectile, char.go 13963); the thrower does not freeze', { time: nFrames(e.freeze) })
+      : t('{time} (its pausetime); the thrower does not freeze', { time: nFrames(e.freeze) }));
+    if (v.guard) prop(t('Blocked'), I18n.server(v.guard.text));
+    prop(t('Knockdown'), v.knockdown === true ? t('yes') : v.knockdown === false ? t('no') : t('depends on a formula'));
+    if (v.juggle !== null && v.juggle !== undefined) prop(t('Juggle cost'), e.kind === 'projectile' ? t('{n} (air.juggle is read for projectiles)', { n: v.juggle }) : v.juggle);
     // Where and how it flies.
     const sp = e.spawn || {};
-    const POS = { p1: 'ahead of the thrower\'s axis', p2: 'around the opponent (P2), along their facing', front: 'from the screen edge in front of the thrower', back: 'from the screen edge behind the thrower', left: 'from the screen\'s left edge', right: 'from the screen\'s right edge', none: 'at that place on the stage' };
-    prop('Appears at', 'x ' + fmt(sp.offset && sp.offset[0]) + ', y ' + fmt(sp.offset && sp.offset[1]) + ' ' + (POS[sp.postype] || sp.postype) + ' (postype ' + sp.postype + ')' + (sp.postype === 'p1' ? '; y from the ground with the thrower standing' : ''));
+    const POS = { p1: t('ahead of the thrower\'s axis'), p2: t('around the opponent (P2), along their facing'), front: t('from the screen edge in front of the thrower'), back: t('from the screen edge behind the thrower'), left: t('from the screen\'s left edge'), right: t('from the screen\'s right edge'), none: t('at that place on the stage') };
+    const av = { x: fmt(sp.offset && sp.offset[0]), y: fmt(sp.offset && sp.offset[1]), where: POS[sp.postype] || sp.postype, postype: sp.postype };
+    prop(t('Appears at'), sp.postype === 'p1' ? t('x {x}, y {y} {where} (postype {postype}); y from the ground with the thrower standing', av) : t('x {x}, y {y} {where} (postype {postype})', av));
     if (e.kind === 'projectile') {
       const m = e.motion || {};
-      prop('Speed', 'velocity ' + pairText(m.velocity) + ', accel ' + pairText(m.accel) + (m.velmul && (m.velmul[0] !== 1 || m.velmul[1] !== 1) ? ', velmul ' + pairText(m.velmul) : '') + ' per frame');
+      const mv = { velocity: pairText(m.velocity), accel: pairText(m.accel), velmul: pairText(m.velmul) };
+      prop(t('Speed'), m.velmul && (m.velmul[0] !== 1 || m.velmul[1] !== 1) ? t('velocity {velocity}, accel {accel}, velmul {velmul} per frame', mv) : t('velocity {velocity}, accel {accel} per frame', mv));
       const L2 = e.life || {};
-      prop('Ends', (L2.removetime ? (L2.removetime.value === -1 ? 'no timer (projremovetime -1)' : 'projremovetime ' + fmt(L2.removetime.value)) : '') + '; height bound ' + pairText(L2.heightbound) + '; edge bound ' + fmt(L2.edgebound && L2.edgebound.value) + ' past the screen');
-      prop('Hits', 'projhits ' + fmt(L2.hits && L2.hits.value) + ', projmisstime ' + fmt(L2.misstime && L2.misstime.value) + ', projpriority ' + fmt(L2.priority && L2.priority.value));
-      const an = (x) => (!x ? '?' : x.foreign ? x.foreign + ' (common effects)' : x.depends ? 'depends on ' + x.depends : x.action === -1 ? 'none (-1)' : 'action ' + x.action) + (x && x.how && x.how !== 'file' ? ' (' + x.how + ')' : '');
-      prop('Animations', 'flying ' + (e.look.action === null ? (e.look.raw || '?') : 'action ' + e.look.action) + (e.look.how === 'default' ? ' (projanim not set: 0)' : '') + '; on hit ' + an(e.hitAnim) + '; vanishing ' + an(e.remAnim) + '; cancelled ' + an(e.cancelAnim));
+      prop(t('Ends'), t('{timer}; height bound {height}; edge bound {edge} past the screen', { timer: L2.removetime ? (L2.removetime.value === -1 ? t('no timer (projremovetime -1)') : t('projremovetime {n}', { n: fmt(L2.removetime.value) })) : '',
+        height: pairText(L2.heightbound), edge: fmt(L2.edgebound && L2.edgebound.value) }));
+      prop(t('Hits'), t('projhits {hits}, projmisstime {misstime}, projpriority {priority}', { hits: fmt(L2.hits && L2.hits.value), misstime: fmt(L2.misstime && L2.misstime.value), priority: fmt(L2.priority && L2.priority.value) }));
+      const an = (x) => (!x ? '?' : x.foreign ? t('{anim} (common effects)', { anim: x.foreign }) : x.depends ? t('depends on {formula}', { formula: x.depends }) : x.action === -1 ? t('none (-1)') : t('action {action}', { action: x.action })) + (x && x.how && x.how !== 'file' ? ' (' + howWord(x.how) + ')' : '');
+      const fly = e.look.action === null ? (e.look.raw || '?') : t('action {action}', { action: e.look.action });
+      prop(t('Animations'), t('flying {anim}; on hit {hit}; vanishing {vanish}; cancelled {cancel}', { anim: e.look.how === 'default' ? t('{anim} (projanim not set: 0)', { anim: fly }) : fly, hit: an(e.hitAnim), vanish: an(e.remAnim), cancel: an(e.cancelAnim) }));
     } else {
       const m = e.motion || {};
-      prop('Speed', (m.headerVel ? 'velset ' + pairText(m.headerVel) + ' at its state\'s start' : 'no velset on its state') + '; then its own VelSet / VelAdd / PosAdd, physics ' + (m.physics || 'n').toUpperCase());
+      const physics = (m.physics || 'n').toUpperCase();
+      prop(t('Speed'), m.headerVel ? t('velset {vel} at its state\'s start; then its own VelSet / VelAdd / PosAdd, physics {physics}', { vel: pairText(m.headerVel), physics })
+        : t('no velset on its state; then its own VelSet / VelAdd / PosAdd, physics {physics}', { physics }));
     }
     const sc = e.scale || {};
-    prop('Scale', 'drawn at ' + pairText(sc.draw) + ' (' + sc.drawHow + '); boxes at ' + pairText(sc.clsn) + ' (' + sc.clsnHow + ')');
-    if (e.path) prop('Its path', pathWords(e));
-    if (e.screen && (e.screen.middle !== null || e.screen.corner !== null)) prop('Off screen', 'with the camera still, it passes the screen edge + ' + e.screen.edgebound + ' after ' + (e.screen.middle !== null ? e.screen.middle + ' frames thrown from the middle of the screen' : '') + (e.screen.corner !== null ? (e.screen.middle !== null ? ', ' : '') + e.screen.corner + ' frames thrown from one corner to the other' : '') + ' (' + e.screen.width + ' wide)');
-    if (e.path && e.path.mayEnd && e.path.mayEnd.length) prop('May end sooner', e.path.mayEnd.map((m) => m.type + ' at ' + m.file + ' line ' + m.line + ' when ' + m.text).join('; '));
+    // drawHow / clsnHow are the server's words for where each scale comes from
+    prop(t('Scale'), t('drawn at {draw} ({drawHow}); boxes at {clsn} ({clsnHow})', { draw: pairText(sc.draw), drawHow: I18n.server(sc.drawHow), clsn: pairText(sc.clsn), clsnHow: I18n.server(sc.clsnHow) }));
+    if (e.path) prop(t('Its path'), pathWords(e));
+    if (e.screen && (e.screen.middle !== null || e.screen.corner !== null)) {
+      const after = [e.screen.middle !== null ? t('{n} frames thrown from the middle of the screen', { n: e.screen.middle }) : null,
+        e.screen.corner !== null ? t('{n} frames thrown from one corner to the other', { n: e.screen.corner }) : null].filter(Boolean).join(', ');
+      prop(t('Off screen'), t('with the camera still, it passes the screen edge + {edge} after {after} ({width} wide)', { edge: e.screen.edgebound, after, width: e.screen.width }));
+    }
+    if (e.path && e.path.mayEnd && e.path.mayEnd.length) prop(t('May end sooner'), e.path.mayEnd.map((m) => t('{type} at {file} line {line} when {trigger}', { type: m.type, file: m.file, line: m.line, trigger: m.text })).join('; '));
     card.append(props);
     if (e.depends && e.depends.length) {
       const box = el('div', { class: 'pjdeps' }, el('b', { text: 'Depends on the game: ' }), 'these are written as formulas, so the numbers they decide are left out: ');
-      e.depends.forEach((d, i) => { if (i) box.append('; '); box.append(d.what + ' = ', el('code', { text: d.expr }), d.line ? ' (' + d.file + ' line ' + d.line + ')' : ''); });
+      // d.what: the server's words for the number (or a parameter's name); d.expr as written
+      e.depends.forEach((d, i) => { if (i) box.append('; '); box.append(I18n.server(d.what) + ' = ', el('code', { text: d.expr }), d.line ? ' ' + t('({file} line {line})', { file: d.file, line: d.line }) : ''); });
       card.append(box);
     }
     for (const x of (e.notes || [])) card.append(el('div', { class: 'fdnote', text: x }));
@@ -1419,14 +1585,17 @@
   }
   function pathWords(e) {
     const p = e.path, end = p.end;
-    const ptxt = (k) => { const q = p.pts[k]; return q ? 'x ' + fmt(q[0]) + ', y ' + fmt(q[1]) : '?'; };
+    const ptxt = (k) => { const q = p.pts[k]; return q ? t('x {x}, y {y}', { x: fmt(q[0]), y: fmt(q[1]) }) : '?'; };
     const parts = [];
-    if (e.firstHit !== null && e.firstHit !== undefined && p.pts[e.firstHit]) parts.push('first hit box on its frame ' + (e.firstHit + 1) + ' at ' + ptxt(e.firstHit));
-    if (end.why === 'cap') parts.push('still flying after ' + end.tick + ' frames');
-    else if (end.why === 'depends') parts.push('after frame ' + end.tick + ' it depends on ' + end.text + (end.line ? ' (' + end.file + ' line ' + end.line + ')' : ''));
-    else parts.push('it ' + pjEndWords(e) + ' after ' + end.tick + ' frames' + (p.pts.length ? ', last at ' + ptxt(p.pts.length - 1) : ''));
-    if (p.turns && p.turns.length) parts.push('turns around on frame ' + p.turns.map((t) => t + 1).join(', '));
-    if (p.cut) parts.push('drawn for its first ' + p.pts.length + ' frames: past that it is beyond any screen' + (e.kind === 'projectile' ? ', where the engine removes a projectile' : ' (a helper flies on off screen)'));
+    if (e.firstHit !== null && e.firstHit !== undefined && p.pts[e.firstHit]) parts.push(t('first hit box on its frame {n} at {at}', { n: e.firstHit + 1, at: ptxt(e.firstHit) }));
+    if (end.why === 'cap') parts.push(t('still flying after {n} frames', { n: end.tick }));
+    else if (end.why === 'depends') {
+      const dv = { n: end.tick, cause: end.text, file: end.file, line: end.line };
+      parts.push(end.line ? t('after frame {n} it depends on {cause} ({file} line {line})', dv) : t('after frame {n} it depends on {cause}', dv));
+    } else parts.push(p.pts.length ? t('it {end} after {n} frames, last at {at}', { end: pjEndWords(e), n: end.tick, at: ptxt(p.pts.length - 1) }) : t('it {end} after {n} frames', { end: pjEndWords(e), n: end.tick }));
+    if (p.turns && p.turns.length) parts.push(t('turns around on frame {n}', { n: p.turns.map((x) => x + 1).join(', ') }));
+    if (p.cut) parts.push(e.kind === 'projectile' ? t('drawn for its first {n} frames: past that it is beyond any screen, where the engine removes a projectile', { n: p.pts.length })
+      : t('drawn for its first {n} frames: past that it is beyond any screen (a helper flies on off screen)', { n: p.pts.length }));
     return parts.join('; ');
   }
 
@@ -1455,23 +1624,30 @@
     const k = e.path.chain.indexOf(sg);
     const ys = e.path.pts.filter((p) => p[5] === k).map((p) => p[1]);
     const top = ys.length ? Math.min(y0, ...ys) : y0, low = ys.length ? Math.max(y0, ...ys) : y0;
-    const ground = (a, b) => (b >= 0 && a < 0 ? ' to the ground' : '');
-    if (top <= Math.min(y0, y1) - 0.5) parts.push('rises ' + fmt(y0 - top) + ', then falls ' + fmt(y1 - top) + ground(top, y1));
-    else if (low >= Math.max(y0, y1) + 0.5) parts.push('falls ' + fmt(low - y0) + ground(y0, low) + ', then rises ' + fmt(low - y1));
-    else if (Math.abs(dy) >= 0.5) parts.push((dy > 0 ? 'falls ' : 'rises ') + fmt(Math.abs(dy)) + (dy > 0 ? ground(y0, y1) : ''));
-    if (Math.abs(dx) >= 0.5) parts.push('moves ' + (dx > 0 ? 'forward' : 'back') + ' ' + fmt(Math.abs(dx) / n) + ' a frame');
-    if (!parts.length) parts.push('holds still');
+    // (it lands when it ends at or under the ground from above it)
+    const ground = (a, b) => b >= 0 && a < 0;
+    if (top <= Math.min(y0, y1) - 0.5) parts.push(ground(top, y1) ? t('rises {up}, then falls {down} to the ground', { up: fmt(y0 - top), down: fmt(y1 - top) }) : t('rises {up}, then falls {down}', { up: fmt(y0 - top), down: fmt(y1 - top) }));
+    else if (low >= Math.max(y0, y1) + 0.5) parts.push(ground(y0, low) ? t('falls {down} to the ground, then rises {up}', { down: fmt(low - y0), up: fmt(low - y1) }) : t('falls {down}, then rises {up}', { down: fmt(low - y0), up: fmt(low - y1) }));
+    else if (Math.abs(dy) >= 0.5) parts.push(dy > 0 ? (ground(y0, y1) ? t('falls {down} to the ground', { down: fmt(Math.abs(dy)) }) : t('falls {down}', { down: fmt(Math.abs(dy)) })) : t('rises {up}', { up: fmt(Math.abs(dy)) }));
+    if (Math.abs(dx) >= 0.5) parts.push(dx > 0 ? t('moves forward {n} a frame', { n: fmt(Math.abs(dx) / n) }) : t('moves back {n} a frame', { n: fmt(Math.abs(dx) / n) }));
+    if (!parts.length) parts.push(t('holds still'));
     for (const p of (e.path.pauses || []).filter((q) => q.state === sg.state && q.tick >= sg.from && (sg.to === null || sg.to === undefined || q.tick < sg.to || (q.tick === sg.from && sg.to === sg.from)))) {
-      parts.push(p.kind + ': the others stand frozen ' + nFrames(p.time) + (p.movetime >= p.time ? ', it moves on' : ', it moves for ' + p.movetime));
+      // p.kind: the controller (Pause, SuperPause), named as written
+      parts.push(p.movetime >= p.time ? t('{kind}: the others stand frozen {time}, it moves on', { kind: p.kind, time: nFrames(p.time) })
+        : t('{kind}: the others stand frozen {time}, it moves for {n}', { kind: p.kind, time: nFrames(p.time), n: p.movetime }));
     }
     return parts.join(' · ');
   }
   function chainEnd(e, sg) {
-    if (sg.how === 'changestate') return (sg.toState !== undefined ? '→ state ' + sg.toState : 'changes state') + (sg.endText ? ' when ' + sg.endText : '');
-    if (sg.how === 'lands') return 'lands (the engine sends it to state 52)';
-    if (sg.how === 'destroyself') return 'destroys itself' + (sg.endText ? ' when ' + sg.endText : '');
-    if (sg.how === 'cap') return 'still going at frame ' + sg.to + ', where the walk stops';
-    if (sg.how === 'depends') return 'then it depends on ' + (e.path.end.text || 'the game');
+    // sg.endText: the trigger that ends it, as written
+    if (sg.how === 'changestate') {
+      const cv = { state: String(sg.toState), trigger: sg.endText };
+      return sg.toState !== undefined ? (sg.endText ? t('→ state {state} when {trigger}', cv) : t('→ state {state}', cv)) : (sg.endText ? t('changes state when {trigger}', cv) : t('changes state'));
+    }
+    if (sg.how === 'lands') return t('lands (the engine sends it to state 52)');
+    if (sg.how === 'destroyself') return sg.endText ? t('destroys itself when {trigger}', { trigger: sg.endText }) : t('destroys itself');
+    if (sg.how === 'cap') return t('still going at frame {n}, where the walk stops', { n: sg.to });
+    if (sg.how === 'depends') return t('then it depends on {cause}', { cause: e.path.end.text || t('the game') });
     return '';
   }
   // The states a helper is followed through (two or more): its numbers, its
@@ -1505,8 +1681,8 @@
       }
       const tk = el('div', { class: 'tk', 'aria-hidden': 'true' });
       if (fr.time > 0) for (let t = 0; t < Math.min(fr.time, 60); t++) tk.append(el('i', { class: hasHit ? 'a' : 's' }));
-      cell.append(stage, el('div', { class: 'cap', title: '.air line ' + fr.line }, el('b', { text: '#' + fr.elem }), ' · ' + fr.group + ',' + fr.number + ' · ' + fr.time + 't'),
-        tk, el('div', { class: 'fn' }, el('b', { text: fr.elem }), fr.holds ? 'holds' : fr.time + 't'));
+      cell.append(stage, el('div', { class: 'cap', title: t('.air line {line}', { line: fr.line }) }, el('b', { text: '#' + fr.elem }), ' · ' + fr.group + ',' + fr.number + ' · ' + t('{n}t', { n: fr.time })),
+        tk, el('div', { class: 'fn' }, el('b', { text: fr.elem }), fr.holds ? t('holds') : t('{n}t', { n: fr.time })));
       strip.append(cell);
     });
   }
@@ -1514,6 +1690,15 @@
   // before the dark dash that hits): one heading and one strip per state of
   // the walk, every strip in ONE frame and scale (the union of every state's
   // sprites and boxes), so the ground line and size never jump between them.
+  // The frames' legend: "drawn 2x the game's 320-wide screen: sprite at 1,
+  // 1, boxes at 1, 1" (every: each state of a helper's walk, at one scale).
+  function drawnAt(every, z, sS, bS, k) {
+    const v = { zoom: z >= 1 ? z + 'x' : Math.round(z * 100) + '%', sprite: pairText(sS), boxes: pairText(bS), localcoord: k !== 1 ? model.localcoord.join('x') : '' };
+    if (every) return k !== 1 ? t('every state drawn {zoom} the game\'s 320-wide screen: sprite at {sprite}, boxes at {boxes}, localcoord {localcoord}', v)
+      : t('every state drawn {zoom} the game\'s 320-wide screen: sprite at {sprite}, boxes at {boxes}', v);
+    return k !== 1 ? t('drawn {zoom} the game\'s 320-wide screen: sprite at {sprite}, boxes at {boxes}, localcoord {localcoord}', v)
+      : t('drawn {zoom} the game\'s 320-wide screen: sprite at {sprite}, boxes at {boxes}', v);
+  }
   function renderChainFrames(host, e, chain) {
     const k = 320 / ((model.localcoord && model.localcoord[0]) || 320);
     const sS = pjDrawScale(e);
@@ -1534,19 +1719,19 @@
     const raw = box ? Math.min((cw - 8) / box.w, (ch - 8) / box.h) : 1;
     const z = raw >= 1 ? Math.min(4, Math.floor(raw)) : raw;
     host.append(el('h2', { class: 'bk-sh' }, 'Its frames', el('span', { class: 'k', lang: 'ja', text: '連続写真' }),
-      el('span', { class: 'aside', text: chain.length + ' states from state ' + chain[0].state })));
+      el('span', { class: 'aside', text: t('{n} states from state {state}', { n: chain.length, state: chain[0].state }) })));
     const fh = e.path.firstHit;
     chain.forEach((sg, i) => {
       const art = arts[i];
       const to = sg.to === null || sg.to === undefined ? sg.from : sg.to;
-      const head = el('div', { class: 'pjst' }, el('span', { class: 'sbn', 'aria-hidden': 'true', text: String(i + 1) }), el('span', { class: 'sn', text: 'State ' + sg.state }),
-        el('span', { text: (to > sg.from ? 'frames ' + (sg.from + 1) + '–' + to : 'frame ' + (sg.from + 1)) + ' of its life' }),
+      const head = el('div', { class: 'pjst' }, el('span', { class: 'sbn', 'aria-hidden': 'true', text: String(i + 1) }), el('span', { class: 'sn', text: t('State {no}', { no: sg.state }) }),
+        el('span', { text: to > sg.from ? t('frames {a}–{b} of its life', { a: sg.from + 1, b: to }) : t('frame {a} of its life', { a: sg.from + 1 }) }),
         el('span', { text: chainWords(e, sg) }),
-        sg.hit ? el('span', { class: 'hd', text: 'its HitDef (' + sg.hit.file + ' line ' + sg.hit.line + ')' }) : null,
+        sg.hit ? el('span', { class: 'hd', text: t('its HitDef ({file} line {line})', { file: sg.hit.file, line: sg.hit.line }) }) : null,
         el('span', { text: chainEnd(e, sg) }),
-        el('span', { text: art ? 'action ' + art.action + ', ' + art.frames.length + (art.frames.length === 1 ? ' element' : ' elements') : 'its animation is not settled' }));
+        el('span', { text: !art ? t('its animation is not settled') : art.frames.length === 1 ? t('action {action}, 1 element', { action: art.action }) : t('action {action}, {n} elements', { action: art.action, n: art.frames.length }) }));
       host.append(head);
-      if (!art || !art.exists) { host.append(el('div', { class: 'none', text: art ? 'Action ' + art.action + ' is not in the .air.' : 'Its animation here depends on the game.' })); return; }
+      if (!art || !art.exists) { host.append(el('div', { class: 'none', text: art ? t('Action {action} is not in the .air.', { action: art.action }) : 'Its animation here depends on the game.' })); return; }
       // Edit off: every column at least as wide as the shared frame, so no
       // sprite or box draws into its neighbor (a long state scrolls in its strip).
       const strip = el('div', { class: 'strip pjch', style: box ? '--ph:' + Math.min(ch, Math.ceil(box.h * z) + 14) + 'px;--colw:' + Math.min(cw, Math.ceil(box.w * z) + 6) + 'px' : null });
@@ -1556,8 +1741,15 @@
     });
     host.append(el('div', { class: 'legend' },
       el('span', {}, el('i', { style: 'border-color:var(--c1hit);background:var(--c1hit)' }), 'Clsn1 (its hit box)'), el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
-      el('span', { text: 'every state drawn ' + (z >= 1 ? z + 'x' : Math.round(z * 100) + '%') + ' the game\'s 320-wide screen: sprite at ' + pairText(sS) + ', boxes at ' + pairText(bS) + (k !== 1 ? ', localcoord ' + model.localcoord.join('x') : '') }),
+      el('span', { text: drawnAt(true, z, sS, bS, k) }),
       el('span', { text: 'a hit box counts only where its HitDef has fired' })));
+  }
+  // "action 7811, 4 elements, drawn by an Explod; the helper goes on through
+  // states 1200 → 1210 (its path)"
+  function projFramesAside(e, art, chain) {
+    const v = { action: art.action, n: art.frames.length, states: chain ? chain.map((sg) => sg.state).join(' → ') : '' };
+    if (e.kind === 'explod') return chain ? t('action {action}, {n} elements, drawn by an Explod; the helper goes on through states {states} (its path)', v) : t('action {action}, {n} elements, drawn by an Explod', v);
+    return chain ? t('action {action}, {n} elements; the helper goes on through states {states} (its path)', v) : t('action {action}, {n} elements', v);
   }
   function renderProjFrames(host, e) {
     const chain = chainOf(e);
@@ -1570,8 +1762,13 @@
     // An Explod-drawn helper followed through its states keeps the Explod's
     // frames (as before); the aside names the states its path follows.
     host.append(el('h2', { class: 'bk-sh' }, 'Its frames', el('span', { class: 'k', lang: 'ja', text: '連続写真' }),
-      art ? el('span', { class: 'aside', text: 'action ' + art.action + ', ' + art.frames.length + ' elements' + (e.kind === 'explod' ? ', drawn by an Explod' : '') + (chain ? '; the helper goes on through states ' + chain.map((sg) => sg.state).join(' → ') + ' (its path)' : '') }) : null));
-    if (!art || !art.exists) { host.append(el('div', { class: 'none', text: e.look.action === null ? 'Its animation depends on ' + (e.look.raw || 'a formula') + '.' : 'Action ' + (art ? art.action : e.look.action) + ' is not in the .air' + (e.kind === 'projectile' ? ': the engine copies the animation the thrower is playing.' : '.') })); return; }
+      art ? el('span', { class: 'aside', text: projFramesAside(e, art, chain) }) : null));
+    if (!art || !art.exists) {
+      const nv = { formula: e.look.raw || t('a formula'), action: art ? art.action : e.look.action };
+      host.append(el('div', { class: 'none', text: e.look.action === null ? t('Its animation depends on {formula}.', nv)
+        : e.kind === 'projectile' ? t('Action {action} is not in the .air: the engine copies the animation the thrower is playing.', nv) : t('Action {action} is not in the .air.', nv) }));
+      return;
+    }
     const boxesOf = e.kind === 'explod' ? projAnim(e.look.action) : art;
     const rectOf = (f) => { const r = frameRect(f); return r ? [r[0] * sx, r[1] * sy, r[2] * sx, r[3] * sy] : null; };
     const bxr = (r) => [r[0] * bx, r[1] * by, r[2] * bx, r[3] * by];
@@ -1591,8 +1788,8 @@
     const blank = (projAnim(e.look.action) || {}).noSprite || e.look.blank;
     host.append(el('div', { class: 'legend' },
       el('span', {}, el('i', { style: 'border-color:var(--c1hit);background:var(--c1hit)' }), 'Clsn1 (its hit box)'), el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
-      el('span', { text: 'drawn ' + (z >= 1 ? z + 'x' : Math.round(z * 100) + '%') + ' the game\'s 320-wide screen: sprite at ' + pairText(sS) + ', boxes at ' + pairText(bS) + (k !== 1 ? ', localcoord ' + model.localcoord.join('x') : '') }),
-      e.kind === 'explod' ? el('span', { text: 'boxes: the blank helper\'s action ' + e.look.action + ', element by element' }) : null,
+      el('span', { text: drawnAt(false, z, sS, bS, k) }),
+      e.kind === 'explod' ? el('span', { text: t('boxes: the blank helper\'s action {action}, element by element', { action: e.look.action }) }) : null,
       blank && e.kind === 'projectile' ? el('span', { class: 'warnline', text: 'its animation draws nothing: an invisible hit' }) : null));
   }
 
@@ -1604,9 +1801,9 @@
   function renderProjPath(host, e) {
     const p = e.path;
     host.append(el('h2', { class: 'bk-sh' }, 'Its path', el('span', { class: 'k', lang: 'ja', text: '軌道' }),
-      p ? el('span', { class: 'aside', text: p.pts.length + ' frames shown' + (e.spawn && e.spawn.postype !== 'p1' ? ', x from where it appears' : ', x from the thrower\'s axis') }) : null));
-    if (!p) { host.append(el('div', { class: 'none', text: 'Its path depends on ' + ((e.depends || []).map((d) => d.expr).join(', ') || 'a formula') + ': not drawn.' })); return; }
-    if (!p.pts.length) { host.append(el('div', { class: 'none', text: p.end.why === 'depends' ? 'Its motion depends on ' + p.end.text + ' from its first frame: not drawn.' : 'It ' + pjEndWords(e) + ' before it moves.' })); return; }
+      p ? el('span', { class: 'aside', text: e.spawn && e.spawn.postype !== 'p1' ? t('{n} frames shown, x from where it appears', { n: p.pts.length }) : t('{n} frames shown, x from the thrower\'s axis', { n: p.pts.length }) }) : null));
+    if (!p) { host.append(el('div', { class: 'none', text: t('Its path depends on {formula}: not drawn.', { formula: (e.depends || []).map((d) => d.expr).join(', ') || t('a formula') }) })); return; }
+    if (!p.pts.length) { host.append(el('div', { class: 'none', text: p.end.why === 'depends' ? t('Its motion depends on {cause} from its first frame: not drawn.', { cause: p.end.text }) : t('It {end} before it moves.', { end: pjEndWords(e) }) })); return; }
     const W = 520, H = 190;
     const thrS = attackStates().find((x) => x.no === e.thrower.state) || (model.states || []).find((x) => x.no === e.thrower.state) || null;
     const ta = thrS && e.thrower.timing && e.thrower.timing.anim !== null ? (thrS.anims || []).find((a) => a.action === e.thrower.timing.anim) : null;
@@ -1614,11 +1811,11 @@
     const xs = model.size ? model.size.xscale : 1, ys = model.size ? model.size.yscale : 1;
     const tr = tf && tf.w ? (() => { const r = frameRect(tf); return r ? [r[0] * xs, r[1] * ys, r[2] * xs, r[3] * ys] : null; })() : null;
     const pts = p.pts;
-    let l = Math.min(0, ...pts.map((q) => q[0])), r = Math.max(0, ...pts.map((q) => q[0])), t = Math.min(0, ...pts.map((q) => q[1])), b = 0;
-    if (tr) { l = Math.min(l, tr[0]); r = Math.max(r, tr[2]); t = Math.min(t, tr[1]); b = Math.max(b, tr[3]); }
-    const z = Math.min((W - 40) / Math.max(1, r - l), (H - (chainOf(e) ? 64 : 40)) / Math.max(1, b - t), 3);
+    let l = Math.min(0, ...pts.map((q) => q[0])), r = Math.max(0, ...pts.map((q) => q[0])), tp = Math.min(0, ...pts.map((q) => q[1])), b = 0;
+    if (tr) { l = Math.min(l, tr[0]); r = Math.max(r, tr[2]); tp = Math.min(tp, tr[1]); b = Math.max(b, tr[3]); }
+    const z = Math.min((W - 40) / Math.max(1, r - l), (H - (chainOf(e) ? 64 : 40)) / Math.max(1, b - tp), 3);
     const ox = 20 - l * z, oy = H - 14 - b * z;
-    const plate = el('div', { class: 'pjpath bk-plate', role: 'img', 'aria-label': 'its path: ' + pathWords(e) });
+    const plate = el('div', { class: 'pjpath bk-plate', role: 'img', 'aria-label': t('its path: {path}', { path: pathWords(e) }) });
     plate.append(el('div', { class: 'gnd', style: 'top:' + Math.round(oy) + 'px' }), el('div', { class: 'axv', style: 'left:' + Math.round(ox) + 'px' }));
     if (tf && tr) {
       const img = el('img', { alt: '', class: 'thr', src: '/api/sprite?char=' + encodeURIComponent(char) + '&group=' + tf.group + '&index=' + tf.number });
@@ -1631,9 +1828,15 @@
     if (e.screen && e.screen.middle !== null) {
       const x0 = pts.length ? pts[0][0] : 0;
       const sx = x0 + (e.screen.width / 2 + e.screen.edgebound) * Math.sign((pts[pts.length - 1][0] - x0) || 1);
-      if (sx * z + ox > 0 && sx * z + ox < W) plate.append(el('div', { class: 'scr', style: 'left:' + Math.round(ox + sx * z) + 'px', title: 'the screen edge + ' + e.screen.edgebound + ', thrown from the middle of a still screen' }));
+      if (sx * z + ox > 0 && sx * z + ox < W) plate.append(el('div', { class: 'scr', style: 'left:' + Math.round(ox + sx * z) + 'px', title: t('the screen edge + {edge}, thrown from the middle of a still screen', { edge: e.screen.edgebound }) }));
     }
-    pts.forEach((q, i) => plate.append(el('div', { class: 'dot' + (q[3] ? ' h' : '') + ((i + 1) % 10 === 0 ? ' t10' : ''), style: 'left:' + Math.round(ox + q[0] * z) + 'px;top:' + Math.round(oy + q[1] * z) + 'px', title: 'frame ' + (i + 1) + ': x ' + fmt(q[0]) + ', y ' + fmt(q[1]) + ', element ' + q[2] + (q[3] ? ', hit box out' : '') + (chainOf(e) && q[5] !== undefined && chainOf(e)[q[5]] ? ', state ' + chainOf(e)[q[5]].state : '') })));
+    const dotTip = (q, i) => {
+      const st = chainOf(e) && q[5] !== undefined && chainOf(e)[q[5]] ? chainOf(e)[q[5]].state : null;
+      const v = { n: i + 1, x: fmt(q[0]), y: fmt(q[1]), elem: q[2], state: st };
+      if (st === null) return q[3] ? t('frame {n}: x {x}, y {y}, element {elem}, hit box out', v) : t('frame {n}: x {x}, y {y}, element {elem}', v);
+      return q[3] ? t('frame {n}: x {x}, y {y}, element {elem}, hit box out, state {state}', v) : t('frame {n}: x {x}, y {y}, element {elem}, state {state}', v);
+    };
+    pts.forEach((q, i) => plate.append(el('div', { class: 'dot' + (q[3] ? ' h' : '') + ((i + 1) % 10 === 0 ? ' t10' : ''), style: 'left:' + Math.round(ox + q[0] * z) + 'px;top:' + Math.round(oy + q[1] * z) + 'px', title: dotTip(q, i) })));
     // A chain: a numbered mark just above and right of the place it enters
     // each state (the numbers of the frame headings); marks that would cover
     // one another move on to the right, so each number stays readable (Panini
@@ -1650,11 +1853,11 @@
           if (lx > W - 20) { lx = 4; ly = Math.min(H - 20, ly + 17); }
         }
         placed.push([lx, ly]);
-        plate.append(el('div', { class: 'sb', style: 'left:' + lx + 'px;top:' + ly + 'px', title: 'state ' + sg.state + ' from its frame ' + (sg.from + 1) }, el('span', { class: 'sbn', text: String(i + 1) })));
+        plate.append(el('div', { class: 'sb', style: 'left:' + lx + 'px;top:' + ly + 'px', title: t('state {state} from its frame {n}', { state: sg.state, n: sg.from + 1 }) }, el('span', { class: 'sbn', text: String(i + 1) })));
       });
     }
     const fh = e.firstHit !== null && e.firstHit !== undefined ? pts[e.firstHit] : null;
-    if (fh) plate.append(el('div', { class: 'mk', style: 'left:' + Math.round(ox + fh[0] * z) + 'px;top:' + Math.round(oy + fh[1] * z) + 'px', title: 'its first hit box: frame ' + (e.firstHit + 1) + ' of its flight' }));
+    if (fh) plate.append(el('div', { class: 'mk', style: 'left:' + Math.round(ox + fh[0] * z) + 'px;top:' + Math.round(oy + fh[1] * z) + 'px', title: t('its first hit box: frame {n} of its flight', { n: e.firstHit + 1 }) }));
     if (fh) {
       const art = e.kind === 'explod' && e.explod && !e.explod.anim.foreign ? projAnim(e.explod.anim.action) : projAnim(e.look.action);
       const boxA = e.kind === 'explod' ? projAnim(e.look.action) : art;
@@ -1683,20 +1886,34 @@
       }
     }
     const last = pts[pts.length - 1];
-    if (p.end.why !== 'cap' && !p.cut) plate.append(el('div', { class: 'mk end', style: 'left:' + Math.round(ox + last[0] * z) + 'px;top:' + Math.round(oy + last[1] * z) + 'px', title: 'it ' + pjEndWords(e) }));
-    plate.append(el('span', { class: 'tag', text: (z >= 1 ? fmt(z) + 'x' : Math.round(z * 100) + '%') + ' · ' + (fh ? 'first hit box at frame ' + (e.firstHit + 1) : p.hitUnknown ? 'hit box unknown' : 'no hit box') + ' · ' + (p.end.why === 'cap' ? (chain ? 'still going at frame ' + p.end.tick : 'flies on') : p.end.why === 'depends' ? 'depends on the game after frame ' + p.end.tick : pjEndWords(e) + ' at ' + p.end.tick) + (p.cut && !chain ? ' (drawn: its first ' + pts.length + ' frames)' : '') }));
+    if (p.end.why !== 'cap' && !p.cut) plate.append(el('div', { class: 'mk end', style: 'left:' + Math.round(ox + last[0] * z) + 'px;top:' + Math.round(oy + last[1] * z) + 'px', title: t('it {end}', { end: pjEndWords(e) }) }));
+    // "2x · first hit box at frame 4 · lands at 30": its scale, its hit, its end
+    const hitPart = fh ? t('first hit box at frame {n}', { n: e.firstHit + 1 }) : p.hitUnknown ? t('hit box unknown') : t('no hit box');
+    const endPart = p.end.why === 'cap' ? (chain ? t('still going at frame {n}', { n: p.end.tick }) : t('flies on'))
+      : p.end.why === 'depends' ? t('depends on the game after frame {n}', { n: p.end.tick }) : t('{end} at {n}', { end: pjEndWords(e), n: p.end.tick });
+    const zoom = z >= 1 ? fmt(z) + 'x' : Math.round(z * 100) + '%';
+    plate.append(el('span', { class: 'tag', text: zoom + ' · ' + hitPart + ' · ' + endPart + (p.cut && !chain ? ' ' + t('(drawn: its first {n} frames)', { n: pts.length }) : '') }));
     host.append(plate);
     if (chain) {
       const key = el('div', { class: 'pjkey' });
       chain.forEach((sg, i) => {
         const to = sg.to === null || sg.to === undefined ? sg.from : sg.to;
+        const kv = { state: sg.state, a: sg.from + 1, b: to };
         key.append(el('span', {}, el('span', { class: 'sbn', 'aria-hidden': 'true', text: String(i + 1) }),
-          'state ' + sg.state + ', frames ' + (sg.from + 1) + '–' + to + (sg.from > 0 && sg.from >= pts.length ? ' (past the drawn frames)' : '')));
+          sg.from > 0 && sg.from >= pts.length ? t('state {state}, frames {a}–{b} (past the drawn frames)', kv) : t('state {state}, frames {a}–{b}', kv)));
       });
-      if (p.cut) key.append(el('span', { text: 'drawn: its first ' + pts.length + ' frames, past them it is beyond any screen' }));
-      for (const pz of (p.pauses || [])) key.append(el('span', { text: 'frames ' + (pz.tick + 2) + '–' + (pz.tick + 1 + pz.time) + ': its ' + pz.kind + ' freezes the player and the opponent' + (pz.movetime >= pz.time ? '; it moves on' : '; it moves for ' + pz.movetime + ', then stands still') }));
+      if (p.cut) key.append(el('span', { text: t('drawn: its first {n} frames, past them it is beyond any screen', { n: pts.length }) }));
+      // pz.kind: the controller (Pause, SuperPause), named as written
+      for (const pz of (p.pauses || [])) {
+        const zv = { a: pz.tick + 2, b: pz.tick + 1 + pz.time, kind: pz.kind, n: pz.movetime };
+        key.append(el('span', { text: pz.movetime >= pz.time ? t('frames {a}–{b}: its {kind} freezes the player and the opponent; it moves on', zv)
+          : t('frames {a}–{b}: its {kind} freezes the player and the opponent; it moves for {n}, then stands still', zv) }));
+      }
       const nf = (p.mayEnd || []).filter((m) => m.type === 'changestate' || m.type === 'selfstate');
-      if (nf.length) key.append(el('span', { text: 'not followed (the files do not settle them): ' + nf.slice(0, 4).map((m) => 'state ' + m.to + ' when ' + m.text + ' (in ' + m.state + ')').join('; ') + (nf.length > 4 ? '; and ' + (nf.length - 4) + ' more' : '') }));
+      if (nf.length) {
+        const list = nf.slice(0, 4).map((m) => t('state {state} when {trigger} (in {from})', { state: String(m.to), trigger: m.text, from: m.state })).join('; ');
+        key.append(el('span', { text: nf.length > 4 ? t('not followed (the files do not settle them): {list}; and {n} more', { list, n: nf.length - 4 }) : t('not followed (the files do not settle them): {list}', { list }) }));
+      }
       host.append(key);
     }
   }
@@ -1717,7 +1934,7 @@
       const list = el('span', { class: 'cxto' });
       ts.forEach((x, i) => {
         if (i) list.append(', ');
-        list.append(el('span', { text: moveName(x.state) }), el('span', { class: 'sn', text: ' ' + x.state }));
+        list.append(el('span', { translate: 'no', text: moveName(x.state) }), el('span', { class: 'sn', text: ' ' + x.state }));
         if (!(x.hit && x.block)) list.append(el('small', { text: x.hit ? ' on hit' : ' on block' }));
         if (!x.exact) list.append(el('small', { text: ' ≈' }));
       });
@@ -1725,10 +1942,14 @@
     }
     const exact = to.filter((x) => x.exact), apx = to.filter((x) => !x.exact);
     const vias = [...new Set(exact.flatMap((x) => x.via))];
-    const where = [...new Set(to.map((x) => x.file + ' line ' + x.line))];
-    const note = el('div', { class: 'from' }, 'On hit and on block unless marked. Read from the [State -1] blocks that name this state'
-      + (vias.length ? ' (through ' + vias.join(', ') + ', which the [State -1], -2 or -3 sets for it)' : '') + ': ' + where.slice(0, 4).join(', ') + (where.length > 4 ? ' and ' + (where.length - 4) + ' more' : '') + '.');
-    if (apx.length) note.append(' ≈ = through ' + [...new Set(apx.flatMap((x) => x.via))].join(', ') + ', which this state sets in its own code; the [State -1] reads it a tick later.');
+    const where = [...new Set(to.map((x) => t('{file} line {line}', { file: x.file, line: x.line })))];
+    const rv = { vars: vias.join(', '), places: where.slice(0, 4).join(', '), n: where.length - 4 };
+    const read = vias.length
+      ? (where.length > 4 ? t('Read from the [State -1] blocks that name this state (through {vars}, which the [State -1], -2 or -3 sets for it): {places} and {n} more.', rv)
+        : t('Read from the [State -1] blocks that name this state (through {vars}, which the [State -1], -2 or -3 sets for it): {places}.', rv))
+      : (where.length > 4 ? t('Read from the [State -1] blocks that name this state: {places} and {n} more.', rv) : t('Read from the [State -1] blocks that name this state: {places}.', rv));
+    const note = el('div', { class: 'from' }, t('On hit and on block unless marked.') + ' ' + read);
+    if (apx.length) note.append(' ' + t('≈ = through {vars}, which this state sets in its own code; the [State -1] reads it a tick later.', { vars: [...new Set(apx.flatMap((x) => x.via))].join(', ') }));
     box.append(note);
     host.append(box);
   }
@@ -1747,11 +1968,11 @@
     if (!f) return;
     const card = el('div', { class: 'fd' });
     const head = el('div', { class: 'fdh' }, el('span', { class: 't', text: 'Frame data' }),
-      el('span', { class: 'tag', text: [f.attr ? f.attr[0].toUpperCase() + f.attr.slice(1) : b.type, f.guard ? f.guard.level : null].filter(Boolean).join(' · ') }));
+      el('span', { class: 'tag', translate: 'no', text: [f.attr ? capServer(f.attr) : b.type, f.guard ? I18n.server(f.guard.level) : null].filter(Boolean).join(' · ') }));
     if (f.anim !== null && f.anim !== undefined) {
       // Timing lives in the animation: the element times ARE startup, active
       // and recovery. The animation editor writes them.
-      head.append(el('button', { class: 'ed', text: 'Edit timing…', title: 'Open action ' + f.anim + ' in the animation editor: element times decide startup, active and recovery.',
+      head.append(el('button', { class: 'ed', text: 'Edit timing…', title: t('Open action {action} in the animation editor: element times decide startup, active and recovery.', { action: f.anim }),
         onclick: () => window.open('/animedit.html?char=' + encodeURIComponent(char) + '&name=' + encodeURIComponent(name) + '&action=' + f.anim, 'animedit-' + char, 'width=1440,height=900') }));
     }
     card.append(head);
@@ -1765,21 +1986,22 @@
     if (pj && (f.onHit === null || f.onHit === undefined) && (f.onBlock === null || f.onBlock === undefined)) {
       const pje = projById(pj.id), act = pjActive(pje), pt = pj.approx ? '≈' : '';
       card.append(el('div', { class: 'fdrow' },
-        n('Appears', f.startup, 'the frame the projectile appears on (frame 1 is the first frame of the move)'),
-        n('Active', act.text, 'the projectile\'s hit box: ' + act.tip),
-        n('Recovery', pj.recovery, 'your frames after it appears until you can act'),
-        n('Total', f.total, 'frames you cannot act'),
+        n(t('Appears'), f.startup, 'the frame the projectile appears on (frame 1 is the first frame of the move)'),
+        n(t('Active'), act.text, t('the projectile\'s hit box: {tip}', { tip: act.tip })),
+        n(t('Recovery'), pj.recovery, 'your frames after it appears until you can act'),
+        n(t('Total'), f.total, 'frames you cannot act'),
         n('PB hit', pj.onHit === null || pj.onHit === undefined ? null : pt + signed(pj.onHit), PB_TIP, 'sep ' + advCls(pj.onHit)),
         n('PB block', pj.onBlock === null || pj.onBlock === undefined ? null : pt + signed(pj.onBlock), PB_TIP, advCls(pj.onBlock))));
       card.append(el('div', { class: 'fdnote' }, 'A throw: the numbers after Appears are its projectile\'s (PB = point blank, if it connects on the first frame it can). ',
-        pj.by !== undefined ? (pj.by !== null ? 'This state is a helper\'s: Appears and Total count the helper\'s frames, Recovery and PB count state ' + pj.by + '\'s, the move that makes the helper. ' : 'This state is a helper\'s, and the frames of the move that makes it are not settled. ') : null,
+        pj.by !== undefined ? (pj.by !== null ? t('This state is a helper\'s: Appears and Total count the helper\'s frames, Recovery and PB count state {state}\'s, the move that makes the helper.', { state: pj.by }) + ' ' : 'This state is a helper\'s, and the frames of the move that makes it are not settled. ') : null,
         el('button', { class: 'pjlink', type: 'button', onclick: () => openProj(pj.id) }, 'Open the projectile →')));
     }
     const row = pj && (f.onHit === null || f.onHit === undefined) && (f.onBlock === null || f.onBlock === undefined) ? el('div', { hidden: true }) : el('div', { class: 'fdrow' },
-      n('Startup', f.startup, 'the first frame the attack can hit (frame 1 is the first frame of the move)'),
-      n('Active', f.active, 'frames the hit box stays out'),
-      n('Recovery', f.recovery, 'frames after the active frames until you can act again'),
-      n('Total', f.total, 'frames you cannot act' + (f.endHow === 'animtime' ? ': the state hands control back when its animation ends, and you act the frame after' : f.endHow === 'time' ? ': the state hands control back at a set time' : f.endHow === 'assumed' ? ': assumed to end with its animation (no end trigger found)' : '')),
+      n(t('Startup'), f.startup, 'the first frame the attack can hit (frame 1 is the first frame of the move)'),
+      n(t('Active'), f.active, 'frames the hit box stays out'),
+      n(t('Recovery'), f.recovery, 'frames after the active frames until you can act again'),
+      n(t('Total'), f.total, f.endHow === 'animtime' ? t('frames you cannot act: the state hands control back when its animation ends, and you act the frame after')
+        : f.endHow === 'time' ? t('frames you cannot act: the state hands control back at a set time') : f.endHow === 'assumed' ? t('frames you cannot act: assumed to end with its animation (no end trigger found)') : t('frames you cannot act')),
       f.knockdown ? n('On hit', 'KD', 'knockdown: the opponent falls, so frame advantage depends on their wake-up', 'sep kd')
         : n('On hit', f.onHit === undefined || f.onHit === null ? null : tilde + signed(f.onHit), hitTip, 'sep ' + advCls(f.onHit)),
       n('On block', f.onBlock === undefined || f.onBlock === null ? null : tilde + signed(f.onBlock), 'frames you are ahead after the opponent blocks on the first active frame: blockstun + 1 + the blockstop difference - your frames after contact (the 1 is the opponent getting control back mid-frame).', advCls(f.onBlock)));
@@ -1787,7 +2009,8 @@
 
     if (f.meter && f.meter.length) {
       const meter = el('div', { class: 'meter', title: 'one cell per frame' });
-      f.meter.forEach((c, i) => meter.append(el('i', { class: c + ((i + 1) % 5 === 0 ? ' n5' : ''), title: 'frame ' + (i + 1) + ': ' + ({ s: 'startup', a: 'active', r: 'recovery' })[c] })));
+      // (the server's meter holds s, a and r only)
+      f.meter.forEach((c, i) => meter.append(el('i', { class: c + ((i + 1) % 5 === 0 ? ' n5' : ''), title: c === 'a' ? t('frame {n}: active', { n: i + 1 }) : c === 'r' ? t('frame {n}: recovery', { n: i + 1 }) : t('frame {n}: startup', { n: i + 1 }) })));
       card.append(meter, el('div', { class: 'mkey' },
         el('span', {}, el('i', { class: 's' }), 'startup'),
         el('span', {}, el('i', { class: 'a' }), 'active'),
@@ -1805,11 +2028,11 @@
     const stat = (label, x, param, index, tip) => {
       if (!x) return;
       const box = el('div', { class: 'fds', title: tip });
-      box.append(el('div', { class: 'k' }, label, el('small', { text: param + (index ? '[' + (index + 1) + ']' : '') })));
+      box.append(el('div', { class: 'k' }, label, el('small', { translate: 'no', text: param + (index ? '[' + (index + 1) + ']' : '') })));
       const line = el('div', { class: 'in' });
       const err = el('div');
       if (x.how === 'computed' || x.how === 'unknown') {
-        line.append(el('span', { class: 'ro calc', text: x.value === null ? '?' : '≈' + x.value, title: 'a formula: ' + x.text + '. Read as a fresh first hit (variables at 0, float variables at 1). Edit it in the table.' }));
+        line.append(el('span', { class: 'ro calc', text: x.value === null ? '?' : '≈' + x.value, title: t('a formula: {formula}. Read as a fresh first hit (variables at 0, float variables at 1). Edit it in the table.', { formula: x.text }) }));
         box.append(line, el('div', { class: 'how', text: 'formula' }));
       } else if (!b.editable && x.how === 'file') {
         line.append(el('span', { class: 'ro', text: String(x.value) }));
@@ -1825,29 +2048,34 @@
           editValue(b, param, index, val, err, () => { input.value = shown; });
         };
         line.append(input);
-        box.append(line, el('div', { class: 'how', text: pinned ? (x.how === 'derived' ? 'from ' + x.from + ': typing a number sets it' : 'engine default: typing a number sets it') : 'from the file' }));
+        box.append(line, el('div', { class: 'how', text: pinned ? (x.how === 'derived' ? t('from {param}: typing a number sets it', { param: x.from }) : 'engine default: typing a number sets it') : 'from the file' }));
       }
       box.append(err);
       stats.append(box);
     };
-    stat('Hitstun', v.hitstun, 'ground.hittime', 0, 'frames the grounded opponent stays stunned after the hitstop');
-    stat('Blockstun', v.blockstun, 'guard.hittime', 0, 'frames the opponent stays stuck blocking after the blockstop');
+    stat(t('Hitstun'), v.hitstun, 'ground.hittime', 0, 'frames the grounded opponent stays stunned after the hitstop');
+    stat(t('Blockstun'), v.blockstun, 'guard.hittime', 0, 'frames the opponent stays stuck blocking after the blockstop');
     stat('Hitstop (you)', v.hitstop, 'pausetime', 0, 'frames you freeze when the hit connects');
     stat('Hitstop (them)', v.hitstopP2, 'pausetime', 1, 'frames the opponent shakes when the hit connects');
-    stat('Damage', v.damage, 'damage', 0, 'damage on hit');
-    stat('Chip', v.chip, 'damage', 1, 'damage on block');
+    stat(t('Damage'), v.damage, 'damage', 0, 'damage on hit');
+    stat(t('Chip'), v.chip, 'damage', 1, 'damage on block');
     card.append(stats);
 
+    // Its properties, a label each (a t() word) and a value in words; the
+    // server's own words (guard, hitflag) go through I18n.server. hitflag's
+    // is a list (framedata.js hitflagText): each entry is a key, and so is
+    // the combo clause after " - ".
     const props = el('div', { class: 'fdprops' });
-    const prop = (k, val) => { if (val !== null && val !== undefined && val !== '') props.append(el('div', {}, el('b', { text: k + ': ' }), String(val))); };
-    if (f.guard) prop('Blocked', f.guard.text);
-    prop('Hits', f.hits);
-    prop('Knockdown', f.knockdown === true ? 'yes' : f.knockdown === false ? 'no' : 'depends on a formula');
-    if (f.juggle !== null && f.juggle !== undefined) prop('Juggle cost', f.juggle);
-    if (f.armFrame > 1 || f.armHow !== 'file') prop('Armed', 'from frame ' + f.armFrame + (f.armHow === 'conditional' ? ' (when its condition holds)' : f.armHow === 'assumed' ? ' (assumed)' : ''));
+    const prop = (k, val) => { if (val !== null && val !== undefined && val !== '') props.append(el('div', { translate: 'no' }, el('b', { text: k + ': ' }), String(val))); };
+    const hitsWords = (s) => { if (!s) return s; const [list, ...only] = String(s).split(' - '); return [list.split(', ').map((w) => I18n.server(w)).join(', '), ...only.map((w) => I18n.server(w))].join(' - '); };
+    if (f.guard) prop(t('Blocked'), I18n.server(f.guard.text));
+    prop(t('Hits'), hitsWords(f.hits));
+    prop(t('Knockdown'), f.knockdown === true ? t('yes') : f.knockdown === false ? t('no') : t('depends on a formula'));
+    if (f.juggle !== null && f.juggle !== undefined) prop(t('Juggle cost'), f.juggle);
+    if (f.armFrame > 1 || f.armHow !== 'file') prop(t('Armed'), f.armHow === 'conditional' ? t('from frame {n} (when its condition holds)', { n: f.armFrame }) : f.armHow === 'assumed' ? t('from frame {n} (assumed)', { n: f.armFrame }) : t('from frame {n}', { n: f.armFrame }));
     card.append(props);
     for (const x of (f.notes || [])) card.append(el('div', { class: 'fdnote', text: x }));
-    if (f.assumed && f.assumed.length) card.append(el('div', { class: 'fdnote', text: '≈ assumes: ' + f.assumed.join('; ') }));
+    if (f.assumed && f.assumed.length) card.append(el('div', { class: 'fdnote', text: t('≈ assumes: {list}', { list: f.assumed.map((a) => I18n.server(a)).join('; ') }) }));
     renderExplodList(card, s);
     host.append(card);
   }
@@ -1892,7 +2120,7 @@
     const z = fit >= 2 ? 2 : fit >= 1 ? 1 : fit;
     const ox = Math.round((W2 - box.w * z) / 2 - box.l * z);
     const oy = Math.round(H2 - 14 - (box.t + box.h) * z);
-    const plate = el('div', { class: 'plate2 bk-plate', role: 'img', 'aria-label': 'element ' + e.elem + ' of action ' + a.action + ' with its boxes' });
+    const plate = el('div', { class: 'plate2 bk-plate', role: 'img', 'aria-label': t('element {elem} of action {action} with its boxes', { elem: e.elem, action: a.action }) });
     plate.append(el('div', { class: 'axv', style: 'left:' + ox + 'px' }), el('div', { class: 'gnd', style: 'top:' + oy + 'px' }));
     drawExplods(plate, s, a.action, tk, ox, oy, z, false);
     if (e.w && e.h) {
@@ -1911,26 +2139,31 @@
     const addBox = (r, cls) => plate.append(el('div', { class: 'box ' + cls, style: 'left:' + Math.round(ox + r[0] * z) + 'px;top:' + Math.round(oy + r[1] * z) + 'px;width:' + Math.max(1, Math.round((r[2] - r[0]) * z)) + 'px;height:' + Math.max(1, Math.round((r[3] - r[1]) * z)) + 'px' }));
     for (const r of e.clsn2 || []) addBox(r, 'c2');
     for (const r of e.clsn1 || []) addBox(r, c1.cls);
-    plate.append(el('span', { class: 'tag', text: 'element ' + e.elem + ', ' + (z === 2 || z === 1 ? z + 'x' : Math.round(z * 100) + '%') }));
+    plate.append(el('span', { class: 'tag', text: t('element {elem}, {zoom}', { elem: e.elem, zoom: z === 2 || z === 1 ? z + 'x' : Math.round(z * 100) + '%' }) }));
 
+    // A label each (a t() word) and a value in words or numbers; the
+    // server's own words (guard) go through I18n.server.
     const dl = el('dl', { class: 'bk-prof platedl' });
-    const row = (k, ...v) => dl.append(el('dt', { text: k }), el('dd', {}, ...v));
-    row('Sprite', e.group + ',' + e.number + (e.w ? '  ' + e.w + ' × ' + e.h : '  (no sprite)') + (e.flip ? '  ' + e.flip : ''));
-    row('Time', e.holds ? 'holds' : e.time + (e.time === 1 ? ' tick' : ' ticks') + ', from tick ' + e.start);
+    const row = (k, ...v) => dl.append(el('dt', { text: k }), el('dd', { translate: 'no' }, ...v));
+    row(t('Sprite'), e.group + ',' + e.number + (e.w ? '  ' + e.w + ' × ' + e.h : '  ' + t('(no sprite)')) + (e.flip ? '  ' + e.flip : ''));
+    row(t('Time'), e.holds ? t('holds') : e.time === 1 ? t('1 tick, from tick {start}', { start: e.start }) : t('{n} ticks, from tick {start}', { n: e.time, start: e.start }));
     const rc = (r) => r[0] + ',' + r[1] + ' → ' + r[2] + ',' + r[3];
-    (e.clsn1 || []).forEach((r, i) => row(i ? '' : 'Clsn1', el('span', { class: 'sw c1' }), rc(r)));
-    (e.clsn2 || []).forEach((r, i) => row(i ? '' : 'Clsn2', el('span', { class: 'sw c2' }), rc(r)));
-    row('Axis', e.axisX + ',' + e.axisY + (e.x || e.y ? '  offset ' + e.x + ',' + e.y : ''));
-    if (explodArt) for (const { e: x, pt } of explodsAt(s, a.action, tk)) row('Explod', 'action ' + x.anim.action + ', element ' + (pt[0] + 1) + ', ' + (x.layer.front ? 'over' : 'under') + ' the character');
+    (e.clsn1 || []).forEach((r, i) => row(i ? '' : t('Clsn1'), el('span', { class: 'sw c1' }), rc(r)));
+    (e.clsn2 || []).forEach((r, i) => row(i ? '' : t('Clsn2'), el('span', { class: 'sw c2' }), rc(r)));
+    row(t('Axis'), e.axisX + ',' + e.axisY + (e.x || e.y ? '  ' + t('offset {x},{y}', { x: e.x, y: e.y }) : ''));
+    if (explodArt) for (const { e: x, pt } of explodsAt(s, a.action, tk)) {
+      const xv = { action: x.anim.action, elem: pt[0] + 1 };
+      row(t('Explod'), x.layer.front ? t('action {action}, element {elem}, over the character', xv) : t('action {action}, element {elem}, under the character', xv));
+    }
     dl.append(el('div', { class: 'gap' }));
     const v = f.values || {};
     const val = (x) => (!x || x.value === null || x.value === undefined ? '—' : (x.how === 'computed' ? '≈' : '') + x.value);
-    if (v.damage || v.chip) row('Damage', val(v.damage) + (v.chip ? ', chip ' + val(v.chip) : ''));
-    if (v.hitstun) row('Hitstun', val(v.hitstun));
-    if (v.blockstun) row('Blockstun', val(v.blockstun));
-    if (v.hitstop) row('Hitstop', val(v.hitstop) + (v.hitstopP2 ? ' / ' + val(v.hitstopP2) : ''));
-    if (f.guard) row('Blocked', f.guard.text);
-    row('Knockdown', f.knockdown === true ? 'yes' : f.knockdown === false ? 'no' : 'depends on a formula');
+    if (v.damage || v.chip) row(t('Damage'), v.chip ? t('{damage}, chip {chip}', { damage: val(v.damage), chip: val(v.chip) }) : val(v.damage));
+    if (v.hitstun) row(t('Hitstun'), val(v.hitstun));
+    if (v.blockstun) row(t('Blockstun'), val(v.blockstun));
+    if (v.hitstop) row(t('Hitstop'), val(v.hitstop) + (v.hitstopP2 ? ' / ' + val(v.hitstopP2) : ''));
+    if (f.guard) row(t('Blocked'), I18n.server(f.guard.text));
+    row(t('Knockdown'), f.knockdown === true ? t('yes') : f.knockdown === false ? t('no') : t('depends on a formula'));
     host.append(el('div', { class: 'platerow pr' }, plate, dl));
   }
 
@@ -1953,11 +2186,12 @@
       route = '/api/char-move-add';
       body = { char, file: b.file, state: b.state, ordinal: b.ordinal, param, values, sha1, confirm: confirmed === true || undefined };
     } else {
-      errBox.append(el('div', { class: 'fderr', text: param + ' is written without this value; set it in the table below.' })); undo(); return;
+      errBox.append(el('div', { class: 'fderr', text: t('{param} is written without this value; set it in the table below.', { param }) })); undo(); return;
     }
     try {
       const r = await postJson(route, body);
-      say(param + (index ? '[' + (index + 1) + ']' : '') + ' in state ' + b.state + ' → ' + (r.written !== undefined ? r.written : value) + (r.backupCreated ? ' · original kept as ' + r.backup : ''), 'ok');
+      say(t('{param} in state {state} → {value}', { param: param + (index ? '[' + (index + 1) + ']' : ''), state: b.state, value: r.written !== undefined ? r.written : value })
+        + (r.backupCreated ? ' · ' + t('original kept as {file}', { file: r.backup }) : ''), 'ok');
       await load(true);
     } catch (e) {
       if (e.code === 'confirm') {
@@ -1978,90 +2212,92 @@
 
   // THE ENGINE'S PARAMETERS IN FIGHTING-GAME WORDS: [what a player calls it,
   // what it does]. The table groups them the way a frame data page would.
+  // Every name and note goes through t(): a bare word, a note with "=" in it
+  // ("1 = knocks down on hit") or one like "x on block" is a key only that way.
   const FGC = {
-    damage: ['Damage', 'damage on hit, chip damage on block'],
-    getpower: ['Meter gain', 'meter you gain on hit, on block'],
-    givepower: ['Meter given', 'meter the opponent gains on hit, on block'],
-    dizzypoints: ['Stun damage', 'fills the opponent\'s dizzy meter'],
-    guardpoints: ['Guard crush damage', 'drains the opponent\'s guard meter'],
-    redlife: ['Recoverable damage', 'red life the opponent can regain (tag)'],
-    numhits: ['Hit count', 'added to the combo counter'],
-    kill: ['Can KO', '0 = this hit cannot finish the round'],
-    'guard.kill': ['Chip can KO', '0 = chip damage cannot finish the round'],
-    pausetime: ['Hitstop', 'freeze when it hits: you, the opponent'],
-    'guard.pausetime': ['Blockstop', 'freeze when it is blocked: you, the opponent'],
-    'ground.hittime': ['Hitstun', 'frames the grounded opponent stays stunned'],
-    'air.hittime': ['Air hitstun', 'hitstun when the opponent is airborne and not knocked down'],
-    'guard.hittime': ['Blockstun', 'frames the opponent stays stuck blocking'],
-    'down.hittime': ['OTG hitstun', 'hitstun when hitting a downed opponent'],
-    'ground.slidetime': ['Hit slide', 'frames the opponent slides back on hit'],
-    'guard.slidetime': ['Block slide', 'frames the opponent slides back on block'],
-    'guard.ctrltime': ['Block recovery', 'frames until a blocking opponent can act'],
-    'airguard.ctrltime': ['Air block recovery', 'frames until an opponent blocking in the air can act'],
-    yaccel: ['Hitstun gravity', 'how fast a launched opponent falls'],
-    attr: ['Attack type', 'stance, then normal / special / super and attack / throw / projectile'],
-    hitflag: ['Can hit', 'H standing, L crouching, A airborne, F falling, D downed; + combo only, - never in a combo'],
-    guardflag: ['Block', 'H standing, L crouching, A in the air: H only is an overhead, L only a low, none unblockable'],
-    priority: ['Trade priority', 'higher wins when two attacks trade; Hit / Miss / Dodge on a tie'],
-    animtype: ['Hit reaction', 'light / medium / hard / back / up / diag-up'],
-    'air.animtype': ['Air hit reaction', 'the reaction when hit airborne'],
-    'ground.type': ['Hit height', 'high / low / trip (a sweep)'],
-    'air.type': ['Air hit height', 'high / low / trip when hit airborne'],
-    hitonce: ['Single target', '1 = hits only one opponent'],
-    forcestand: ['Force standing', 'a crouching opponent is stood up'],
-    forcecrouch: ['Force crouching', 'a standing opponent is made to crouch'],
-    'guard.dist': ['Proximity block range', 'how close the opponent must be to start blocking'],
-    'ground.velocity': ['Hit pushback', 'x (pushback), y (launch) on a grounded hit'],
-    'guard.velocity': ['Block pushback', 'x on block'],
-    'air.velocity': ['Air hit launch', 'x, y when the opponent is hit airborne'],
-    'airguard.velocity': ['Air block pushback', 'x, y when blocked in the air'],
-    'down.velocity': ['OTG launch', 'x, y when hitting a downed opponent'],
-    'down.bounce': ['OTG bounce', '1 = a downed opponent bounces'],
-    'ground.cornerpush.veloff': ['Corner pushback (hit)', 'how far you are pushed when the opponent is cornered'],
-    'guard.cornerpush.veloff': ['Corner pushback (block)', 'how far you are pushed off a cornered, blocking opponent'],
-    'air.cornerpush.veloff': ['Corner pushback (air hit)', ''],
-    'airguard.cornerpush.veloff': ['Corner pushback (air block)', ''],
-    'down.cornerpush.veloff': ['Corner pushback (OTG)', ''],
-    fall: ['Knockdown', '1 = knocks down on hit'],
-    'air.fall': ['Knockdown (air hit)', '1 = knocks down when hit airborne'],
-    'fall.recover': ['Air tech', '1 = the opponent can recover out of the knockdown'],
-    'fall.recovertime': ['Tech delay', 'frames before the opponent can tech'],
-    'fall.xvelocity': ['Knockdown drift', 'x speed while falling'],
-    'fall.yvelocity': ['Knockdown bounce', 'y speed when bouncing off the ground'],
-    'fall.damage': ['Landing damage', 'damage when the opponent hits the ground'],
-    'fall.kill': ['Landing can KO', ''],
-    'fall.animtype': ['Knockdown reaction', ''],
-    'air.juggle': ['Juggle cost', 'juggle points this hit uses'],
-    id: ['Chain ID', 'names this hit for cancels'],
-    chainid: ['Chains from', 'only connects after the hit with this ID'],
-    nochainid: ['Won\'t chain from', 'never connects after the hit with this ID'],
-    p1stateno: ['Your state on hit', 'throws and follow-ups'],
-    p2stateno: ['Opponent\'s state on hit', 'throws: the opponent runs your states'],
-    p1facing: ['Your facing on hit', ''], p2facing: ['Opponent\'s facing on hit', ''], p1getp2facing: ['Face the opponent', ''],
-    mindist: ['Throw range (min)', ''], maxdist: ['Throw range (max)', ''], snap: ['Throw snap', 'where the opponent is placed'],
-    sparkno: ['Hit spark', ''], 'guard.sparkno': ['Block spark', ''], sparkxy: ['Spark position', 'x, y from your axis'],
-    hitsound: ['Hit sound', ''], guardsound: ['Block sound', ''],
-    projid: ['Projectile ID', ''], projanim: ['Projectile animation', ''], projhitanim: ['Projectile hit animation', ''],
-    projremanim: ['Projectile vanish animation', ''], projcancelanim: ['Projectile clash animation', ''],
-    velocity: ['Projectile speed', 'x, y per frame'], accel: ['Projectile acceleration', ''], remvelocity: ['Speed after hitting', ''],
-    projremovetime: ['Projectile lifetime', 'frames before it vanishes (-1 = until it hits)'],
-    projhits: ['Projectile durability', 'hits before it vanishes'], projpriority: ['Projectile clash priority', 'a higher one beats a lower one'],
-    projmisstime: ['Projectile rehit delay', 'frames between hits'], offset: ['Spawn position', 'x, y from your axis'],
-    'reversal.attr': ['Counters', 'the attacks it catches'],
+    damage: [t('Damage'), t('damage on hit, chip damage on block')],
+    getpower: [t('Meter gain'), t('meter you gain on hit, on block')],
+    givepower: [t('Meter given'), t('meter the opponent gains on hit, on block')],
+    dizzypoints: [t('Stun damage'), t('fills the opponent\'s dizzy meter')],
+    guardpoints: [t('Guard crush damage'), t('drains the opponent\'s guard meter')],
+    redlife: [t('Recoverable damage'), t('red life the opponent can regain (tag)')],
+    numhits: [t('Hit count'), t('added to the combo counter')],
+    kill: [t('Can KO'), t('0 = this hit cannot finish the round')],
+    'guard.kill': [t('Chip can KO'), t('0 = chip damage cannot finish the round')],
+    pausetime: [t('Hitstop'), t('freeze when it hits: you, the opponent')],
+    'guard.pausetime': [t('Blockstop'), t('freeze when it is blocked: you, the opponent')],
+    'ground.hittime': [t('Hitstun'), t('frames the grounded opponent stays stunned')],
+    'air.hittime': [t('Air hitstun'), t('hitstun when the opponent is airborne and not knocked down')],
+    'guard.hittime': [t('Blockstun'), t('frames the opponent stays stuck blocking')],
+    'down.hittime': [t('OTG hitstun'), t('hitstun when hitting a downed opponent')],
+    'ground.slidetime': [t('Hit slide'), t('frames the opponent slides back on hit')],
+    'guard.slidetime': [t('Block slide'), t('frames the opponent slides back on block')],
+    'guard.ctrltime': [t('Block recovery'), t('frames until a blocking opponent can act')],
+    'airguard.ctrltime': [t('Air block recovery'), t('frames until an opponent blocking in the air can act')],
+    yaccel: [t('Hitstun gravity'), t('how fast a launched opponent falls')],
+    attr: [t('Attack type'), t('stance, then normal / special / super and attack / throw / projectile')],
+    hitflag: [t('Can hit'), t('H standing, L crouching, A airborne, F falling, D downed; + combo only, - never in a combo')],
+    guardflag: [t('Block'), t('H standing, L crouching, A in the air: H only is an overhead, L only a low, none unblockable')],
+    priority: [t('Trade priority'), t('higher wins when two attacks trade; Hit / Miss / Dodge on a tie')],
+    animtype: [t('Hit reaction'), t('light / medium / hard / back / up / diag-up')],
+    'air.animtype': [t('Air hit reaction'), t('the reaction when hit airborne')],
+    'ground.type': [t('Hit height'), t('high / low / trip (a sweep)')],
+    'air.type': [t('Air hit height'), t('high / low / trip when hit airborne')],
+    hitonce: [t('Single target'), t('1 = hits only one opponent')],
+    forcestand: [t('Force standing'), t('a crouching opponent is stood up')],
+    forcecrouch: [t('Force crouching'), t('a standing opponent is made to crouch')],
+    'guard.dist': [t('Proximity block range'), t('how close the opponent must be to start blocking')],
+    'ground.velocity': [t('Hit pushback'), t('x (pushback), y (launch) on a grounded hit')],
+    'guard.velocity': [t('Block pushback'), t('x on block')],
+    'air.velocity': [t('Air hit launch'), t('x, y when the opponent is hit airborne')],
+    'airguard.velocity': [t('Air block pushback'), t('x, y when blocked in the air')],
+    'down.velocity': [t('OTG launch'), t('x, y when hitting a downed opponent')],
+    'down.bounce': [t('OTG bounce'), t('1 = a downed opponent bounces')],
+    'ground.cornerpush.veloff': [t('Corner pushback (hit)'), t('how far you are pushed when the opponent is cornered')],
+    'guard.cornerpush.veloff': [t('Corner pushback (block)'), t('how far you are pushed off a cornered, blocking opponent')],
+    'air.cornerpush.veloff': [t('Corner pushback (air hit)'), ''],
+    'airguard.cornerpush.veloff': [t('Corner pushback (air block)'), ''],
+    'down.cornerpush.veloff': [t('Corner pushback (OTG)'), ''],
+    fall: [t('Knockdown'), t('1 = knocks down on hit')],
+    'air.fall': [t('Knockdown (air hit)'), t('1 = knocks down when hit airborne')],
+    'fall.recover': [t('Air tech'), t('1 = the opponent can recover out of the knockdown')],
+    'fall.recovertime': [t('Tech delay'), t('frames before the opponent can tech')],
+    'fall.xvelocity': [t('Knockdown drift'), t('x speed while falling')],
+    'fall.yvelocity': [t('Knockdown bounce'), t('y speed when bouncing off the ground')],
+    'fall.damage': [t('Landing damage'), t('damage when the opponent hits the ground')],
+    'fall.kill': [t('Landing can KO'), ''],
+    'fall.animtype': [t('Knockdown reaction'), ''],
+    'air.juggle': [t('Juggle cost'), t('juggle points this hit uses')],
+    id: [t('Chain ID'), t('names this hit for cancels')],
+    chainid: [t('Chains from'), t('only connects after the hit with this ID')],
+    nochainid: [t('Won\'t chain from'), t('never connects after the hit with this ID')],
+    p1stateno: [t('Your state on hit'), t('throws and follow-ups')],
+    p2stateno: [t('Opponent\'s state on hit'), t('throws: the opponent runs your states')],
+    p1facing: [t('Your facing on hit'), ''], p2facing: [t('Opponent\'s facing on hit'), ''], p1getp2facing: [t('Face the opponent'), ''],
+    mindist: [t('Throw range (min)'), ''], maxdist: [t('Throw range (max)'), ''], snap: [t('Throw snap'), t('where the opponent is placed')],
+    sparkno: [t('Hit spark'), ''], 'guard.sparkno': [t('Block spark'), ''], sparkxy: [t('Spark position'), t('x, y from your axis')],
+    hitsound: [t('Hit sound'), ''], guardsound: [t('Block sound'), ''],
+    projid: [t('Projectile ID'), ''], projanim: [t('Projectile animation'), ''], projhitanim: [t('Projectile hit animation'), ''],
+    projremanim: [t('Projectile vanish animation'), ''], projcancelanim: [t('Projectile clash animation'), ''],
+    velocity: [t('Projectile speed'), t('x, y per frame')], accel: [t('Projectile acceleration'), ''], remvelocity: [t('Speed after hitting'), ''],
+    projremovetime: [t('Projectile lifetime'), t('frames before it vanishes (-1 = until it hits)')],
+    projhits: [t('Projectile durability'), t('hits before it vanishes')], projpriority: [t('Projectile clash priority'), t('a higher one beats a lower one')],
+    projmisstime: [t('Projectile rehit delay'), t('frames between hits')], offset: [t('Spawn position'), t('x, y from your axis')],
+    'reversal.attr': [t('Counters'), t('the attacks it catches')],
   };
   const GROUPS = [
-    ['Damage and meter', /^(damage|getpower|givepower|dizzypoints|guardpoints|redlife|numhits|kill|guard\.kill)$/],
-    ['Stun and hitstop', /^(pausetime|guard\.pausetime|ground\.hittime|air\.hittime|guard\.hittime|down\.hittime|ground\.slidetime|guard\.slidetime|guard\.ctrltime|airguard\.ctrltime|yaccel)$/],
-    ['How it hits', /^(attr|hitflag|guardflag|priority|animtype|air\.animtype|ground\.type|air\.type|hitonce|forcestand|forcecrouch|guard\.dist|reversal\.attr)$/],
-    ['Pushback and launch', /(velocity|cornerpush|down\.bounce)/],
-    ['Knockdown', /^(fall|air\.fall|fall\.|forcenofall)/],
-    ['Juggle and cancels', /^(air\.juggle|id|chainid|nochainid)$/],
-    ['Throws and states', /^(p1stateno|p2stateno|p1facing|p2facing|p1getp2facing|mindist|maxdist|snap|p1sprpriority|p2sprpriority|sprpriority)$/],
-    ['Projectile', /^(proj|velocity|accel|offset|remvelocity|supermovetime|pausemovetime)/],
-    ['Effects', /^(sparkno|guard\.sparkno|sparkxy|hitsound|guardsound|envshake|palfx|fall\.envshake)/],
+    [t('Damage and meter'), /^(damage|getpower|givepower|dizzypoints|guardpoints|redlife|numhits|kill|guard\.kill)$/],
+    [t('Stun and hitstop'), /^(pausetime|guard\.pausetime|ground\.hittime|air\.hittime|guard\.hittime|down\.hittime|ground\.slidetime|guard\.slidetime|guard\.ctrltime|airguard\.ctrltime|yaccel)$/],
+    [t('How it hits'), /^(attr|hitflag|guardflag|priority|animtype|air\.animtype|ground\.type|air\.type|hitonce|forcestand|forcecrouch|guard\.dist|reversal\.attr)$/],
+    [t('Pushback and launch'), /(velocity|cornerpush|down\.bounce)/],
+    [t('Knockdown'), /^(fall|air\.fall|fall\.|forcenofall)/],
+    [t('Juggle and cancels'), /^(air\.juggle|id|chainid|nochainid)$/],
+    [t('Throws and states'), /^(p1stateno|p2stateno|p1facing|p2facing|p1getp2facing|mindist|maxdist|snap|p1sprpriority|p2sprpriority|sprpriority)$/],
+    [t('Projectile'), /^(proj|velocity|accel|offset|remvelocity|supermovetime|pausemovetime)/],
+    [t('Effects'), /^(sparkno|guard\.sparkno|sparkxy|hitsound|guardsound|envshake|palfx|fall\.envshake)/],
   ];
-  const groupOf = (name) => { const g = GROUPS.find(([, re]) => re.test(name)); return g ? g[0] : 'Other'; };
-  const fgcOf = (name) => FGC[name] || (/^envshake/.test(name) ? ['Screen shake', ''] : /^palfx/.test(name) ? ['Hit flash', ''] : /^fall\.envshake/.test(name) ? ['Landing screen shake', ''] : null);
+  const groupOf = (name) => { const g = GROUPS.find(([, re]) => re.test(name)); return g ? g[0] : t('Other'); };
+  const fgcOf = (name) => FGC[name] || (/^envshake/.test(name) ? [t('Screen shake'), ''] : /^palfx/.test(name) ? [t('Hit flash'), ''] : /^fall\.envshake/.test(name) ? [t('Landing screen shake'), ''] : null);
 
   // ---- the action, frame by frame ------------------------------------------
 
@@ -2075,8 +2311,8 @@
     if (b.ctrl === 'reversaldef' || b.ctrl === 'modifyreversaldef') return { cls: 'c1rev', label: 'ReversalDef' };
     // A negative state runs inside whatever state is playing; one that sets
     // movetype A with a StateTypeSet makes that state an attack.
-    if (s.negative) return s.setsAttack ? { cls: 'c1hit', label: 'HitDef' } : { cls: 'c1not', label: 'Inactive' };
-    if (s.movetype === 'i' || s.movetype === null) return { cls: 'c1not', label: 'Inactive' };
+    if (s.negative) return s.setsAttack ? { cls: 'c1hit', label: 'HitDef' } : { cls: 'c1not', label: t('Inactive') };
+    if (s.movetype === 'i' || s.movetype === null) return { cls: 'c1not', label: t('Inactive') };
     return { cls: 'c1hit', label: 'HitDef' };
   }
 
@@ -2131,31 +2367,40 @@
     const f = b.frame || {};
     // Edit off: the printed side head over the strip.
     host.append(el('h2', { class: 'bk-sh pr' }, 'Frame by frame', el('span', { class: 'k', lang: 'ja', text: '連続写真' }),
-      a && a.exists ? el('span', { class: 'aside', text: 'action ' + a.action + ', ' + a.frames.length + ' elements, ' + (a.endless ? 'holds on element ' + (a.holdsOn || a.frames.length) : a.ticks + ' ticks') }) : null));
-    host.append(el('div', { class: 'title ed' }, 'State ' + s.no + ' · block ' + (k + 1) + ' of ' + s.blocks.length + ' · ', el('span', { class: 'ty', text: b.type }), ' · ' + animLabel(s)));
+      a && a.exists ? el('span', { class: 'aside', text: a.endless ? t('action {action}, {n} elements, holds on element {elem}', { action: a.action, n: a.frames.length, elem: a.holdsOn || a.frames.length })
+        : t('action {action}, {n} elements, {ticks} ticks', { action: a.action, n: a.frames.length, ticks: a.ticks }) }) : null));
+    host.append(el('div', { class: 'title ed' }, ...tn(t('State {no} · block {n} of {of} · {type} · {anim}', nodes({ no: s.no, n: k + 1, of: s.blocks.length, type: el('span', { class: 'ty', translate: 'no', text: b.type }), anim: animLabel(s) })))));
+    // The state's facts, each a phrase of its own, joined with " · ".
     const facts = el('div', { class: 'facts ed' });
-    if (s.negative) facts.append(el('code', { text: s.file + ':' + s.line }), ' · a negative state: runs every tick ' + (s.no === -2 ? 'in any state, an opponent\'s custom state included' : 'while the character is in its own states')
-      + (s.setsAttack ? ' · sets movetype A with a StateTypeSet' : ' · sets no movetype A: a HitDef here hits only in states that are attacks already')
-      + ' · the animation drawn is the one its triggers test for'
-      + ' · localcoord ' + model.localcoord.join('x') + (model.localcoordDeclared ? '' : ' (undeclared)') + ' · [Size] ' + model.size.xscale + ' x ' + model.size.yscale);
-    else facts.append(el('code', { text: s.file + ':' + s.line }), ' · movetype ' + (s.movetypeRaw === null ? 'not set (I)' : s.movetypeRaw)
-      + ' · juggle ' + (s.juggle ? s.juggle.raw + ' (on the [Statedef] line ' + s.juggle.line + ', not the HitDef)' : 'not set')
-      + ' · localcoord ' + model.localcoord.join('x') + (model.localcoordDeclared ? '' : ' (undeclared)')
-      + ' · [Size] ' + model.size.xscale + ' x ' + model.size.yscale);
+    const lc = model.localcoord.join('x');
+    const lcFact = model.localcoordDeclared ? t('localcoord {lc}', { lc }) : t('localcoord {lc} (undeclared)', { lc });
+    const sizeFact = t('[Size] {x} x {y}', { x: model.size.xscale, y: model.size.yscale });
+    if (s.negative) facts.append(el('code', { text: s.file + ':' + s.line }), ' · ' + [
+      s.no === -2 ? t('a negative state: runs every tick in any state, an opponent\'s custom state included') : t('a negative state: runs every tick while the character is in its own states'),
+      s.setsAttack ? t('sets movetype A with a StateTypeSet') : t('sets no movetype A: a HitDef here hits only in states that are attacks already'),
+      t('the animation drawn is the one its triggers test for'), lcFact, sizeFact].join(' · '));
+    else facts.append(el('code', { text: s.file + ':' + s.line }), ' · ' + [
+      t('movetype {type}', { type: s.movetypeRaw === null ? t('not set (I)') : s.movetypeRaw }),
+      s.juggle ? t('juggle {n} (on the [Statedef] line {line}, not the HitDef)', { n: s.juggle.raw, line: s.juggle.line }) : t('juggle not set'),
+      lcFact, sizeFact].join(' · '));
     host.append(facts);
-    if (s.anim && !s.anim.literal) host.append(el('div', { class: 'facts' }, 'anim = ', el('code', { text: s.anim.raw }), s.anim.exact === false ? ' - candidates are a guess from the variables it reads' : ''));
+    if (s.anim && !s.anim.literal) {
+      const av = { expr: el('code', { text: s.anim.raw }) };
+      host.append(el('div', { class: 'facts' }, s.anim.exact === false ? tn(t('anim = {expr} - candidates are a guess from the variables it reads', nodes(av))) : tn(t('anim = {expr}', nodes(av)))));
+    }
     for (const ca of s.changeAnims) {
-      host.append(el('div', { class: 'facts ed' }, ca.type + ' line ' + ca.line + ': value = ', el('code', { text: ca.raw || '' }),
-        ca.triggers && ca.triggers.length ? ' when ' : '', ca.triggers && ca.triggers.length ? el('code', { text: ca.triggers.join(' / ') }) : ''));
+      // ca.type: the controller (ChangeAnim, ChangeAnim2), named as written
+      const cv = { type: ca.type, line: ca.line, value: el('code', { text: ca.raw || '' }), triggers: ca.triggers && ca.triggers.length ? el('code', { text: ca.triggers.join(' / ') }) : null };
+      host.append(el('div', { class: 'facts ed' }, cv.triggers ? tn(t('{type} line {line}: value = {value} when {triggers}', nodes(cv))) : tn(t('{type} line {line}: value = {value}', nodes(cv)))));
     }
 
     // Candidate animations as tabs (§8.1: an expression anim is several moves).
     if (anims.length > 1) {
       const tabs = el('div', { class: 'tabs', role: 'group', 'aria-label': 'Animations this state may play' });
       for (const x of anims) {
-        const t = el('button', { 'aria-pressed': x.action === sel.action ? 'true' : 'false', title: x.source, text: 'action ' + x.action + (x.exists ? '' : ' (missing)') });
-        t.onclick = () => { sel.action = x.action; renderSelection(); };
-        tabs.append(t);
+        const tab = el('button', { 'aria-pressed': x.action === sel.action ? 'true' : 'false', title: x.source, text: x.exists ? t('action {action}', { action: x.action }) : t('action {action} (missing)', { action: x.action }) });
+        tab.onclick = () => { sel.action = x.action; renderSelection(); };
+        tabs.append(tab);
       }
       host.append(tabs);
     }
@@ -2165,23 +2410,30 @@
     // but only elements with a Clsn1 can connect.
     const fireBox = el('div', { class: 'sub ed' });
     const firingElems = new Set();
+    // Each line: its badge, then one sentence with the trigger group (triggerall,
+    // trigger1: code, named as written) and the trigger text in it.
     for (const fz of b.firing) {
       const line = el('div', { class: 'fire' });
-      const grp = fz.group === 'all' ? 'triggerall' : 'trigger' + fz.group;
+      const fv = { group: fz.group === 'all' ? 'triggerall' : 'trigger' + fz.group, trigger: el('code', { text: fz.text }) };
       if (fz.kind === 'animelem' || fz.kind === 'animelemtime') {
         const tick = a && fz.ticks ? fz.ticks[a.action] : undefined;
         if (a && fz.elem <= a.frames.length) firingElems.add(fz.elem);
-        line.append(el('span', { class: 'k static', text: 'fires' }), grp + ': ', el('code', { text: fz.text }),
-          ' → element ' + fz.elem + (fz.kind === 'animelemtime' ? ' + ' + fz.offset + ' ticks' : '')
-          + (tick === null ? ' - past the end of action ' + (a && a.action) + ': never fires' : tick !== undefined ? ', tick ' + tick + ' of the animation' : ''));
+        Object.assign(fv, { at: fz.kind === 'animelemtime' ? t('element {elem} + {offset} ticks', { elem: fz.elem, offset: fz.offset }) : t('element {elem}', { elem: fz.elem }), action: String(a && a.action), tick });
+        line.append(el('span', { class: 'k static', text: t('fires') }), ...(tick === null ? tn(t('{group}: {trigger} → {at} - past the end of action {action}: never fires', nodes(fv)))
+          : tick !== undefined ? tn(t('{group}: {trigger} → {at}, tick {tick} of the animation', nodes(fv))) : tn(t('{group}: {trigger} → {at}', nodes(fv)))));
       } else if (fz.kind === 'time') {
-        line.append(el('span', { class: 'k static', text: 'fires' }), grp + ': ', el('code', { text: fz.text }), ' → tick ' + fz.tick + ' of the state; it then stays live, and only elements with a Clsn1 can connect');
+        fv.tick = fz.tick;
+        line.append(el('span', { class: 'k static', text: t('fires') }), ...tn(t('{group}: {trigger} → tick {tick} of the state; it then stays live, and only elements with a Clsn1 can connect', nodes(fv))));
       } else if (fz.never) {
-        line.append(el('span', { class: 'k cond', text: 'never' }), grp + ': ', el('code', { text: fz.text }), ' - ' + (fz.note || 'this group never fires'));
+        // fz.note: the server's words for why
+        fv.why = fz.note || t('this group never fires');
+        line.append(el('span', { class: 'k cond', text: t('never') }), ...tn(t('{group}: {trigger} - {why}', nodes(fv))));
       } else {
         if (a && fz.elem && fz.elem <= a.frames.length) firingElems.add(fz.elem);
-        line.append(el('span', { class: 'k cond', text: 'conditional' }), grp + ': ', el('code', { text: fz.text }),
-          fz.elem ? ' (reads element ' + fz.elem + ')' : '');
+        fv.elem = fz.elem;
+        // (with no element read, the line is the group and the trigger alone: code)
+        if (!fz.elem) line.setAttribute('translate', 'no');
+        line.append(el('span', { class: 'k cond', text: t('conditional') }), ...(fz.elem ? tn(t('{group}: {trigger} (reads element {elem})', nodes(fv))) : [fv.group + ': ', fv.trigger]));
       }
       fireBox.append(line);
     }
@@ -2191,21 +2443,25 @@
     const c1 = clsn1Class(s, b);
     host.append(el('div', { class: 'legend' },
       el('span', { class: 'pr' }, el('i', { class: 'fb s' }), 'startup'), el('span', { class: 'pr' }, el('i', { class: 'fb a' }), 'active'), el('span', { class: 'pr' }, el('i', { class: 'fb r' }), 'recovery'),
-      el('span', {}, el('i', { style: 'border-color:var(--' + c1.cls + ');background:var(--' + c1.cls + ')' }), 'Clsn1 (' + c1.label + ')'),
+      el('span', {}, el('i', { style: 'border-color:var(--' + c1.cls + ');background:var(--' + c1.cls + ')' }), t('Clsn1 ({label})', { label: c1.label })),
       el('span', {}, el('i', { style: 'border-color:var(--c2);background:var(--c2)' }), 'Clsn2'),
       el('span', { class: 'ed', text: 'engine debug colors, system.go:4000-4007' }),
       el('span', { class: 'pr', text: 'one bar cell per tick, 60 to the second' }),
       c1.cls === 'c1not' ? el('span', { class: 'warnline', text: 'movetype I: the engine does not treat this state as attacking (char.go:12552)' }) : null,
       // Explod art: on / off (remembered); none drawn = the readout says why.
-      hasDrawnExplods(s) ? xplSwitch() : (s.explods && s.explods.length ? el('span', { class: 'xnone', text: 'Explod art: ' + s.explods.length + (s.explods.length === 1 ? ' Explod, not drawn' : ' Explods, none drawn') + ' (the frame data says why)' }) : null)));
+      hasDrawnExplods(s) ? xplSwitch() : (s.explods && s.explods.length ? el('span', { class: 'xnone', text: s.explods.length === 1 ? t('Explod art: 1 Explod, not drawn (the frame data says why)')
+        : t('Explod art: {n} Explods, none drawn (the frame data says why)', { n: s.explods.length }) }) : null)));
 
     if (!a) { host.append(el('div', { class: 'none', text: 'No animation could be resolved for this state.' })); return; }
-    if (!a.exists) { host.append(el('div', { class: 'none', text: 'Action ' + a.action + ' is not in the .air or the common animations - the state shows whatever it had before.' })); return; }
-    host.append(el('div', { class: 'ed' }, el('div', { class: 'facts', text: 'Action ' + a.action + (a.table === 'common' ? ' (engine common animation)' : ' · .air line ' + a.line)
-      + (a.copyOf !== undefined ? ' · plays action ' + a.copyOf + '\'s frames' : '')
-      + ' · ' + a.frames.length + ' elements · ' + (a.endless ? 'holds on element ' + (a.holdsOn || a.frames.length) : a.ticks + ' ticks')
-      + (a.loopStart ? ' · loops from element ' + (a.loopStart + 1) : '')
-      + ' · active (Clsn1): ' + (a.active.length ? a.active.join(', ') : 'none - this animation cannot hit') })));
+    if (!a.exists) { host.append(el('div', { class: 'none', text: t('Action {action} is not in the .air or the common animations - the state shows whatever it had before.', { action: a.action }) })); return; }
+    // The action's facts, each a phrase of its own, joined with " · ".
+    const af = [a.table === 'common' ? t('Action {action} (engine common animation)', { action: a.action }) : t('Action {action}', { action: a.action })];
+    if (a.table !== 'common') af.push(t('.air line {line}', { line: a.line }));
+    if (a.copyOf !== undefined) af.push(t('plays action {action}\'s frames', { action: a.copyOf }));
+    af.push(t('{n} elements', { n: a.frames.length }), a.endless ? t('holds on element {elem}', { elem: a.holdsOn || a.frames.length }) : t('{n} ticks', { n: a.ticks }));
+    if (a.loopStart) af.push(t('loops from element {elem}', { elem: a.loopStart + 1 }));
+    af.push(t('active (Clsn1): {elems}', { elems: a.active.length ? a.active.join(', ') : t('none - this animation cannot hit') }));
+    host.append(el('div', { class: 'ed' }, el('div', { class: 'facts', text: af.join(' · ') })));
 
     // THE STRIP'S FRAMING IS THE MOVE'S OWN (the owner: "With the switch OFF
     // the strip looks exactly as it does on master", and with it ON no cell
@@ -2290,29 +2546,35 @@
       }
       // Only the element the engine stops on holds (a middle -1 or a last -2
       // is not a hold); a time of 0 or less takes no AnimElemTime ticks.
-      const end = fr.holds ? 'holds' : fr.time <= 0 ? 't' + fr.start : 't' + fr.start + '-' + (fr.start + fr.time - 1);
+      const end = fr.holds ? t('holds') : fr.time <= 0 ? 't' + fr.start : 't' + fr.start + '-' + (fr.start + fr.time - 1);
+      // where its Clsn1 boxes are written: its own block or the default one
+      const bv = { n: fr.clsn1.length, source: fr.clsn1Source, line: fr.clsn1Line };
+      const boxTip = fr.clsn1Source === 'own' ? t('{n} Clsn1 box(es), own block, .air line {line}', bv) : fr.clsn1Source === 'default' ? t('{n} Clsn1 box(es), default block, .air line {line}', bv)
+        : t('{n} Clsn1 box(es), {source} block, .air line {line}', bv);
       const badges = el('div', { class: 'badges' },
-        fr.clsn1.length ? el('span', { class: 'badge act', text: 'active', title: fr.clsn1.length + ' Clsn1 box(es), ' + fr.clsn1Source + ' block, .air line ' + fr.clsn1Line }) : null,
+        fr.clsn1.length ? el('span', { class: 'badge act', text: 'active', title: boxTip }) : null,
         firingElems.has(fr.elem) ? el('span', { class: 'badge fires', text: 'fires here' }) : null,
         fr.hidden ? el('span', { class: 'badge dim', text: 'never displayed', title: 'the engine never draws it - its time, the totals of the action or the loop skip it (anim.go:428-452, 638-721, 802-846) - but it still takes an AnimElem number (anim.go:507-520)' }) : null,
         fr.clsn2.length && fr.clsn2Source === 'default' ? el('span', { class: 'badge dim', text: 'Clsn2 default' }) : null,
         !fr.w ? el('span', { class: 'badge dim', text: fr.group === -1 || fr.number === -1 ? 'no sprite' : 'sprite missing' }) : null);
       const tk = el('div', { class: 'tk', 'aria-hidden': 'true' });
       if (fr.time > 0) for (let t = fr.start; t < fr.start + Math.min(fr.time, 60); t++) tk.append(el('i', { class: meter && meter[t] ? meter[t] : '' }));
-      cell.append(stage, el('div', { class: 'cap', title: '.air line ' + fr.line },
-        el('b', { text: '#' + fr.elem }), ' · ' + fr.group + ',' + fr.number + (fr.flip ? ' ' + fr.flip : '') + ' · ' + fr.time + 't · ' + end, badges),
-        tk, el('div', { class: 'fn' }, el('b', { text: fr.elem }), fr.holds ? 'holds' : fr.time + 't'));
+      cell.append(stage, el('div', { class: 'cap', title: t('.air line {line}', { line: fr.line }) },
+        el('b', { text: '#' + fr.elem }), ' · ' + fr.group + ',' + fr.number + (fr.flip ? ' ' + fr.flip : '') + ' · ' + t('{n}t', { n: fr.time }) + ' · ' + end, badges),
+        tk, el('div', { class: 'fn' }, el('b', { text: fr.elem }), fr.holds ? t('holds') : t('{n}t', { n: fr.time })));
       strip.append(cell);
     }
     host.append(strip);
-    host.append(el('div', { class: 'facts ed', text: 'Element number (#) is what AnimElem counts; the tick range is what AnimElemTime counts. ' + (box ? 'Drawn at ' + (Math.round(z * 100)) + '%.' : '') }));
+    host.append(el('div', { class: 'facts ed', text: t('Element number (#) is what AnimElem counts; the tick range is what AnimElemTime counts.') + ' ' + (box ? t('Drawn at {pct}%.', { pct: Math.round(z * 100) }) : '') }));
 
-    // Damage paid outside the HitDef (§4): throws.
+    // Damage paid outside the HitDef (§4): throws. od.type is the controller
+    // (LifeAdd, TargetLifeAdd...), od.via the parameter that sends there.
     if (s.outsideDamage && s.outsideDamage.length) {
       const ul = el('ul');
       for (const od of s.outsideDamage) {
-        ul.append(el('li', {}, el('code', { text: od.file + ':' + od.line }), ' ' + od.type + ' in state ' + od.state + ' (' + od.via + ')' + (od.value !== null ? ' value = ' : ''),
-          od.value !== null ? el('code', { text: od.value }) : '', od.note ? ' - ' + od.note : ''));
+        const ov = { type: od.type, state: od.state, via: od.via === 'same state' ? t('same state') : od.via, value: od.value !== null ? el('code', { text: od.value }) : null };
+        ul.append(el('li', {}, el('code', { text: od.file + ':' + od.line }), ' ', ...(od.value !== null ? tn(t('{type} in state {state} ({via}) value = {value}', nodes(ov))) : tn(t('{type} in state {state} ({via})', nodes(ov)))),
+          od.note ? ' - ' + I18n.server(od.note) : ''));
       }
       host.append(el('div', { class: 'sub' }, el('div', { class: 'h', text: 'Damage outside the HitDef' }), ul));
     }
@@ -2321,12 +2583,16 @@
   // ---- Edit on: the block, its triggers and its values ---------------------
 
   function renderBlock(host, s, b) {
-    host.append(el('h2', { class: 'bk-sh' }, 'Values', el('span', { class: 'k', lang: 'ja', text: '数値' }), el('span', { class: 'aside', text: b.type + ', ' + b.params.length + ' parameters' })));
+    host.append(el('h2', { class: 'bk-sh' }, 'Values', el('span', { class: 'k', lang: 'ja', text: '数値' }), el('span', { class: 'aside', text: t('{type}, {n} parameters', { type: b.type, n: b.params.length }) })));
     const bsel = el('div', { class: 'bsel' });
     const prev = el('button', { text: '‹', title: 'Previous block', 'aria-label': 'Previous block', disabled: sel.ordinal === 0 });
     const next = el('button', { text: '›', title: 'Next block', 'aria-label': 'Next block', disabled: sel.ordinal >= s.blocks.length - 1 });
     const pick = el('select', { 'aria-label': 'Attack block' });
-    s.blocks.forEach((x, i) => pick.append(el('option', { value: i, text: 'block ' + (i + 1) + ' of ' + s.blocks.length + ' · ' + x.type + ' · line ' + x.line + (x.label ? ' · ' + x.label : '') })));
+    // x.type: the controller; x.label: its [State N, label] as written
+    s.blocks.forEach((x, i) => {
+      const ov = { n: i + 1, of: s.blocks.length, type: x.type, line: x.line, label: x.label };
+      pick.append(el('option', { value: i, text: x.label ? t('block {n} of {of} · {type} · line {line} · {label}', ov) : t('block {n} of {of} · {type} · line {line}', ov) }));
+    });
     pick.value = String(sel.ordinal);
     pick.onchange = () => { sel.ordinal = Number(pick.value); renderSelection(); };
     prev.onclick = () => { sel.ordinal--; renderSelection(); };
@@ -2334,9 +2600,10 @@
     bsel.append(prev, pick, next);
     host.append(bsel);
 
-    const tr = el('div', { class: 'trig' });
-    for (const t of b.triggers) tr.append(el('div', {}, el('span', { class: 'ln', text: t.line }), t.text));
-    if (!b.triggers.length) tr.append(el('div', { text: '(no triggers)' }));
+    // the trigger lines as written (code)
+    const tr = el('div', { class: 'trig', translate: 'no' });
+    for (const tg of b.triggers) tr.append(el('div', {}, el('span', { class: 'ln', text: tg.line }), tg.text));
+    if (!b.triggers.length) tr.append(el('div', { text: t('(no triggers)') }));
     host.append(tr);
     host.append(el('div', { class: 'tierkey' },
       el('span', {}, el('span', { class: 'bk-tier plain', text: '18' }), ' a plain number, written as typed'),
@@ -2344,12 +2611,12 @@
       el('span', {}, el('span', { class: 'bk-tier verb', text: 'S, NA' }), ' red: a formula is edited as text; anything else is never written, and the badge says why')));
     if (!b.editable) host.append(el('div', { class: 'notes', text: 'This block is not editable.' }));
     for (const n of (b.notes || [])) host.append(el('div', { class: 'notes', text: n }));
-    for (const d of (b.duplicates || [])) host.append(el('div', { class: 'notes', text: d.name + ' is written twice (lines ' + d.firstLine + ' and ' + d.line + '): ' + d.note }));
+    for (const d of (b.duplicates || [])) host.append(el('div', { class: 'notes', text: t('{param} is written twice (lines {first} and {line}): {why}', { param: d.name, first: d.firstLine, line: d.line, why: d.note }) }));
 
     const table = el('table', { class: 'params' });
     // Grouped the way a frame data page reads, each group in the order the
     // file writes it.
-    const order = GROUPS.map(([g]) => g).concat('Other');
+    const order = GROUPS.map(([g]) => g).concat(t('Other'));
     const byGroup = new Map(order.map((g) => [g, []]));
     for (const p of b.params) byGroup.get(groupOf(p.name)).push(p);
     for (const [g, ps] of byGroup) {
@@ -2364,16 +2631,16 @@
         if (b.params.some((p) => p.name === name)) continue;
         const dl = fgcOf(name);
         table.append(el('tr', { class: 'derived' },
-          el('td', { class: 'nm' }, dl ? el('span', { class: 'fgc', text: dl[0] }) : null, el('span', { class: 'mg', text: name }), el('span', { class: 'ln', text: 'derived, not written' })),
+          el('td', { class: 'nm' }, dl ? el('span', { class: 'fgc', text: dl[0] }) : null, el('span', { class: 'mg', translate: 'no', text: name }), el('span', { class: 'ln', text: 'derived, not written' })),
           el('td', {}, el('div', { class: 'vals' }, vals.map((v) => el('span', { class: 'dv', title: v.formula, text: '(' + v.value + ')' }))),
             el('div', { class: 'notes' }, vals.map((v) => el('div', { text: v.formula }))))));
       }
       for (const u of (b.derived.unknown || [])) {
-        table.append(el('tr', { class: 'derived' }, el('td', { class: 'nm', text: u.name }), el('td', {}, el('div', { class: 'notes', text: 'not known statically: ' + u.why }))));
+        table.append(el('tr', { class: 'derived' }, el('td', { class: 'nm', translate: 'no', text: u.name }), el('td', {}, el('div', { class: 'notes', text: t('not known statically: {why}', { why: u.why }) }))));
       }
       if (b.derived.note) host.append(el('div', { class: 'notes', text: b.derived.note }));
     } else if (b.derived && b.derived.reason) {
-      host.append(el('div', { class: 'notes', text: 'Derived values: ' + b.derived.reason }));
+      host.append(el('div', { class: 'notes', text: t('Derived values: {reason}', { reason: b.derived.reason }) }));
     }
     host.append(table);
   }
@@ -2384,9 +2651,9 @@
     const lab = fgcOf(p.name);
     const nm = el('td', { class: 'nm' },
       lab ? el('span', { class: 'fgc', text: lab[0] }) : null,
-      el('span', { class: 'mg' }, p.name, p.risk && p.risk.level !== 'safe' ? el('span', { class: 'risk ' + p.risk.level, text: p.risk.level }) : null),
+      el('span', { class: 'mg', translate: 'no' }, p.name, p.risk && p.risk.level !== 'safe' ? el('span', { class: 'risk ' + p.risk.level, text: RISK[p.risk.level] || p.risk.level }) : null),
       lab && lab[1] ? el('span', { class: 'ex', text: lab[1] }) : null,
-      el('span', { class: 'ln', text: 'line ' + p.line }));
+      el('span', { class: 'ln', text: t('line {line}', { line: p.line }) }));
     const vals = el('div', { class: 'vals' });
     const extra = el('div');
     for (const v of p.values) vals.append(valueCell(s, b, p, v, extra));
@@ -2394,22 +2661,24 @@
     const notes = el('div', { class: 'notes' });
     if (p.note) notes.append(el('div', { text: p.note }));
     if (p.risk && p.risk.level !== 'safe') for (const n of p.risk.notes) notes.append(el('div', { text: n }));
-    if (!p.known) notes.append(el('div', { text: 'not a parameter the engine reads for ' + b.type }));
+    if (!p.known) notes.append(el('div', { text: t('not a parameter the engine reads for {type}', { type: b.type }) }));
     td.append(notes, extra);
     return el('tr', {}, nm, td);
   }
+  // the server's risk levels, printed on the parameter's badge
+  const RISK = { careful: t('careful'), dangerous: t('dangerous') };
 
   function valueCell(s, b, p, v, extra) {
     const wrap = el('span', { class: 'v ' + v.tier });
-    if (v.tier === 'absent') { wrap.append(el('span', { class: 'absent', text: '—', title: 'component ' + (v.index + 1) + ' not written' })); return wrap; }
+    if (v.tier === 'absent') { wrap.append(el('span', { class: 'absent', text: '—', title: t('component {n} not written', { n: v.index + 1 }) })); return wrap; }
     // A FORMULA is edited as text: what it reads as a fresh first hit is shown
     // beside it. The server checks it; one it cannot read asks first.
     if (v.tier === 'red' && v.expr && b.editable) return formulaCell(s, b, p, v, extra);
     if (v.tier === 'red' || !b.editable) {
-      wrap.append(el('span', { class: 'red', text: v.raw }));
+      wrap.append(el('span', { class: 'red', translate: 'no', text: v.raw }));
       if (v.tier === 'red') {
-        const RED_LABEL = { string: 'text', prefix: 'table prefix', letter: 'letter', unknown: 'ignored', extra: 'extra value', expression: 'computed at runtime' };
-        wrap.append(el('span', { class: 'rt', text: RED_LABEL[v.red] || (v.kind === 'string' ? 'text' : 'read only'), title: v.note || '' }));
+        const RED_LABEL = { string: t('text'), prefix: t('table prefix'), letter: t('letter'), unknown: t('ignored'), extra: t('extra value'), expression: t('computed at runtime') };
+        wrap.append(el('span', { class: 'rt', text: RED_LABEL[v.red] || (v.kind === 'string' ? t('text') : t('read only')), title: v.note || '' }));
       }
       return wrap;
     }
@@ -2418,7 +2687,8 @@
     // it. A text field rather than type=number: a number input reads `-.8`
     // (the author's own style, kept on write) back as empty.
     const shown = v.tier === 'amber' ? v.base : v.raw;
-    const input = el('input', { type: 'text', inputmode: 'decimal', spellcheck: 'false', value: shown, title: p.name + ' component ' + (v.index + 1) + ' (' + v.kind + ')' });
+    // v.kind: the value's type as the engine reads it (int, float...), printed as is
+    const input = el('input', { type: 'text', inputmode: 'decimal', spellcheck: 'false', value: shown, title: t('{param} component {n} ({kind})', { param: p.name, n: v.index + 1, kind: v.kind }) });
     let sent = shown;
     const commit = async (confirmed) => {
       const val = input.value.trim();
@@ -2440,15 +2710,15 @@
           char, file: b.file, state: b.state, ordinal: b.ordinal, param: p.name, index: v.index,
           value: val, expect: p.raw, sha1: fileSha(b.file), confirm: confirmed === true || undefined,
         });
-        say(p.name + (p.values.length > 1 ? '[' + (v.index + 1) + ']' : '') + ' in state ' + b.state + ': ' + p.raw + ' → ' + r.raw
-          + (r.backupCreated ? ' · original kept as ' + r.backup : ''), 'ok');
+        say(t('{param} in state {state}: {before} → {after}', { param: p.name + (p.values.length > 1 ? '[' + (v.index + 1) + ']' : ''), state: b.state, before: p.raw, after: r.raw })
+          + (r.backupCreated ? ' · ' + t('original kept as {file}', { file: r.backup }) : ''), 'ok');
         await load(true);
       } catch (e) {
         input.classList.remove('busy');
         sent = prevSent;
         if (e.code === 'confirm') {
           const box = el('div', { class: 'confirm' }, el('div', { text: e.message }));
-          const yes = el('button', { class: 'warn', text: 'Write ' + val + ' anyway' });
+          const yes = el('button', { class: 'warn', text: t('Write {value} anyway', { value: val }) });
           const no = el('button', { text: 'Cancel' });
           yes.onclick = () => { extra.textContent = ''; commit(true); };
           no.onclick = () => { extra.textContent = ''; input.value = shown; sent = shown; };
@@ -2467,13 +2737,13 @@
     };
     input.onblur = () => commit(false);
     wrap.append(input);
-    if (v.tier === 'amber') wrap.append(el('div', { class: 'expr', text: v.raw, title: 'the base literal is written in both places it appears' }));
+    if (v.tier === 'amber') wrap.append(el('div', { class: 'expr', translate: 'no', text: v.raw, title: t('the base literal is written in both places it appears') }));
     return wrap;
   }
 
   function formulaCell(s, b, p, v, extra) {
     const wrap = el('span', { class: 'v xp' });
-    const input = el('input', { type: 'text', spellcheck: 'false', value: v.raw, title: p.name + ' component ' + (v.index + 1) + ': a formula, computed at runtime' });
+    const input = el('input', { type: 'text', spellcheck: 'false', value: v.raw, title: t('{param} component {n}: a formula, computed at runtime', { param: p.name, n: v.index + 1 }) });
     const shown = v.raw;
     input.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); } else if (ev.key === 'Escape') { input.value = shown; input.blur(); } };
     input.onblur = () => {
@@ -2482,7 +2752,7 @@
       editValue(b, p.name, v.index, val, extra, () => { input.value = shown; });
     };
     wrap.append(input);
-    if (v.reads !== undefined) wrap.append(el('span', { class: 'reads', text: 'reads ' + v.reads, title: 'as a fresh first hit: ' + (v.assumed && v.assumed.length ? v.assumed.map((a) => a + ' = ' + (/^(sys)?fvar/.test(a) ? 1 : 0)).join(', ') : 'no variables') }));
+    if (v.reads !== undefined) wrap.append(el('span', { class: 'reads', text: t('reads {value}', { value: v.reads }), title: t('as a fresh first hit: {vars}', { vars: v.assumed && v.assumed.length ? v.assumed.map((a) => a + ' = ' + (/^(sys)?fvar/.test(a) ? 1 : 0)).join(', ') : t('no variables') }) }));
     return wrap;
   }
 
@@ -2493,9 +2763,9 @@
   // Edit on, a name can be changed or a move hidden from the game's list; the
   // choice is saved per bundle (POST /api/movelist) and never touches the
   // character's own folder. Without the route, the section says so.
-  // ", state 1000", or a line that stands for a move's strengths: ", states 1000, 1010, 1020 (one line)"
-  const statesOf = (r) => (Array.isArray(r.merged) && r.merged.length > 1 ? ', states ' + r.merged.map((m) => m.state).join(', ') + ' (one line for ' + r.merged.length + ' strengths)' : ', state ' + r.state);
-  const FROM_SHORT = { owner: 'your name', label: '[State -1] label', command: 'command name', comment: 'comment', readme: 'readme' };
+  // "state 1000", or a line that stands for a move's strengths: "states 1000, 1010, 1020 (one line for 3 strengths)"
+  const statesOf = (r) => (Array.isArray(r.merged) && r.merged.length > 1 ? t('states {states} (one line for {n} strengths)', { states: r.merged.map((m) => m.state).join(', '), n: r.merged.length }) : t('state {state}', { state: r.state }));
+  const FROM_SHORT = { owner: t('your name'), label: t('[State -1] label'), command: t('command name'), comment: t('comment'), readme: t('readme') };
   function renderCmdList() {
     const host = $('cmdl');
     if (!host) return;
@@ -2503,13 +2773,14 @@
     host.append(el('h2', { class: 'bk-sh' }, 'The game\'s Command List', el('span', { class: 'k', lang: 'ja', text: 'コマンドリスト' }), el('span', { class: 'aside', text: 'Ikemen\'s pause menu' })));
     if (!cl) {
       host.append(el('p', {}, clWhy && clWhy.startsWith('error:')
-        ? 'The Command List could not be read: ' + clWhy.slice(6)
+        ? t('The Command List could not be read: {error}', { error: clWhy.slice(6) })
         : 'Not available in this build. This Studio has no Command List writer: move names are not read here, and an export writes no Command List for this character.'));
       return;
     }
     if (cl.own) {
-      host.append(el('p', {}, el('b', { text: name }), ' ships its own Command List', cl.own.file ? [' (', el('code', { text: cl.own.file }), ')'] : null,
-        '. The export leaves it as it is; nothing is generated or written for this character.'));
+      const ov = { name: el('b', { translate: 'no', text: name }), file: cl.own.file ? el('code', { text: cl.own.file }) : null };
+      host.append(el('p', {}, ov.file ? tn(t('{name} ships its own Command List ({file}). The export leaves it as it is; nothing is generated or written for this character.', nodes(ov)))
+        : tn(t('{name} ships its own Command List. The export leaves it as it is; nothing is generated or written for this character.', nodes(ov)))));
     } else {
       host.append(el('p', {}, cl.enabled
         ? 'The export writes this list into the exported copy of the character and names it in that copy\'s .def. The character\'s own folder is never written.'
@@ -2524,7 +2795,7 @@
             const j = await postJson('/api/movelist', { char, enabled: sw.checked });
             if (j && Array.isArray(j.rows)) cl = j;
             say(sw.checked ? 'The export writes this Command List.' : 'The export writes no Command List for this character.', 'ok');
-          } catch (e) { say('Not changed: ' + e.message, 'err'); sw.checked = !sw.checked; sw.disabled = false; return; }
+          } catch (e) { say(t('Not changed: {error}', { error: e.message }), 'err'); sw.checked = !sw.checked; sw.disabled = false; return; }
           renderCmdList();
         };
         host.append(el('p', {}, el('label', { class: 'bk-chk' }, sw, el('i'), el('span', { text: 'Write this list into exported copies' }))));
@@ -2544,10 +2815,10 @@
     const edits = new Map();
     for (const r of rows) {
       const tr = el('tr', { class: r.hidden ? 'off' : '' });
-      tr.append(el('td', { class: 'tok' }, r.glyphs ? glyph(r.glyphs, false, true) : null, ' ', el('span', { text: r.name || '' })));
+      tr.append(el('td', { class: 'tok' }, r.glyphs ? glyph(r.glyphs, false, true) : null, ' ', el('span', { translate: 'no', text: r.name || '' })));
       if (editing && !cl.own) {
-        const inp = el('input', { class: 'bk-inp sm', type: 'text', spellcheck: 'false', value: r.name || '', 'aria-label': 'Name of state ' + r.state, maxlength: '60' });
-        const hid = el('input', { type: 'checkbox', 'aria-label': 'Hide state ' + r.state + ' from the game\'s list' });
+        const inp = el('input', { class: 'bk-inp sm', type: 'text', spellcheck: 'false', value: r.name || '', 'aria-label': t('Name of state {state}', { state: r.state }), maxlength: '60' });
+        const hid = el('input', { type: 'checkbox', 'aria-label': t('Hide state {state} from the game\'s list', { state: r.state }) });
         hid.checked = !!r.hidden;
         const note = () => {
           const ch = {};
@@ -2557,11 +2828,15 @@
           save.disabled = !edits.size;
         };
         inp.oninput = note; hid.onchange = note;
-        tr.append(el('td', {}, inp, el('div', { class: 'src' }, 'from ' + (FROM_SHORT[r.nameFrom] || r.nameFrom || '?') + statesOf(r), flags(r).length ? ' ' : null, flags(r))),
+        tr.append(el('td', {}, inp, el('div', { class: 'src' }, t('from {source}, {states}', { source: FROM_SHORT[r.nameFrom] || r.nameFrom || '?', states: statesOf(r) }), flags(r).length ? ' ' : null, flags(r))),
           el('td', {}, el('label', { class: 'bk-chk' }, hid, el('i'), el('span', { class: 'bk-sr', text: 'Hide' }))));
       } else {
         const raw = r.raw || {};
-        tr.append(el('td', { class: 'src' }, (FROM_SHORT[r.nameFrom] || r.nameFrom || '?') + statesOf(r) + (raw.label && r.nameFrom !== 'label' ? '; label "' + raw.label + '"' : '') + (r.hidden ? '; hidden' : ''), flags(r).length ? ' ' : null, flags(r)));
+        // where its name came from, its state(s), its label and whether it is hidden: phrases joined with ", " and "; "
+        const where = [(FROM_SHORT[r.nameFrom] || r.nameFrom || '?') + ', ' + statesOf(r)];
+        if (raw.label && r.nameFrom !== 'label') where.push(t('label "{label}"', { label: raw.label }));
+        if (r.hidden) where.push(t('hidden'));
+        tr.append(el('td', { class: 'src' }, where.join('; '), flags(r).length ? ' ' : null, flags(r)));
       }
       body.append(tr);
     }
@@ -2576,7 +2851,7 @@
           const j = await postJson('/api/movelist', { char, rows: [...edits.values()] });
           if (j && Array.isArray(j.rows)) cl = j;
           say('Command List names saved for this build.', 'ok');
-        } catch (e) { say('The names were not saved: ' + e.message, 'err'); save.disabled = false; return; }
+        } catch (e) { say(t('The names were not saved: {error}', { error: e.message }), 'err'); save.disabled = false; return; }
         renderStates(); renderSelection(); renderCmdList();
       };
       host.append(el('div', { class: 'acts' }, save, el('span', { class: 'bk-caption', text: 'An empty name goes back to the one read from the files. Saved for this build only; the character\'s files are not written.' })));
@@ -2610,10 +2885,10 @@
       const k = b.dataset.btn, pic = P.by[k];
       if (!pic) continue;
       const name = pic.word || k;
-      const img = el('img', { class: 'bpic', src: pic.src, width: String(Math.round(19 * (pic.w || 64) / (pic.h || 64))), height: '19', alt: name + ' (' + pic.label + ')', title: name + ': ' + pic.label + ' (' + P.label + ' style)' });
+      const img = el('img', { class: 'bpic', src: pic.src, width: String(Math.round(19 * (pic.w || 64) / (pic.h || 64))), height: '19', alt: name + ' (' + pic.label + ')', title: t('{button}: {picture} ({style} style)', { button: name, picture: pic.label, style: P.label }) });
       b.replaceWith(img);
     }
-    tbl.before(el('p', { class: 'bpicnote' }, 'Buttons as this build draws them: the ', el('b', { text: P.label }), ' style (Settings › Controls).'));
+    tbl.before(el('p', { class: 'bpicnote' }, ...tn(t('Buttons as this build draws them: the {style} style (Settings › Controls).', nodes({ style: el('b', { translate: 'no', text: P.label }) })))));
   }
 
   if (!char) {

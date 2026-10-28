@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="/themes.css">
 <script src="/theme.js"></script>
+<script src="/i18n.js"></script>
 <link rel="stylesheet" href="/booklet.css">
 <script src="/booklet.js"></script>
 <title>Animation player</title>
@@ -65,7 +66,7 @@
 </head>
 <body>
   <header class="bk-secband" id="band">
-    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who">&hellip;</span><span class="k" lang="ja">アニメーション</span></h1>
+    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who" translate="no">&hellip;</span><span class="k" lang="ja">アニメーション</span></h1>
     <div class="bk-secband-meta">
       <span class="hint">drag to pan &middot; scroll to zoom &middot; right-click resets
         &middot; space plays &middot; &larr; &rarr;</span>
@@ -86,8 +87,10 @@
   const pal = q.get('pal');
   const name = q.get('name') || char;
 
-  document.getElementById('who').textContent = name || 'no character';
-  document.title = (name || 'Animation') + ' — player';
+  // IN THE READER'S LANGUAGE (i18n.js): the character's name is
+  // translate="no"; the window's words go through I18n.t.
+  document.getElementById('who').textContent = name || I18n.t('no character');
+  document.title = name ? I18n.t('{name} — player', { name }) : I18n.t('Animation — player');
 
   // The same sprite URL the Studio builds, including the palette pick. Built
   // here rather than passed, because a URL is the only thing that survives the

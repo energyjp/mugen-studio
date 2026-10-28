@@ -84,18 +84,42 @@ function endOf(sctrls) {
 // GUARDFLAG IN FGC WORDS. H is "blockable standing", L "blockable crouching",
 // M both, A "blockable in the air". Standing only is an overhead, crouching
 // only a low, both a mid; none is unblockable (the engine's default,
-// guardflag 0 - char.go:705).
+// guardflag 0 - char.go:705). The Moves window shows the level alone and the
+// whole line, so each is one phrase a language pack can word its own way.
+const GUARD_LEVELS = { mid: 'Mid', high: 'Overhead', low: 'Low', none: 'Unblockable' };
+const GUARD_TEXT = {
+  mid: 'Mid, not air-blockable', midAir: 'Mid, air-blockable',
+  high: 'Overhead, not air-blockable', highAir: 'Overhead, air-blockable',
+  low: 'Low, not air-blockable', lowAir: 'Low, air-blockable',
+  none: 'Unblockable', noneAir: 'Unblockable',
+};
 function guardLevel(raw) {
   const s = String(raw || '').toUpperCase().replace(/[^HLMA]/g, '');
   const hi = /[HM]/.test(s), lo = /[LM]/.test(s), air = s.includes('A');
-  const level = hi && lo ? 'Mid' : hi ? 'Overhead' : lo ? 'Low' : 'Unblockable';
-  return { level, air, text: level + (level === 'Unblockable' ? '' : air ? ', air-blockable' : ', not air-blockable') };
+  const k = hi && lo ? 'mid' : hi ? 'high' : lo ? 'low' : 'none';
+  return { level: GUARD_LEVELS[k], air, text: GUARD_TEXT[air ? k + 'Air' : k] };
 }
 
-// attr = S, NA: the stance it is done from and what kind of attack it is.
+// attr = S, NA: the stance it is done from and what kind of attack it is. One
+// stance and one kind, nearly every HitDef, is a whole phrase (ATTR_PHRASES),
+// so a language pack can put its words in its own order; a rarer mix
+// ("standing/crouching", two kinds) is joined from the words below.
+const ATTR_PHRASES = {
+  'S,NA': 'standing normal attack', 'S,NT': 'standing normal throw', 'S,NP': 'standing normal projectile',
+  'S,SA': 'standing special attack', 'S,ST': 'standing special throw', 'S,SP': 'standing special projectile',
+  'S,HA': 'standing super attack', 'S,HT': 'standing super throw', 'S,HP': 'standing super projectile',
+  'C,NA': 'crouching normal attack', 'C,NT': 'crouching normal throw', 'C,NP': 'crouching normal projectile',
+  'C,SA': 'crouching special attack', 'C,ST': 'crouching special throw', 'C,SP': 'crouching special projectile',
+  'C,HA': 'crouching super attack', 'C,HT': 'crouching super throw', 'C,HP': 'crouching super projectile',
+  'A,NA': 'air normal attack', 'A,NT': 'air normal throw', 'A,NP': 'air normal projectile',
+  'A,SA': 'air special attack', 'A,ST': 'air special throw', 'A,SP': 'air special projectile',
+  'A,HA': 'air super attack', 'A,HT': 'air super throw', 'A,HP': 'air super projectile',
+};
 function attrText(raw) {
   if (!raw) return null;
   const [st, ...kinds] = String(raw).toUpperCase().split(',').map((x) => x.trim());
+  const one = kinds.filter(Boolean);
+  if (one.length === 1 && Object.hasOwn(ATTR_PHRASES, st + ',' + one[0])) return ATTR_PHRASES[st + ',' + one[0]];
   const stance = { S: 'standing', C: 'crouching', A: 'air' };
   const cls = { N: 'normal', S: 'special', H: 'super' };
   const typ = { A: 'attack', T: 'throw', P: 'projectile' };
@@ -104,17 +128,20 @@ function attrText(raw) {
   return [where, what.join(', ')].filter(Boolean).join(' ') || null;
 }
 
-// hitflag = MAF: who it can hit.
+// hitflag = MAF: who it can hit. The Moves window words the list one entry
+// at a time (HITFLAG_WORDS) and the combo clause after " - " whole.
+const HITFLAG_WORDS = { H: 'standing', L: 'crouching', A: 'airborne', F: 'falling', D: 'lying down (OTG)', none: 'no one' };
+const HITFLAG_ONLY = { combo: 'only an opponent already in hitstun (combo only)', never: 'never an opponent in hitstun' };
 function hitflagText(raw) {
   const s = String(raw === undefined || raw === null ? 'MAF' : raw).toUpperCase();
   const out = [];
-  if (/[HM]/.test(s)) out.push('standing');
-  if (/[LM]/.test(s)) out.push('crouching');
-  if (s.includes('A')) out.push('airborne');
-  if (s.includes('F')) out.push('falling');
-  if (s.includes('D')) out.push('lying down (OTG)');
-  const only = s.includes('+') ? ' - only an opponent already in hitstun (combo only)' : s.includes('-') ? ' - never an opponent in hitstun' : '';
-  return (out.length ? out.join(', ') : 'no one') + only;
+  if (/[HM]/.test(s)) out.push(HITFLAG_WORDS.H);
+  if (/[LM]/.test(s)) out.push(HITFLAG_WORDS.L);
+  if (s.includes('A')) out.push(HITFLAG_WORDS.A);
+  if (s.includes('F')) out.push(HITFLAG_WORDS.F);
+  if (s.includes('D')) out.push(HITFLAG_WORDS.D);
+  const only = s.includes('+') ? HITFLAG_ONLY.combo : s.includes('-') ? HITFLAG_ONLY.never : '';
+  return (out.length ? out.join(', ') : HITFLAG_WORDS.none) + (only ? ' - ' + only : '');
 }
 
 // A HitDef that can never hit: its hitflag names none of H, L, M, A, D. The

@@ -82,8 +82,9 @@ function problem() {
   try { text = fs.readFileSync(FILE, 'utf8'); } catch (e) {
     if (e.code === 'ENOENT') return null;
     const busy = e.code === 'EBUSY' || e.code === 'EPERM' || e.code === 'EACCES';
-    return FILE + ' could not be read (' + (e.code || e.message) + ')'
-      + (busy ? ': another program is holding it (an antivirus scan or a sync client, for example). Try again in a moment.' : '.');
+    const code = e.code || e.message;
+    return busy ? FILE + ' could not be read (' + code + '): another program is holding it (an antivirus scan or a sync client, for example). Try again in a moment.'
+      : FILE + ' could not be read (' + code + ').';
   }
   try {
     const raw = JSON.parse(text.replace(/^\uFEFF/, ''));
@@ -569,7 +570,7 @@ function denyText(reason) {
     : reason === 'badpass' ? 'wrong password'
       : reason === 'full' ? 'room full'
         : reason === 'busy' ? 'busy, try again'
-          : 'denied' + (reason ? ' (' + String(reason) + ')' : '');
+          : reason ? 'denied (' + String(reason) + ')' : 'denied';
 }
 
 function tooSlow(timeoutMs) {
@@ -579,9 +580,9 @@ function tooSlow(timeoutMs) {
 // The failure a fetch reports is "fetch failed" with the real reason in
 // `cause`; surface the code (ENOTFOUND, ECONNREFUSED) and nothing else, since
 // an undici message can quote the URL.
-function causeText(e) {
+function causeOf(e) {
   const c = e && e.cause && (e.cause.code || e.cause.message);
-  return c ? ' (' + String(c) + ')' : '';
+  return c ? String(c) : '';
 }
 
 function probeLobby(url, WS, timeoutMs) {
@@ -634,15 +635,16 @@ async function probeTurn(app, key, doFetch, timeoutMs) {
     try { j = await res.json(); } catch (e) { j = null; }
     const n = Array.isArray(j) ? j.length : 0;
     const ms = Date.now() - t0;
-    if (res.ok && n) return { ok: true, ms, status: res.status, servers: n, note: n + ' relay server' + (n === 1 ? '' : 's') + ' issued' };
+    if (res.ok && n) return { ok: true, ms, status: res.status, servers: n, note: n === 1 ? '1 relay server issued' : n + ' relay servers issued' };
     return {
       ok: false, ms, status: res.status,
       why: res.ok ? 'answered, but issued no relay servers'
-        : 'answered ' + res.status + (res.status === 401 || res.status === 403 ? ' - the key is not accepted'
-          : res.status === 404 ? ' - no app with that subdomain' : ''),
+        : res.status === 401 || res.status === 403 ? 'answered ' + res.status + ' - the key is not accepted'
+          : res.status === 404 ? 'answered ' + res.status + ' - no app with that subdomain' : 'answered ' + res.status,
     };
   } catch (e) {
-    return { ok: false, ms: Date.now() - t0, why: ctl.signal.aborted ? tooSlow(timeoutMs) : 'could not reach ' + app + '.metered.live' + causeText(e) };
+    const cause = causeOf(e), host = app + '.metered.live';
+    return { ok: false, ms: Date.now() - t0, why: ctl.signal.aborted ? tooSlow(timeoutMs) : cause ? 'could not reach ' + host + ' (' + cause + ')' : 'could not reach ' + host };
   } finally {
     clearTimeout(timer);
   }
@@ -665,10 +667,11 @@ async function probeIdentity(base, doFetch, timeoutMs) {
     if (res.ok) return { ok: true, ms, status: res.status, route, note: route + ' answered ' + res.status };
     return {
       ok: false, ms, status: res.status, route,
-      why: route + ' answered ' + res.status + (res.status === 404 ? ' - nothing at that address speaks the identity routes' : ''),
+      why: res.status === 404 ? route + ' answered ' + res.status + ' - nothing at that address speaks the identity routes' : route + ' answered ' + res.status,
     };
   } catch (e) {
-    return { ok: false, ms: Date.now() - t0, why: ctl.signal.aborted ? tooSlow(timeoutMs) : 'could not reach it' + causeText(e) };
+    const cause = causeOf(e);
+    return { ok: false, ms: Date.now() - t0, why: ctl.signal.aborted ? tooSlow(timeoutMs) : cause ? 'could not reach it (' + cause + ')' : 'could not reach it' };
   } finally {
     clearTimeout(timer);
   }

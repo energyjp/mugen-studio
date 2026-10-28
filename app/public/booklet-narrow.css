@@ -1,0 +1,99 @@
+/* THE THIN WINDOW (2026-10-27): the main window from 400px wide up, in every
+   language. The owner's window at about 405px showed stage titles broken inside
+   their words ("BLU E STA GE") and buttons spilling out of their boxes
+   ("Ajuste widescreen"), in English as much as in Portuguese. The booklet was
+   drawn for 1400x900 and 1024x700, and below that each page gave way only as
+   far as somebody had looked.
+
+   The rules here never reach a window 1024px wide or wider - every one sits in
+   a media query below the width where something first broke, measured
+   headless (tools/test-narrow-window.js, at 400, 560, 720 and 880px, in
+   English and in the pseudo language every word of which runs a third
+   longer) - so the booklet at its own sizes is the booklet as drawn, pixel for
+   pixel. What they do, in the owner's words: long titles shrink or wrap at
+   spaces, never inside a word; buttons wrap their label or move to a line of
+   their own; a label and its field stack.
+
+   Two tiers:
+   - below 900px (the pseudo language's header and palette sliders broke at
+     880, English's export colophon at 880): rules that GIVE WAY - a row that
+     may wrap, a button that does not shrink under its label, a word kept
+     whole. While the content fits, they draw exactly what was drawn before.
+   - below 640px (English's header, the roster bar and the Engine rows broke at
+     560): rules that REARRANGE - a stage entry with its picture over its text,
+     a setting's notes under its field, a dialog's kicker stepping aside.
+   The running head gives way in fitTabRow's own steps (studio.html): after
+   every label and the mascot have gone, its buttons wrap (body.fit-hwrap,
+   below); the running foot's readout drops its counts the same way.
+
+   Loaded last in <head>, and every rule carries :root, so it outranks the
+   rules it narrows, including the dialogs' own <style> blocks in the body. */
+
+/* ---- the running head: the buttons wrap (fitTabRow's last step) ---- */
+:root body.fit-hwrap #topbar > header.bk-rhead { height: auto; min-height: var(--head-h); align-items: stretch; }
+:root body.fit-hwrap #topbar > header.bk-rhead .bk-imprint { height: auto; min-height: var(--head-h); }
+:root body.fit-hwrap #topbar > header.bk-rhead .tcol.right { flex: 1 1 0; min-width: 0; }
+:root body.fit-hwrap #topbar > header.bk-rhead .acts { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; padding: 6px 0; }
+
+@media (max-width: 900px) {
+  /* a section band: its notes go under the title, the title wraps at its spaces
+     and the kicker under it; the plate keeps the band's height */
+  :root .bk-secband { flex-wrap: wrap; flex-basis: auto; height: auto; row-gap: 6px; }
+  :root .bk-secband-t { flex-wrap: wrap; row-gap: 2px; min-width: 0; min-height: var(--secband-h); white-space: normal; }
+  :root .bk-secband-meta { flex-wrap: wrap; row-gap: 4px; white-space: normal; }
+  /* a page's top line: its buttons keep their labels and move under the head */
+  :root #panel-stages > .pframe > .pbar, :root #panel-music > .pframe > .pbar { flex-wrap: wrap; row-gap: 6px; }
+  :root #panel-stages > .pframe > .pbar button, :root #panel-music > .pframe > .pbar button { flex: none; }
+  /* the roster bar, after fitCharBar's steps; the open character's Hide and Remove */
+  :root #panel-chars #charBar { flex-wrap: wrap; row-gap: 6px; }
+  :root #panel-chars #charDetail .phead { flex-wrap: wrap; row-gap: 6px; }
+  :root #panel-chars #charDetail .phead button { flex: none; }
+  /* Settings: a group's marks go under its name; a path in a note may break
+     anywhere (it has no spaces to wrap at, and it is a path, not a word) */
+  :root #panel-settings #settings details.grp > summary { flex-wrap: wrap; row-gap: 4px; }
+  :root #panel-settings #settings .hostnote { overflow-wrap: anywhere; }
+  /* Settings > Controls: a key's buttons go under its box */
+  :root #panel-settings #settings .kb { flex-wrap: wrap; row-gap: 4px; }
+  /* Colors: a family's slider labels go over their sliders */
+  :root #palDlg .sl { flex-wrap: wrap; }
+  /* a side head's Japanese kicker is one word */
+  :root .bk-sh .k { white-space: nowrap; }
+}
+
+@media (max-width: 640px) {
+  /* the section band's title a size down */
+  :root .bk-secband-t .t { font-size: var(--t-20); }
+  /* Settings > Engine and Fighting stats: the notes under the label and the field */
+  :root #panel-settings #settings .econsts .erow, :root #statsDlg .srow { flex-wrap: wrap; row-gap: 4px; }
+  :root #panel-settings #settings .econsts .erow .info, :root #statsDlg .srow .info { flex: 1 1 100%; }
+  /* a dialog's head: the kicker steps aside, so the title has the room up to Close */
+  :root dialog[data-k]::before { display: none; }
+  :root dialog[data-k] > h3 { --tail: calc(var(--slant) + 40px); }
+  :root dialog:has(> button.close) > h3, :root dialog[data-k]:has(> button.close) > h3 { --tail: 96px; }
+  /* Colors: a family's name over its three sliders */
+  :root #palDlg .fam { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  :root #palDlg .fam > :first-child { grid-column: 1 / -1; }
+  /* Portraits: a slot's one column no wider than the sheet, its head's notes wrapping */
+  :root #fitDlg .slot { grid-template-columns: minmax(0, 1fr); }
+  :root #fitDlg .slot h4 { flex-wrap: wrap; }
+  /* Sounds: the table scrolls sideways inside the sheet instead of running out of it */
+  :root #sndDlg #sndRows { overflow-x: auto; }
+  /* Theme and Mods: a button wraps its label */
+  :root #panel-theme :is(#themes, #themeCopy, #lifebarMix, #logoStatus) button, :root #panel-mods #mods button {
+    height: auto; min-height: 26px; padding-top: 4px; padding-bottom: 4px; white-space: normal; max-width: 100%;
+  }
+  /* the export page's log: a button inside a line wraps its label */
+  :root #exportDlg .xl .bk-btn { height: auto; min-height: 24px; padding-top: 3px; padding-bottom: 3px; white-space: normal; max-width: 100%; }
+  /* About: the cover's top strip prints its kind of book on two lines */
+  :root #panel-about .cv-kind { flex-wrap: wrap; row-gap: 3px; white-space: normal; }
+}
+
+@media (max-width: 520px) {
+  /* a stage entry: the picture over the text, which then has the whole column -
+     its name never breaks inside a word, its buttons keep their labels */
+  :root #panel-stages #stages .card.stage { grid-template-columns: minmax(0, 1fr); row-gap: 10px; }
+  :root #panel-stages #stages .card.stage > .body { grid-column: 1; grid-row: 2; }
+  :root #panel-stages #stages .card.stage .line.ident,
+  :root #panel-stages #stages .card.stage:has(> button.danger.armed) .line.ident { padding-right: 0; }
+  :root #panel-stages #stages .card.stage .name { overflow-wrap: break-word; }
+}

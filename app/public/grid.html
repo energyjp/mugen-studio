@@ -2,6 +2,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="/themes.css">
 <script src="/theme.js"></script>
+<script src="/i18n.js"></script>
 <link rel="stylesheet" href="/booklet.css">
 <script src="/booklet.js"></script>
 <title>E-Select — Ikemen GO Select Screen Editor</title>
@@ -161,6 +162,10 @@
   .row .nm { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .sub { color:var(--dim); font-size:11px; overflow:hidden;
               text-overflow:ellipsis; white-space:nowrap; }
+  /* A picker's line under the name says where the character already sits
+     ("already in the build, cell 0"); translated, it wraps instead of losing
+     the cell to the ellipsis (GRAIL 3.1c rule 10). */
+  :root[lang] .picker .row .sub { white-space:normal; }
   .tabs { display:flex; border-bottom:1px solid var(--line); }
   .tab { flex:1; background:none; border:0;
          border-radius:0; padding:7px 4px; font:inherit; cursor:pointer; }
@@ -829,6 +834,19 @@ header > .spacer{ display: none; }
 #toolbar button, #toolbar #zoomLbl{ font-size: .8rem; }
 #toolbar #zoomLbl{ min-width: 4ch; text-align: center; }
 #toolbar .tsep{ width: 1px; height: 20px; background: var(--line2); flex: none; }
+/* In another language (GRAIL 3.1c rule 10) the toolbar's labels run longer,
+   and at the default 1400px window the whole toolbar went onto a second row,
+   flush on the head's rule. Translated, the path gives way first: it takes
+   the room the toolbar leaves, down to 5.5rem (the engine's word and its
+   arrow), and the author, then the pack's name, ellipsize in it. The note
+   keeps its own rule above (no width of its own, so it can never wrap the
+   toolbar and refit the grid as it comes and goes); it shares what is left
+   with the path but grows no wider than its own words, so the rest goes to
+   the path. A window too narrow for that still wraps the toolbar, as
+   English does. */
+:root[lang] header > .crumb{ flex: 1 1 0; min-width: 5.5rem; }
+:root[lang] header > .crumb .by{ min-width: 0; flex-shrink: 10; overflow: hidden; text-overflow: ellipsis; }
+:root[lang] header > #dirty{ max-width: max-content; }
 /* DISABLED LOOKS DISABLED, in every look. The page-wide ladder gives a
    disabled button only a lighter text, and in High contrast that text is
    near-white - Undo with nothing to undo read exactly like Redo with a step
@@ -1015,6 +1033,10 @@ button.launch:active{
 .tab{ min-width: 0; padding: 6px 4px; font: 12px/1.35 var(--fu);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       border-bottom-color: transparent; }
+/* In another language (GRAIL 3.1c rule 10) the four labels run longer: each
+   tab gives up 2px of padding a side, which is what Spanish and Portuguese
+   need to show all four whole at the panel's 250px default (measured). */
+:root[lang] #tabs .tab{ padding-left: 2px; padding-right: 2px; }
 #libhead{ display: block; padding: 5px 10px; font: 11px/1.4 var(--fu); color: var(--dim);
           border-bottom: 1px solid var(--line2);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1117,13 +1139,13 @@ button.launch:active{
        own files. -->
   <!-- The band plate (the booklet's section band, in the head): the menu
        button, the product and its kicker. -->
-  <div class="es-plate"><button id="menuBtn" title="Menu" aria-haspopup="menu" aria-expanded="false">&#9776;</button><span class="appname">E-Select</span><span class="k" lang="ja">セレクト画面</span></div>
+  <div class="es-plate"><button id="menuBtn" title="Menu" aria-haspopup="menu" aria-expanded="false">&#9776;</button><span class="appname" translate="no">E-Select</span><span class="k" lang="ja">セレクト画面</span></div>
   <!-- The band's mascot (Booklet.mascot): WB, DJ AR or SHiZUKA, as in the Studio's head;
        a click deals E-Select's tips (the 'eselect' page in the Studio's tip
        table) through the opener's deck, as a slip over the page. Hidden in a
        window the Studio did not open (no deck). -->
   <button id="esMascot" class="bk-bandmascot" type="button" hidden></button>
-  <div class="crumb" id="crumb"><span id="engineWord" class="pword" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false" title="The engine: its settings, its install folder, Launch">Ikemen GO</span><span class="psep">&rsaquo;</span><span id="packWord" class="pword" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false" title="The screenpack this build uses">loading…</span><span class="by" id="packBy"></span></div>
+  <div class="crumb" id="crumb"><span id="engineWord" class="pword" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false" title="The engine: its settings, its install folder, Launch">Ikemen GO</span><span class="psep">&rsaquo;</span><span id="packWord" class="pword" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false" title="The screenpack this build uses">loading…</span><span class="by" id="packBy" translate="no"></span></div>
   <div class="spacer"></div>
   <span id="dirty" class="dirty"></span>
   <div id="toolbar" role="toolbar" aria-label="Toolbar">
@@ -1159,11 +1181,11 @@ button.launch:active{
     <div class="ahead" id="libhead">library</div>
     <!-- The strip, not the box, carries the keyline under it: the list starts
          on a line of its own. -->
-    <div id="searchbar"><input id="search" placeholder="Search… (name, author:, path:)"></div>
+    <div id="searchbar"><input id="search"></div>
     <div id="list"></div>
     <div id="orderPanel" hidden></div>
     <div class="hsplit" id="splitLog" title="Drag to resize the log"></div>
-    <div id="log"></div>
+    <div id="log" translate="no"></div>
   </aside>
   <div class="splitter" id="splitL" title="Drag to resize the library panel"></div>
   <div class="stage"><div id="wrap"></div></div>
@@ -1182,11 +1204,11 @@ button.launch:active{
 </main>
 
 <footer>
-  <div id="hover">—</div><div class="spacer"></div><div id="geom"></div>
+  <div id="hover" translate="no">—</div><div class="spacer"></div><div id="geom" translate="no"></div>
   <!-- The folio: the picked cell's select slot, as the Studio's foot prints it. -->
   <div id="esFolio" class="bk-folio" aria-label="Select slot"><b id="esFolioNo">No.&nbsp;&ndash;</b><small id="esFolioOf"></small></div>
 </footer>
-<div id="celltip" hidden></div>
+<div id="celltip" hidden translate="no"></div>
 
 <!-- The .air player's timeline (airTimeline): which element the engine has on
      screen tick by tick, for the backgrounds, the big portraits and the cursor. -->
@@ -1253,6 +1275,17 @@ const portraitSrc = (char, pal) => sprite(char, MI.select.portraitSpr, pal) + '&
 // each have to know PAL_PICK exists.
 const palOf = (char) => PAL_PICK.get(String(char || '').toLowerCase());
 
+// THE LOG IS PART OF THE PAGE: its lines are what E-Select tells the person
+// it did, so they are written in the viewer's language - each line ONE t()
+// sentence, its names, cells, files and lists as placeholders, one key per
+// shape (a plural, a clause that may or may not be there), made where the
+// edit happens. #log stays translate="no" because every line arrives here
+// already translated - a refusal a picker repeats, an Undo label, the
+// server's own message inside an ERROR line - and the data inside it (a
+// character called Random, a pack's name) must not be translated again. Log
+// FILES and the console are another matter: the server's log, its console
+// and console.* lines stay English, since they are what gets sent when
+// something breaks.
 function log(msg, act) {
   const d = document.createElement('div');
   if (act) d.className = 'act';
@@ -1328,6 +1361,10 @@ const Session = {
   // Every user-actionable change records itself. `staged` marks the ones that
   // are only in order[] so far, so Save stays the thing that commits them.
   // The same call is where Undo takes its step (historyRecord, below).
+  // A LABEL IS WHAT THE TOOLTIPS SAY: Revert lists the journal and Undo / Redo
+  // name their step, word for word. So it is made with t() where the edit
+  // happens, one whole phrase with its names and numbers as placeholders,
+  // and nothing ever reads it back.
   record(label, staged) {
     this.journal.push(label);
     if (staged) { this.staged = (this.staged || 0) + 1; markDirty(true); }
@@ -1335,9 +1372,11 @@ const Session = {
     this.sync();
   },
 
-  // Typed into a property field but not applied yet.
+  // Typed into a property field but not applied yet. Like a journal label,
+  // `what` is words the Revert tooltip shows as they are, so it arrives
+  // already in the viewer's language (t()).
   touchForm(what) {
-    this.formTouched = what || 'property edits';
+    this.formTouched = what || t('property edits');
     this.sync();
   },
 
@@ -1351,14 +1390,16 @@ const Session = {
     const n = this.journal.length;
     const can = (n > 0 || dirty || !!this.formTouched) && !!this.baseline;
     btn.disabled = !can;
-    btn.textContent = n > 0 ? 'Revert (' + n + ')' : 'Revert';
+    btn.textContent = n > 0 ? t('Revert ({n})', { n }) : t('Revert');
+    // The journal's labels and formTouched are already words (t()); the
+    // tooltip only lines them up.
     const lines = this.journal.slice(-12);
-    if (this.formTouched) lines.push('unapplied: ' + this.formTouched);
+    if (this.formTouched) lines.push(t('unapplied: {what}', { what: this.formTouched }));
     btn.title = !this.baseline
-      ? 'No session baseline was captured, so there is nothing to revert to'
-      : (can ? 'Undo everything since the session started or was last saved:'
+      ? t('No session baseline was captured, so there is nothing to revert to')
+      : (can ? t('Undo everything since the session started or was last saved:')
              + String.fromCharCode(10) + lines.join(String.fromCharCode(10))
-             : 'Nothing to revert');
+             : t('Nothing to revert'));
     const note = $('#dirty');
     // SCREENPACK EDITS ARE NOT "UNSAVED". The grid size and the empty-cell
     // flags go straight into the pack's system.def when you change them, so
@@ -1366,8 +1407,8 @@ const Session = {
     // properties. They still count in Revert, which restores the pack's file.
     // Saying so here is what stops "Revert (2) but Save is grayed out".
     if (note && !dirty) {
-      note.textContent = this.formTouched ? 'unapplied property edits'
-        : (n > 0 ? 'screenpack edits are written as you make them · Save is for the cell order' : '');
+      note.textContent = this.formTouched ? t('unapplied property edits')
+        : (n > 0 ? t('screenpack edits are written as you make them · Save is for the cell order') : '');
     }
     syncUndoButtons();
   },
@@ -1376,7 +1417,7 @@ const Session = {
   // roster between the baseline going back and the reload would leave the
   // page on neither.
   async revert() {
-    if (!this.baseline) { log('ERROR nothing to revert to'); return; }
+    if (!this.baseline) { log(t('ERROR nothing to revert to')); return; }
     if (REVERTING) return;
     REVERTING = true;
     syncUndoButtons();
@@ -1390,7 +1431,7 @@ const Session = {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.baseline),
       })).json();
-      if (r.error) { log('ERROR ' + r.error); return; }
+      if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
       // EVERY PACK BACK TO ITS OWN TEXT, each named explicitly, so a pack the
       // build switched to and then away from goes back too, and ikemen1's
       // text can never land in Big MUGEN1's file. A pack is written only when
@@ -1403,10 +1444,19 @@ const Session = {
       }
       // The log reads newest first: the reasons go in first, so they sit
       // under the line that points at them.
-      for (const why of left) log('WARNING ' + why);
-      log('Reverted ' + (n ? n + ' change(s)' : 'unsaved edits') + ' back to the start of the session'
-        + (left.length ? ', except ' + plural(left.length, 'screenpack file') + ' left as ' + (left.length === 1 ? 'it is' : 'they are')
-          + ' (below)' : ''), true);
+      for (const why of left) log(t('WARNING {why}', { why }));
+      // One whole sentence per shape: no change counted, one, or more, by
+      // no pack file left as it was, one, or more.
+      const m = left.length;
+      log(!m ? (!n ? t('Reverted unsaved edits back to the start of the session')
+          : n === 1 ? t('Reverted 1 change(s) back to the start of the session')
+          : t('Reverted {n} change(s) back to the start of the session', { n }))
+        : m === 1 ? (!n ? t('Reverted unsaved edits back to the start of the session, except 1 screenpack file left as it is (below)')
+          : n === 1 ? t('Reverted 1 change(s) back to the start of the session, except 1 screenpack file left as it is (below)')
+          : t('Reverted {n} change(s) back to the start of the session, except 1 screenpack file left as it is (below)', { n }))
+        : (!n ? t('Reverted unsaved edits back to the start of the session, except {m} screenpack files left as they are (below)', { m })
+          : n === 1 ? t('Reverted 1 change(s) back to the start of the session, except {m} screenpack files left as they are (below)', { m })
+          : t('Reverted {n} change(s) back to the start of the session, except {m} screenpack files left as they are (below)', { n, m })), true);
       this.journal = [];
       this.formTouched = null;
       PENDING.clear();
@@ -1422,7 +1472,7 @@ const Session = {
 function markDirty(v) {
   dirty = v;
   $('#save').disabled = !v;
-  $('#dirty').textContent = v ? 'unsaved changes' : '';
+  $('#dirty').textContent = v ? t('unsaved changes') : '';
   if (typeof Session !== 'undefined' && Session.sync) {
     if (!v) Session.staged = 0;
     Session.sync();
@@ -1787,8 +1837,8 @@ function faceOffscreenNote() {
       if (x0 + fc.w * sx <= 0 || x0 >= L[0] || y0 + fc.h * sy <= 0 || y0 >= L[1]) missed++;
     }
     if (missed === ids.length) {
-      out.push(side.toUpperCase() + '’s big portrait at offset '
-        + (f.offset || [0, 0]).join(',') + ' lands off-screen for every character');
+      out.push(t('{side}’s big portrait at offset {offset} lands off-screen for every character',
+        { side: side.toUpperCase(), offset: (f.offset || [0, 0]).join(',') }));
     }
   }
   return out.length ? '  ·  <span class="over">' + out.join('; ') + '</span>' : '';
@@ -1829,45 +1879,49 @@ function drawGeom() {
   // middle is off the screen, any side, and that count says so too.
   const offN = OFFSCREEN_COUNT;
   const overflow = !!(offX || offY || offN);
-  const fits = (offX || offY)
-    ? '  ·  <span class="over">runs ' + [offX ? offX + ' past the right' : null,
-      offY ? offY + ' past the bottom' : null].filter(Boolean).join(' and ')
-      + ' of a ' + L[0] + '×' + L[1] + ' screen</span>'
+  // ONE SENTENCE PER CASE (t()), never a list of pieces joined with "and":
+  // #geom is translate="no" (it names stranded characters), so every word in
+  // it is put in the viewer's language here.
+  const scr = { w: L[0], h: L[1] };
+  const runs = offX && offY
+    ? t('runs {x} past the right and {y} past the bottom of a {w}×{h} screen', Object.assign({ x: offX, y: offY }, scr))
+    : offX ? t('runs {x} past the right of a {w}×{h} screen', Object.assign({ x: offX }, scr))
+    : offY ? t('runs {y} past the bottom of a {w}×{h} screen', Object.assign({ y: offY }, scr)) : '';
+  const fits = runs
+    ? '  ·  <span class="over">' + runs + '</span>'
     : offN
-      ? '  ·  <span class="over">' + offN + ' cell' + (offN === 1 ? ' lies' : 's lie') + ' off the '
-        + L[0] + '×' + L[1] + ' screen</span>'
+      ? '  ·  <span class="over">' + (offN === 1 ? t('1 cell lies off the {w}×{h} screen', scr)
+        : t('{n} cells lie off the {w}×{h} screen', Object.assign({ n: offN }, scr))) + '</span>'
       : '';
-  g.innerHTML = 'Grid: ' + S.rows + '×' + S.columns + ' - ' + total + ' cells ('
-    + (free < 0
-        ? '<span class="over">' + (-free) + ' cell'
-          + (free === -1 ? '' : 's') + ' past the end</span>'
-        : free + ' available')
-    + ')  ·  portrait.spr ' + S.portraitSpr.join(',') + fits + faceOffscreenNote()
-    + strandedNote(strandedCells());
+  const room = free < 0
+    ? '<span class="over">' + (free === -1 ? t('1 cell past the end') : t('{n} cells past the end', { n: -free })) + '</span>'
+    : t('{n} available', { n: free });
+  g.innerHTML = t('Grid: {rows}×{columns} - {total} cells ({room})  ·  portrait.spr {spr}',
+    { rows: S.rows, columns: S.columns, total, room, spr: S.portraitSpr.join(',') })
+    + fits + faceOffscreenNote() + strandedNote(strandedCells());
   g.classList.add('editable');
   // The bar itself opens the grid editor, so the rescue must not bubble into it.
   const rb = g.querySelector('button.rescue');
   if (rb) rb.onclick = (e) => { e.stopPropagation(); e.preventDefault(); rescueStranded(); };
-  g.title = 'Edit the grid: rows, columns, cell size and spacing'
-    + (overflow ? '\nThis screenpack asks for more grid than its own screen holds.'
-      + ' The engine draws the overflow off the edge too.'
-      + (PREFS.showOffscreen ? '' : ' ☰ › Show Offscreen Cells draws it here.') : '');
+  g.title = t('Edit the grid: rows, columns, cell size and spacing')
+    + (overflow ? '\n' + t('This screenpack asks for more grid than its own screen holds. The engine draws the overflow off the edge too.')
+      + (PREFS.showOffscreen ? '' : ' ' + t('☰ › Show Offscreen Cells draws it here.')) : '');
   g.onclick = editGrid;
-  $('#libhead').textContent = TAB === 'stages'
-    ? 'stages — ' + ((MI.stageList || []).length) + ' in [ExtraStages]'
+  const head = TAB === 'stages'
+    ? t('stages — {n} in [ExtraStages]', { n: (MI.stageList || []).length })
     : TAB === 'order'
-    ? 'arcade order — ' + CELLS.filter((c) => c.kind === 'char' && !c.variant).length + ' characters'
+    ? t('arcade order — {n} characters', { n: CELLS.filter((c) => c.kind === 'char' && !c.variant).length })
     : TAB === 'excluded'
-      ? 'not in the build — on disk only'
+      ? t('not in the build — on disk only')
       // CHARACTERS in the build, to pair with characters on disk. `order.length`
       // counted every entry, so placeholders inflated it - a grid padded out to
       // 72 cells read as "73 in build" next to "25 on disk" - and it also counted
       // each member of a slot block, which is right for characters and wrong for
       // cells. Entries with no `kind` are exactly the characters.
-      : 'library — ' + LIB.onDisk + ' on disk, '
-        + order.filter((e) => !e.kind).length + ' in build';
+      : t('library — {disk} on disk, {build} in build', { disk: LIB.onDisk, build: order.filter((e) => !e.kind).length });
   // One line that ellipsizes in a narrow panel; the tooltip has it whole.
-  $('#libhead').title = $('#libhead').textContent;
+  $('#libhead').textContent = head;
+  $('#libhead').title = head;
 }
 
 // Cell index is DERIVED, never the array index: a slot block of N members
@@ -1891,9 +1945,10 @@ function deriveCells() {
       out.push({
         index: cell, row: 0, col: 0, variant: k, variants: group.length,
         kind: g.kind || 'char', char: g.char || null, slot: g.slot || '',
+        // A placeholder's name is words, in the viewer's language (t()).
         displayName: (meta && meta.displayName) || g.char
-          || (g.kind === 'skip' ? '(skipslot)'
-              : g.kind === 'dummy' ? '(empty cell)' : '(random)'),
+          || (g.kind === 'skip' ? t('(skipslot)')
+              : g.kind === 'dummy' ? t('(empty cell)') : t('(random)')),
         props: (meta && meta.props) || {},
         // From the ENTRY, not from disk: a lock is staged like any cell edit.
         locked: isLockOn(g.locked),
@@ -2059,7 +2114,7 @@ function drawBG(under, over) {
     const host = l.layerno === 1 ? over : under;
     const d = document.createElement('div');
     d.className = 'bglayer';
-    d.title = l.name + '  (' + l.type + ', layer ' + l.layerno + ')';
+    d.title = t('{name}  ({type}, layer {layer})', { name: l.name, type: l.type, layer: l.layerno });
     // add1 is MUGEN's additive blend; `screen` is the closest CSS gets and is
     // right for the glows and gradients these are used for.
     // ...and only as much of it as the layer asks for: `alpha = src,dst` scales
@@ -2714,10 +2769,11 @@ function hiddenLevel(info) {
   const n = parseInt(String((info.props && info.props.hidden) || '').trim(), 10);
   return n >= 1 && n <= 3 ? n : 0;
 }
+// The tooltip's words (t()): the language does not change while the page is open.
 const HIDDEN_MEANING = {
-  1: 'hidden cell, still in the random pool',
-  2: 'cannot be selected, the cursor skips it',
-  3: 'shown as a random-select cell',
+  1: t('hidden cell, still in the random pool'),
+  2: t('cannot be selected, the cursor skips it'),
+  3: t('shown as a random-select cell'),
 };
 // An eye with a slash through it, drawn in currentColor. A constant: nothing
 // from a file goes through this innerHTML.
@@ -3059,24 +3115,29 @@ function drawGrid() {
         // getCellOverride builds the motif's `cell.<col>-<row>` key from
         // those, so `cell.*-0` really is row 0's override. Both conventions
         // are the engine's; only the one shown to a person changes here.
+        // #hover is translate="no": the label names the character, and its
+        // words are already the viewer's (cellLabel).
         const hv = $('#hover');
-        hv.textContent = 'Row ' + (r + 1) + ', Col ' + (c + 1) + ' - ' + label;
+        const said = t('Row {row}, Col {col} - {label}', { row: r + 1, col: c + 1, label });
+        hv.textContent = said;
         // Ellipsized in the bar, complete on hover.
-        hv.title = hv.textContent;
+        hv.title = said;
         // THE SELECT SLOT AT THE CURSOR (the booklet, 2026-10-18): the tooltip
         // prints the cell's slot numeral ahead of its label, the number the
         // Properties title and the folio print for a picked cell (printSlot).
         // A data attribute the stylesheet draws, so the label stays the
         // tooltip's own first text node. A cell past the last entry has none.
         const tipEl = $('#celltip'), tipOf = CELLS.length ? CELLS[CELLS.length - 1].index + 1 : 0;
-        if (i < tipOf) tipEl.dataset.no = 'No.' + slotPad(i + 1); else delete tipEl.dataset.no;
+        // The stylesheet draws it (attr(data-no)), where the observer cannot
+        // see it: t() says the "No.".
+        if (i < tipOf) tipEl.dataset.no = t('No.{slot}', { slot: slotPad(i + 1) }); else delete tipEl.dataset.no;
         // PREFERENCES > TOOLTIPS. The character tooltip can be switched off
         // (the footer line above stays), and the hidden state rides on it as a
         // second line while both are on. With only the hidden-state tooltip
         // on, the badge shows it by itself (see onmousemove).
         if (PREFS.tooltipCharacter) {
           const hl = PREFS.tooltipHidden ? hiddenLevel(info) : 0;
-          cellTip.show(label, e, hl ? { text: 'Hidden: ' + HIDDEN_MEANING[hl], level: hl } : null);
+          cellTip.show(label, e, hl ? { text: t('Hidden: {meaning}', { meaning: HIDDEN_MEANING[hl] }), level: hl } : null);
         }
       };
       d.onmousemove = (e) => {
@@ -3088,7 +3149,7 @@ function drawGrid() {
           const over = PREFS.tooltipHidden && e.clientX >= b.left && e.clientX < b.right
             && e.clientY >= b.top && e.clientY < b.bottom;
           if (!over) cellTip.hide();
-          else if ($('#celltip').hidden) cellTip.show('Hidden: ' + HIDDEN_MEANING[hidLv], e);
+          else if ($('#celltip').hidden) cellTip.show(t('Hidden: {meaning}', { meaning: HIDDEN_MEANING[hidLv] }), e);
         }
         cellTip.move(e);
       };
@@ -3250,12 +3311,35 @@ function cellHasLock(i) {
 function cellLocked(i) { return locksOn() && cellHasLock(i); }
 // `who` names the character the edit is for, when that is not the cell's
 // first member: a slot's second member dragged onto a stage.
+//
+// `what` is the edit, in the words the English sentence ends with ('moved',
+// 'dropped onto'): a code the callers pass, never shown as it is. Each one
+// is its own whole sentence below (t()), since what the edit is changes the
+// rest of the sentence in other languages; the cell and the name go in as
+// one value, "4 (Ryu)".
+const LOCKED_WHY = {
+  'moved': (cell) => t('Cell {cell} is locked, so it cannot be moved.', { cell }),
+  'dropped onto': (cell) => t('Cell {cell} is locked, so it cannot be dropped onto.', { cell }),
+  'filled': (cell) => t('Cell {cell} is locked, so it cannot be filled.', { cell }),
+  'replaced': (cell) => t('Cell {cell} is locked, so it cannot be replaced.', { cell }),
+  'removed': (cell) => t('Cell {cell} is locked, so it cannot be removed.', { cell }),
+  'turned into another kind': (cell) => t('Cell {cell} is locked, so it cannot be turned into another kind.', { cell }),
+  'turned into a slot': (cell) => t('Cell {cell} is locked, so it cannot be turned into a slot.', { cell }),
+  'split apart': (cell) => t('Cell {cell} is locked, so it cannot be split apart.', { cell }),
+  'taken off the grid': (cell) => t('Cell {cell} is locked, so it cannot be taken off the grid.', { cell }),
+  'given another stage': (cell) => t('Cell {cell} is locked, so it cannot be given another stage.', { cell }),
+  'set to a random stage': (cell) => t('Cell {cell} is locked, so it cannot be set to a random stage.', { cell }),
+  'deleted with its row': (cell) => t('Cell {cell} is locked, so it cannot be deleted with its row.', { cell }),
+  'deleted with its column': (cell) => t('Cell {cell} is locked, so it cannot be deleted with its column.', { cell }),
+  'moved off the end of the grid': (cell) => t('Cell {cell} is locked, so it cannot be moved off the end of the grid.', { cell }),
+  'moved out of the last column': (cell) => t('Cell {cell} is locked, so it cannot be moved out of the last column.', { cell }),
+};
 function lockedWhy(i, what, who) {
   const info = cellAt(i);
   const nm = who || (info && info.kind === 'char' ? info.displayName : '');
-  const name = nm ? ' (' + nm + ')' : '';
-  return 'Cell ' + i + name + ' is locked, so it cannot be ' + what
-    + '. Right-click it and choose Unlock cell, or turn off Preferences › Lock cells.';
+  const cell = nm ? i + ' (' + nm + ')' : String(i);
+  const says = LOCKED_WHY[what] ? LOCKED_WHY[what](cell) : t('Cell {cell} is locked.', { cell });
+  return says + ' ' + t('Right-click it and choose Unlock cell, or turn off Preferences › Lock cells.');
 }
 // Refuse an edit to a locked cell: logs why, and answers the reason, which a
 // picker can show. A reason is never empty, so `if (lockRefuses(...))` still
@@ -3296,8 +3380,8 @@ async function withStudioAdds() {
   const list = savedOrder(), at = order.length;
   let disk = null;
   try { disk = await esApi('/api/roster'); } catch (e) {
-    log('WARNING Could not read the roster on disk (' + ((e && e.message) || e) + '), so this save cannot keep'
-      + ' a character the Studio added since this page loaded');
+    log(t('WARNING Could not read the roster on disk ({error}), so this save cannot keep a character the Studio added since this page loaded',
+      { error: (e && e.message) || e }));
     return { list, kept: [] };
   }
   const sent = new Set(list.filter((e) => !e.kind && e.char).map((e) => lc(e.char)));
@@ -3314,8 +3398,10 @@ async function withStudioAdds() {
   return { list: list.slice(0, at).concat(add, list.slice(at)), kept };
 }
 function logStudioAdds(kept) {
-  if (kept.length) log('Kept ' + plural(kept.length, 'character') + ' added in the Studio since this page loaded: '
-    + kept.map((c) => c.mountAs).join(', '));
+  if (!kept.length) return;
+  const v = { n: kept.length, names: kept.map((c) => c.mountAs).join(', ') };
+  log(v.n === 1 ? t('Kept 1 character added in the Studio since this page loaded: {names}', v)
+    : t('Kept {n} characters added in the Studio since this page loaded: {names}', v));
 }
 
 // Lock cell / Unlock cell, from the cell's right-click menu. A cell past the
@@ -3336,9 +3422,10 @@ function cellToggleLock(i) {
     padTo(i);
     order.push({ kind: 'dummy', locked: '1' });
   }
-  const name = info && info.kind === 'char' ? ' (' + info.displayName + ')' : '';
-  log((was ? 'Unlocked cell ' : 'Locked cell ') + i + name, true);
-  Session.record((was ? 'unlocked cell ' : 'locked cell ') + i, true);
+  const v = { cell: i, name: info && info.kind === 'char' ? info.displayName : '' };
+  log(was ? (v.name ? t('Unlocked cell {cell} ({name})', v) : t('Unlocked cell {cell}', v))
+    : (v.name ? t('Locked cell {cell} ({name})', v) : t('Locked cell {cell}', v)), true);
+  Session.record(was ? t('unlocked cell {cell}', { cell: i }) : t('locked cell {cell}', { cell: i }), true);
   render();
 }
 
@@ -3551,14 +3638,16 @@ function onDrop(payload, target, addVariant, opts) {
     const id = payload.slice(4);
     const at = orderIndexOfCell(target);
     if (at && order.slice(at.start, at.end).some((e) => e.char && lc(e.char) === lc(id))) {
-      return refused(target === wanted ? charName(id) + ' is already in cell ' + target
-        : 'Cell ' + wanted + ' is reserved by ' + (MI.name || 'the screenpack') + ', and the next cell, '
-          + target + ', already holds ' + charName(id));
+      const v = { name: charName(id), cell: wanted, next: target, pack: MI.name };
+      return refused(target === wanted ? t('{name} is already in cell {cell}', { name: v.name, cell: target })
+        : MI.name ? t('Cell {cell} is reserved by {pack}, and the next cell, {next}, already holds {name}', v)
+        : t('Cell {cell} is reserved by the screenpack, and the next cell, {next}, already holds {name}', v));
     }
   }
   if (target !== wanted) {
-    log('Cell ' + wanted + ' is reserved by ' + (MI.name || 'the screenpack')
-      + ' — placed at ' + target + ' instead');
+    const v = { cell: wanted, pack: MI.name, next: target };
+    log(MI.name ? t('Cell {cell} is reserved by {pack} — placed at {next} instead', v)
+      : t('Cell {cell} is reserved by the screenpack — placed at {next} instead', v));
   }
   // A LOCKED CELL TAKES NOTHING: no character, no variant, no swap.
   const locked = lockRefuses(target, 'dropped onto');
@@ -3577,7 +3666,7 @@ function onDrop(payload, target, addVariant, opts) {
   let landing = target;   // where an EMPTY target ends up after the removal
   let moving = null;      // the entry being moved, detached from order
   let vacated = -1;       // order index the mover was lifted OUT of, if any
-  let liftedFrom = '';    // the log's words on where a lifted one came from
+  let liftedFrom = null;  // where a lifted one came from (liftFromBuild's `from`)
   let liftHole = null;    // the unused cell a lifted one left (liftFromBuild)
   // Where the locked cells are before anything moves, so a shift below can be
   // taken back for them (pinLocks).
@@ -3626,7 +3715,7 @@ function onDrop(payload, target, addVariant, opts) {
       liftedFrom = l.from;
       liftHole = l.hole;
     } else {
-      if (inOrder(id)) return refused(id + ' is already in the build');
+      if (inOrder(id)) return refused(t('{name} is already in the build', { name: id }));
       moving = takeFromLibrary(id);
     }
   } else return;
@@ -3649,8 +3738,8 @@ function onDrop(payload, target, addVariant, opts) {
       moving.slot = '';
       if (vacated >= 0) order.splice(vacated, 0, { kind: 'dummy' });
       const pk = parkEntry(moving);
-      log('Placed ' + moving.char + ' → cell ' + pk.cell + liftedFrom, true);
-      Session.record('placed ' + moving.char + ' in cell ' + pk.cell, true);
+      log(placedLine(moving.char, pk.cell, liftedFrom), true);
+      Session.record(t('placed {name} in cell {cell}', { name: moving.char, cell: pk.cell }), true);
     } else if (addVariant) {
       // Give the destination a slot id if it has none, then insert the mover
       // at the end of that run so the members stay CONSECUTIVE - the block
@@ -3659,8 +3748,8 @@ function onDrop(payload, target, addVariant, opts) {
       if (!sid) { sid = 'g' + Date.now().toString(36); for (let k = span.start; k < span.end; k++) order[k].slot = sid; }
       moving.slot = sid;
       order.splice(span.end, 0, moving);
-      log('Added ' + moving.char + ' as a variant of cell ' + target, true);
-      Session.record(moving.char + ' as a variant of cell ' + target, true);
+      log(t('Added {name} as a variant of cell {cell}', { name: moving.char, cell: target }), true);
+      Session.record(t('{name} as a variant of cell {cell}', { name: moving.char, cell: target }), true);
       // Making a slot is the moment its commands become worth setting, so the
       // window opens itself - the same two moments VSelect opens it.
       VARIANT_MADE = sid;
@@ -3674,14 +3763,17 @@ function onDrop(payload, target, addVariant, opts) {
       if (vacated >= 0) order.splice(vacated, 0, { kind: 'dummy' });
       const m = shiftInsert(moving, destEntry);
       const names = m.shifted.map((c) => c[0].char || c[0].kind);
-      log('Moved ' + moving.char + ' → cell ' + m.cell
-        + (names.length ? ' (' + names.join(', ') + ' moved on one cell)' : '')
-        + (m.tookRandom ? ', replacing the RandomSelect cell ' + m.sink : ''), true);
+      const v = { name: moving.char, cell: m.cell, names: names.join(', '), sink: m.sink };
+      log(names.length
+        ? (m.tookRandom ? t('Moved {name} → cell {cell} ({names} moved on one cell), replacing the RandomSelect cell {sink}', v)
+          : t('Moved {name} → cell {cell} ({names} moved on one cell)', v))
+        : (m.tookRandom ? t('Moved {name} → cell {cell}, replacing the RandomSelect cell {sink}', v)
+          : t('Moved {name} → cell {cell}', v)), true);
       if (m.beyond && names.length) {
-        log(names[names.length - 1] + ' was pushed past the last cell of the grid: still in the'
-          + ' build, but with no cell. Free a cell or add rows or columns, then Move into the grid.');
+        log(t('{name} was pushed past the last cell of the grid: still in the build, but with no cell. Free a cell or add rows or columns, then Move into the grid.',
+          { name: names[names.length - 1] }));
       }
-      Session.record('moved ' + moving.char + ' to cell ' + m.cell, true);
+      Session.record(t('moved {name} to cell {cell}', { name: moving.char, cell: m.cell }), true);
     } else {
       moving.slot = '';
       const victim = order[span.start];
@@ -3716,8 +3808,16 @@ function onDrop(payload, target, addVariant, opts) {
       if (vacated >= 0) order.splice(vacated, 0, victim);
       else if (liftHole && order.includes(liftHole)) order.splice(order.indexOf(liftHole), 1, victim);
       else parked = parkEntry(victim);
-      Session.record(o.swapStep || 'swapped ' + moving.char + ' with ' + victim.char, true);
-      log((o.swapLog || 'Swapped ' + moving.char + ' ↔ ' + victim.char) + parkedNote(victim, parked), true);
+      Session.record(o.swapStep || t('swapped {name} with {other}', { name: moving.char, other: victim.char }), true);
+      // Replace…'s swap (o.swapLog) trades two cells of the grid, so it never
+      // parks anyone; a drag's swap says where the displaced one went when it
+      // was not the plain end of the list (parkEntry).
+      const v = { name: moving.char, other: victim.char, cell: parked && parked.cell };
+      const how = parked ? parked.how : 'end';
+      log(o.swapLog || (how === 'end' ? t('Swapped {name} ↔ {other}', v)
+        : how === 'beyond' ? t('Swapped {name} ↔ {other} ({other} went past the last cell of the grid: every cell is taken)', v)
+        : how === 'random' ? t('Swapped {name} ↔ {other} ({other} took the RandomSelect cell {cell})', v)
+        : t('Swapped {name} ↔ {other} ({other} took the free cell {cell})', v)), true);
     }
   } else {
     // Empty (or hole) target. TWO CASES, and only one of them is padding.
@@ -3751,14 +3851,13 @@ function onDrop(payload, target, addVariant, opts) {
       // into his old place moves it up again. Reporting `landing` said
       // "cell 3" for a drop that put him in cell 4 - in the log, and in the
       // Undo and Revert tooltips, which read this label.
-      log('Placed ' + moving.char + ' → cell ' + target + liftedFrom, true);
-      Session.record('placed ' + moving.char + ' in cell ' + target, true);
+      log(placedLine(moving.char, target, liftedFrom), true);
+      Session.record(t('placed {name} in cell {cell}', { name: moving.char, cell: target }), true);
     } else {
       const holes = padTo(landing);
       order.push(moving);
-      log('Placed ' + moving.char + ' → cell ' + landing
-        + (holes ? ' (+' + holes + ' empty)' : '') + liftedFrom, true);
-      Session.record('placed ' + moving.char + ' in cell ' + landing, true);
+      log(placedLine(moving.char, landing, liftedFrom, holes), true);
+      Session.record(t('placed {name} in cell {cell}', { name: moving.char, cell: landing }), true);
     }
   }
   unpinLocks(pins);
@@ -3778,6 +3877,12 @@ function onDrop(payload, target, addVariant, opts) {
 // three fields, `author:x` / `path:y` / `name:z` narrow to one. Two builds of
 // the same character share a display name and differ only by author and
 // folder, so searching by name alone cannot separate them.
+// THE QUALIFIERS ARE TYPED AS THEY ARE in every language, so the hint that
+// names them keeps them out of the words a pack translates: placeholders.
+function searchHint() {
+  return t('Search… (name, {author}, {path})', { author: 'author:', path: 'path:' });
+}
+$('#search').placeholder = searchHint();
 function matchesQuery(c, q) {
   if (!q) return true;
   const fields = {
@@ -3833,35 +3938,39 @@ function authorOf(id) {
 
 // The label a cell shows: "Makoto [by NHK]", falling back to the mount id when
 // a character ships no author, since a bare name is ambiguous on this roster.
+// IN THE VIEWER'S WORDS (t()): where it shows - the tooltip, the footer, the
+// header of the cell's menu - it sits beside the character's name, so those
+// spots are translate="no" and nothing translates it after this.
 function cellLabel(info, i) {
   // While Lock cells is on, a locked cell says so wherever its label shows:
-  // the tooltip, the footer and the header of its menu.
-  const lk = i !== undefined && i !== null && cellLocked(i) ? '  (locked)' : '';
+  // the tooltip, the footer and the header of its menu. The marks are tags
+  // after the label, each a word of its own.
+  const lk = i !== undefined && i !== null && cellLocked(i) ? '  ' + t('(locked)') : '';
   // Four different empties now, and telling them apart is most of the point.
   if (!info) {
     // Free ground the SCREENPACK reserves. No roster entry sits here - the
     // imported layout stops at the last character - but the pack's artwork
     // does, so it is not somewhere to put anyone.
     if (THEMELAYOUT && THEMELAYOUT.cells && THEMELAYOUT.cells[i] === 'hole') {
-      return '(reserved by ' + (MI.name || 'the screenpack') + ')';
+      return MI.name ? t('(reserved by {pack})', { pack: MI.name }) : t('(reserved by the screenpack)');
     }
-    return '(unused cell)';
+    return t('(unused cell)');
   }
-  if (info.kind === 'skip') return '(skipslot \u2014 draws nothing, cursor skips it)' + lk;
-  if (info.kind === 'dummy') return '(unused cell \u2014 empty, cursor can rest on it)' + lk;
-  if (info.kind === 'random') return '(random select)' + lk;
+  if (info.kind === 'skip') return t('(skipslot \u2014 draws nothing, cursor skips it)') + lk;
+  if (info.kind === 'dummy') return t('(unused cell \u2014 empty, cursor can rest on it)') + lk;
+  if (info.kind === 'random') return t('(random select)') + lk;
   const who = authorOf(info.char);
-  const ex = info.props && String(info.props.exclude || '') !== '' ? '  (excluded)' : '';
+  const ex = info.props && String(info.props.exclude || '') !== '' ? '  ' + t('(excluded)') : '';
   // Named first, because it explains the blank cell and the missing author at
   // once: with no folder there is no .def to read an author out of, so the
   // label falls back to the id and reads "Name [Name]".
   const gone = missingFromDisk(info.char)
-    ? '\n\u26a0 NOT ON DISK - this character is in the build but its files are gone.'
-      + '\nRemove it from the build, or re-import the character.'
+    ? '\n\u26a0 ' + t('NOT ON DISK - this character is in the build but its files are gone.')
+      + '\n' + t('Remove it from the build, or re-import the character.')
     : '';
-  return info.displayName
-    + (who ? ' [by ' + who + ']' : (info.char ? ' [' + info.char + ']' : ''))
-    + (info.variants > 1 ? '  (' + info.variants + ' variants)' : '') + ex + lk + gone;
+  return (who ? t('{name} [by {author}]', { name: info.displayName, author: who })
+      : info.displayName + (info.char ? ' [' + info.char + ']' : ''))
+    + (info.variants > 1 ? '  ' + t('({n} variants)', { n: info.variants }) : '') + ex + lk + gone;
 }
 
 // VSelect labels the cell under the cursor, at the cursor. Kept clamped inside
@@ -4043,6 +4152,10 @@ function bigPortraitVerdict(id) {
     spr: spr.join(','), w: cp.face.w, h: cp.face.h,
     drawnW: Math.round(drawnW), drawnH: Math.round(drawnH),
     fitW: Math.round(refW), fitH: Math.round(refH),
+    // What the size is measured against: `frame` says which, for code that
+    // words a whole sentence per case (bigPortraitAdvice); `against` is the
+    // English phrase itself.
+    frame: !!(under && win),
     against: (under && win) ? 'the frame the screenpack reserves for it' : 'the screen',
     wantW: Math.round(refW / (sc[0] * resFix)),
     wantH: Math.round(refH / (sc[1] * resFix)),
@@ -4055,50 +4168,37 @@ function bigPortraitVerdict(id) {
   };
 }
 
+// THE ADVICE IS PARAGRAPHS, each one whole sentences in one t() with its
+// numbers as placeholders; the paragraphs are joined by a blank line. The
+// engine's own names (localcoord, portraitscale, motif.localcoord, .def) are
+// part of the sentences, as the scene writes them.
 function bigPortraitAdvice(v) {
   const LF = String.fromCharCode(10);
   const why = v.kind === 'over'
-    ? 'This character stores that at ' + v.w + 'x' + v.h + ' pixels, which is'
-      + ' several times what a character cut for this screenpack stores.'
-    : 'This character stores that at ' + v.w + 'x' + v.h + ' pixels and declares'
-      + ' localcoord ' + v.localcoord + '. The bigger a character\u2019s own'
-      + ' coordinate space, the LESS the engine scales its artwork up - at '
-      + v.localcoord + ' against this motif it is multiplied by only '
-      + v.resFix + ', where a 320-space character would get '
-      + Math.round((v.resFix * v.localcoord / 320) * 100) / 100 + '.';
-  return 'THIS IS ABOUT THE CHARACTER, not about anything you changed.' + LF + LF
-    + 'The screenpack draws its big portrait from sprite ' + v.spr + '. ' + why
+    ? t('The screenpack draws its big portrait from sprite {spr}. This character stores that at {w}x{h} pixels, which is several times what a character cut for this screenpack stores.', v)
+    : t('The screenpack draws its big portrait from sprite {spr}. This character stores that at {w}x{h} pixels and declares localcoord {localcoord}. The bigger a character\u2019s own coordinate space, the LESS the engine scales its artwork up - at {localcoord} against this motif it is multiplied by only {resFix}, where a 320-space character would get {asIf320}.',
+      Object.assign({ asIf320: Math.round((v.resFix * v.localcoord / 320) * 100) / 100 }, v));
+  return t('THIS IS ABOUT THE CHARACTER, not about anything you changed.') + LF + LF
+    + why + LF + LF
+    + (v.frame
+      ? t('The engine scales it by the screenpack\u2019s face scale, {scale}, times motif.localcoord / char.localcoord = {resFix}, which lands it at {drawnW}x{drawnH} against {fitW}x{fitH} of the frame the screenpack reserves for it.', v)
+      : t('The engine scales it by the screenpack\u2019s face scale, {scale}, times motif.localcoord / char.localcoord = {resFix}, which lands it at {drawnW}x{drawnH} against {fitW}x{fitH} of the screen.', v))
     + LF + LF
-    + 'The engine scales it by the screenpack\u2019s face scale, ' + v.scale
-    + ', times motif.localcoord / char.localcoord = ' + v.resFix
-    + ', which lands it at ' + v.drawnW + 'x' + v.drawnH + ' against '
-    + v.fitW + 'x' + v.fitH + ' of ' + v.against + '.' + LF + LF
     + (v.kind === 'over'
-      ? 'It will overhang in game exactly as it does here, and the screenpack'
-        + ' may mirror it for player 2, which makes it more obvious still.'
-      : 'It will be just as small in game. Nothing is broken - the engine is'
-        + ' doing what the character\u2019s own .def asks for.') + LF + LF
-    + 'TO FIX IT, give the character a sprite at ' + v.spr + ' of roughly '
-    + v.wantW + 'x' + v.wantH + ' pixels. Nothing in your roster is affected.';
+      ? t('It will overhang in game exactly as it does here, and the screenpack may mirror it for player 2, which makes it more obvious still.')
+      : t('It will be just as small in game. Nothing is broken - the engine is doing what the character\u2019s own .def asks for.')) + LF + LF
+    + t('TO FIX IT, give the character a sprite at {spr} of roughly {wantW}x{wantH} pixels. Nothing in your roster is affected.', v);
 }
 
 // The long form, shown on hover in the panel and on the grid badge.
 function portraitAdvice(v) {
   const LF = String.fromCharCode(10);
-  return 'THIS IS ABOUT THE CHARACTER, not about anything you changed.' + LF + LF
-    + 'The motif asks every character for sprite ' + v.spr + ' as its cell portrait.'
-    + ' This one is ' + v.w + 'x' + v.h + ' pixels.' + LF + LF
-    + 'The engine scales it by this screenpack\u2019s portrait scale, ' + v.psc
-    + ', times portraitscale x motif.localcoord / char.localcoord'
-    + ' = ' + v.portraitscale + ' x ' + (MI.localcoord || [320])[0] + ' / ' + v.localcoord
-    + ' = ' + v.resFix + ', which lands it at '
-    + v.drawnW + 'x' + v.drawnH + ' in a ' + v.cellW + 'x' + v.cellH + ' cell.' + LF + LF
-    + 'TO FIX IT, give the character a sprite at ' + v.spr + ' of roughly '
-    + v.wantW + 'x' + v.wantH + ' pixels - that is what fills this cell at its'
-    + ' scaling. Most characters ship 25x25 there for a 320-wide game.'
-    + ' Changing localcoord or portraitscale in the .def moves the same number'
-    + ' the other way.' + LF + LF
-    + 'Nothing in your roster is affected. The cell looks like this in game too.';
+  return t('THIS IS ABOUT THE CHARACTER, not about anything you changed.') + LF + LF
+    + t('The motif asks every character for sprite {spr} as its cell portrait. This one is {w}x{h} pixels.', v) + LF + LF
+    + t('The engine scales it by this screenpack\u2019s portrait scale, {psc}, times portraitscale x motif.localcoord / char.localcoord = {portraitscale} x {motifW} / {localcoord} = {resFix}, which lands it at {drawnW}x{drawnH} in a {cellW}x{cellH} cell.',
+      Object.assign({ motifW: (MI.localcoord || [320])[0] }, v)) + LF + LF
+    + t('TO FIX IT, give the character a sprite at {spr} of roughly {wantW}x{wantH} pixels - that is what fills this cell at its scaling. Most characters ship 25x25 there for a 320-wide game. Changing localcoord or portraitscale in the .def moves the same number the other way.', v) + LF + LF
+    + t('Nothing in your roster is affected. The cell looks like this in game too.');
 }
 
 // A MUSIC PREFIX IS A LIST OF TRACKS, not one path.
@@ -4227,7 +4327,7 @@ async function setGridShape(rows, columns) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rows, columns }),
   })).json();
-  if (r.error) { log('ERROR ' + r.error); return false; }
+  if (r.error) { log(t('ERROR {error}', { error: r.error })); return false; }
   return true;
 }
 
@@ -4275,13 +4375,13 @@ async function insertRow(at) {
   order.splice(pos, 0, ...blanks);
   unpinLocks(pins);
   markDirty(true);
-  log('Inserted a row at ' + (at + 1), true);
-  if (await setGridShape(S.rows + 1, cols)) await saveOrderThenReload('inserted row ' + (at + 1));
+  log(t('Inserted a row at {n}', { n: at + 1 }), true);
+  if (await setGridShape(S.rows + 1, cols)) await saveOrderThenReload(t('inserted row {n}', { n: at + 1 }));
 }
 
 async function deleteRow(at) {
   const S = MI.select, cols = S.columns;
-  if (S.rows <= 1) { log('A grid needs at least one row'); return; }
+  if (S.rows <= 1) { log(t('A grid needs at least one row')); return; }
   const blocked = rowDeleteBlock(at);
   if (blocked) { log(lockedWhy(blocked.cell, blocked.what)); return; }
   const pins = pinLocks();
@@ -4293,9 +4393,9 @@ async function deleteRow(at) {
   }
   unpinLocks(pins);
   markDirty(true);
-  log('Deleted row ' + (at + 1)
-    + (lost.length ? ' (' + lost.reverse().join(', ') + ' back in the library)' : ''), true);
-  if (await setGridShape(S.rows - 1, cols)) await saveOrderThenReload('deleted row ' + (at + 1));
+  const v = { n: at + 1, names: lost.reverse().join(', ') };
+  log(lost.length ? t('Deleted row {n} ({names} back in the library)', v) : t('Deleted row {n}', v), true);
+  if (await setGridShape(S.rows - 1, cols)) await saveOrderThenReload(t('deleted row {n}', { n: at + 1 }));
 }
 
 async function insertColumn(at) {
@@ -4306,13 +4406,13 @@ async function insertColumn(at) {
   }
   unpinLocks(pins, (i) => Math.floor(i / cols) * (cols + 1) + (i % cols));
   markDirty(true);
-  log('Inserted a column at ' + (at + 1), true);
-  if (await setGridShape(S.rows, cols + 1)) await saveOrderThenReload('inserted column ' + (at + 1));
+  log(t('Inserted a column at {n}', { n: at + 1 }), true);
+  if (await setGridShape(S.rows, cols + 1)) await saveOrderThenReload(t('inserted column {n}', { n: at + 1 }));
 }
 
 async function deleteColumn(at) {
   const S = MI.select, cols = S.columns;
-  if (cols <= 1) { log('A grid needs at least one column'); return; }
+  if (cols <= 1) { log(t('A grid needs at least one column')); return; }
   const blocked = colDeleteBlock(at);
   if (blocked) { log(lockedWhy(blocked.cell, blocked.what)); return; }
   const pins = pinLocks();
@@ -4326,9 +4426,9 @@ async function deleteColumn(at) {
   // stops the rest); it moves in one column, as it would have anyway.
   unpinLocks(pins, (i) => (i % cols < cols - 1 ? Math.floor(i / cols) * (cols - 1) + (i % cols) : null));
   markDirty(true);
-  log('Deleted column ' + (at + 1)
-    + (lost.length ? ' (' + lost.reverse().join(', ') + ' back in the library)' : ''), true);
-  if (await setGridShape(S.rows, cols - 1)) await saveOrderThenReload('deleted column ' + (at + 1));
+  const v = { n: at + 1, names: lost.reverse().join(', ') };
+  log(lost.length ? t('Deleted column {n} ({names} back in the library)', v) : t('Deleted column {n}', v), true);
+  if (await setGridShape(S.rows, cols - 1)) await saveOrderThenReload(t('deleted column {n}', { n: at + 1 }));
 }
 
 // The roster half is staged and the screenpack half is already written, so the
@@ -4353,9 +4453,9 @@ async function saveOrderThenReload(label) {
     body: JSON.stringify(body),
   })).json();
   if (label) Session.record(label);
-  if (r.error) { log('ERROR ' + r.error); return; }
+  if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
   logStudioAdds(kept);
-  if (r.backup) log('Backed up the previous roster to ' + r.backup);
+  if (r.backup) log(t('Backed up the previous roster to {file}', { file: r.backup }));
   await load(true);
 }
 
@@ -4380,7 +4480,10 @@ function editGrid() {
   back.onmousedown = shut;
   const h = document.createElement('div');
   h.className = 'phead';
-  h.textContent = 'Grid \u00b7 ' + MI.name;
+  // The pack's name is in it, so the head is translate="no" and says its own
+  // word through t().
+  h.textContent = t('Grid \u00b7 {name}', { name: MI.name });
+  h.setAttribute('translate', 'no');
   const form = document.createElement('div');
   form.className = 'gridform';
   const field = (label, val) => {
@@ -4390,12 +4493,12 @@ function editGrid() {
     form.appendChild(l); form.appendChild(i);
     return i;
   };
-  const rows = field('rows', S.rows);
-  const cols = field('columns', S.columns);
-  const cw = field('cell width', S.cellSize[0]);
-  const ch = field('cell height', S.cellSize[1]);
-  const sx = field('spacing x', S.cellSpacing[0]);
-  const sy = field('spacing y', S.cellSpacing[1]);
+  const rows = field(t('rows'), S.rows);
+  const cols = field(t('columns'), S.columns);
+  const cw = field(t('cell width'), S.cellSize[0]);
+  const ch = field(t('cell height'), S.cellSize[1]);
+  const sx = field(t('spacing x'), S.cellSpacing[0]);
+  const sy = field(t('spacing y'), S.cellSpacing[1]);
   const note = document.createElement('div');
   note.className = 'hint wide';
   // CELLS, NOT ENTRIES, as the footer counts them (drawGeom): a slot block is
@@ -4404,11 +4507,12 @@ function editGrid() {
   const say = () => {
     const total = (parseInt(rows.value, 10) || 0) * (parseInt(cols.value, 10) || 0);
     const used = gridCellCount();
-    note.innerHTML = total + ' cells, ' + plural(used, 'cell') + ' in use \u2014 '
-      + (total < used
-        ? '<b style="color:var(--warn)">' + (used - total)
-          + ' would not fit and the engine could not reach them</b>'
-        : (total - used) + ' spare');
+    const rest = total < used
+      ? '<b style="color:var(--warn)">' + t('{n} would not fit and the engine could not reach them', { n: used - total }) + '</b>'
+      : t('{n} spare', { n: total - used });
+    note.innerHTML = used === 1
+      ? t('{total} cells, 1 cell in use \u2014 {rest}', { total, rest })
+      : t('{total} cells, {used} cells in use \u2014 {rest}', { total, used, rest });
   };
   for (const i of [rows, cols]) i.oninput = say;
   say();
@@ -4429,7 +4533,7 @@ function editGrid() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })).json();
-    if (r.error) { log('ERROR ' + r.error); return; }
+    if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
     shut();
     // THE VALUES WRITTEN, not the ones typed: the server keeps rows and
     // columns to 1-64, a cell to 1-512 and spacing to 0-512 (r.set is what
@@ -4442,20 +4546,29 @@ function editGrid() {
       cellSize: two(set['cell.size'], body.cellSize),
       cellSpacing: two(set['cell.spacing'], body.cellSpacing),
     };
+    // Each value the server moved is a phrase of its own, capped or raised.
+    const BOUND = {
+      rows: [(n) => t('rows capped at {n}', { n }), (n) => t('rows raised to {n}', { n })],
+      columns: [(n) => t('columns capped at {n}', { n }), (n) => t('columns raised to {n}', { n })],
+      cellW: [(n) => t('cell width capped at {n}', { n }), (n) => t('cell width raised to {n}', { n })],
+      cellH: [(n) => t('cell height capped at {n}', { n }), (n) => t('cell height raised to {n}', { n })],
+      spaceX: [(n) => t('spacing x capped at {n}', { n }), (n) => t('spacing x raised to {n}', { n })],
+      spaceY: [(n) => t('spacing y capped at {n}', { n }), (n) => t('spacing y raised to {n}', { n })],
+    };
     const moved = [];
     const bound = (what, asked, wrote) => {
-      if (asked !== wrote) moved.push(what + ' ' + (wrote < asked ? 'capped at ' : 'raised to ') + wrote);
+      if (asked !== wrote) moved.push(BOUND[what][wrote < asked ? 0 : 1](wrote));
     };
     bound('rows', body.rows, got.rows);
     bound('columns', body.columns, got.columns);
-    bound('cell width', body.cellSize[0], got.cellSize[0]);
-    bound('cell height', body.cellSize[1], got.cellSize[1]);
-    bound('spacing x', body.cellSpacing[0], got.cellSpacing[0]);
-    bound('spacing y', body.cellSpacing[1], got.cellSpacing[1]);
-    log('Grid is now ' + got.rows + '×' + got.columns
-      + ', cells ' + got.cellSize.join('×') + ', spacing ' + got.cellSpacing.join(',')
-      + (moved.length ? ' (' + moved.join(', ') + ')' : ''), true);
-    Session.record('grid ' + got.rows + '×' + got.columns + ' on ' + MI.name);
+    bound('cellW', body.cellSize[0], got.cellSize[0]);
+    bound('cellH', body.cellSize[1], got.cellSize[1]);
+    bound('spaceX', body.cellSpacing[0], got.cellSpacing[0]);
+    bound('spaceY', body.cellSpacing[1], got.cellSpacing[1]);
+    const v = { rows: got.rows, columns: got.columns, size: got.cellSize.join('×'), spacing: got.cellSpacing.join(','), changes: moved.join(', ') };
+    log(moved.length ? t('Grid is now {rows}×{columns}, cells {size}, spacing {spacing} ({changes})', v)
+      : t('Grid is now {rows}×{columns}, cells {size}, spacing {spacing}', v), true);
+    Session.record(t('grid {rows}×{columns} on {name}', { rows: got.rows, columns: got.columns, name: MI.name }));
     await load(true);
   };
   row.appendChild(cancel); row.appendChild(ok);
@@ -4608,7 +4721,7 @@ function rebasePending() {
     if (printOf(pend) === printOf(saved)) { PENDING.delete(id); dropped = true; }
     else PENDING_BASE.set(pend, saved);
   }
-  if (dropped) Session.formTouched = PENDING.size ? PENDING.size + ' character(s) with property edits' : null;
+  if (dropped) Session.formTouched = PENDING.size ? t('{n} character(s) with property edits', { n: PENDING.size }) : null;
 }
 
 // Which property blocks are folded. Session-scoped, so it survives a redraw.
@@ -4655,8 +4768,9 @@ function modal(title, hint, value, onSave, onShut) {
 function slotPanel(i, members) {
   const pane = $('#slotPane');
   const list = $('#slotBody');
-  $('#slothead').textContent = 'Slot @ cell ' + i + ' \u00b7 ' + members.length + ' variant'
-    + (members.length === 1 ? '' : 's');
+  $('#slothead').textContent = members.length === 1
+    ? t('Slot @ cell {cell} \u00b7 1 variant', { cell: i })
+    : t('Slot @ cell {cell} \u00b7 {n} variants', { cell: i, n: members.length });
   pane.hidden = false;
   $('#splitSlot').hidden = false;
   syncRightColumn();
@@ -4674,14 +4788,18 @@ function slotPanel(i, members) {
     im.onerror = () => { im.style.visibility = 'hidden'; };
     const nm = document.createElement('div');
     nm.className = 'nm'; nm.textContent = m.displayName;
+    nm.setAttribute('translate', 'no');
     top.appendChild(im); top.appendChild(nm);
     card.appendChild(top);
     const pr = m.props || {};
+    // The labels are the slot's own select.def keys, written as the file
+    // writes them: translate="no".
     for (const [label, key] of [['select', 'select_'], ['next', 'next'], ['previous', 'previous']]) {
       const row = document.createElement('div');
       row.className = 'fld';
       const l = document.createElement('label');
       l.textContent = label;
+      l.setAttribute('translate', 'no');
       const inp = document.createElement('input');
       inp.value = pr[key] || '';
       inp.placeholder = '\u2013';
@@ -4716,10 +4834,10 @@ function slotPanel(i, members) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mountAs: char, props }),
       })).json();
-      if (r.error) { log('ERROR ' + r.error); return; }
+      if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
     }
-    log('Slot commands saved for ' + [...byChar.keys()].join(', '), true);
-    Session.record('slot commands @ cell ' + i);
+    log(t('Slot commands saved for {names}', { names: [...byChar.keys()].join(', ') }), true);
+    Session.record(t('slot commands @ cell {cell}', { cell: i }));
     await load(true);
     // The cell survives the reload, so the section stays on the same slot.
     if (CELLS.some((c) => c.index === i && c.slot)) showSlotMembers(i);
@@ -4766,11 +4884,11 @@ function syncRightColumn() {
 // grid too large to scan.
 function findOnGrid(id) {
   const cell = CELLS.find((x) => x.kind === 'char' && lc(x.char) === lc(id));
-  if (!cell) { log(id + ' is not on the grid'); return; }
+  if (!cell) { log(t('{name} is not on the grid', { name: id })); return; }
   sel = cell.index;
   drawGrid(); drawInspector();
   if (!flashCell(cell.index)) return;
-  log('Found ' + cell.displayName + ' at row ' + (cell.row + 1) + ', col ' + (cell.col + 1));
+  log(t('Found {name} at row {row}, col {col}', { name: cell.displayName, row: cell.row + 1, col: cell.col + 1 }));
 }
 // Scroll cell i into the middle of the stage and flash it. False when the
 // grid draws no such cell (one past its end).
@@ -4790,8 +4908,8 @@ async function openFolderById(id) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ char: id }),
   })).json();
-  if (r.error) { log('ERROR ' + r.error); return; }
-  log('Opened ' + r.dir);
+  if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
+  log(t('Opened {path}', { path: r.dir }));
 }
 
 // Put `entry` in cell i, padding with skipslots if the cell is past the end of
@@ -4835,12 +4953,16 @@ function whereInBuild(id) { const l = buildPlaces().get(lc(id)); return l ? l[0]
 // The picker's words for his places: every cell he is in, and "off the grid"
 // for any off it. A cell past the grid's last is off the grid as well, which
 // is what the footer calls it.
+// One whole phrase per case (t()), the cell numbers a list of their own. A
+// place is on the grid or off it, so a list with no cell on the grid has one
+// off it.
 function placeWords(list) {
   const cells = [...new Set(list.filter((p) => !p.off && !p.past).map((p) => p.cell))];
-  const words = [];
-  if (cells.length) words.push((cells.length > 1 ? 'cells ' : 'cell ') + cells.join(', '));
-  if (list.some((p) => p.off || p.past)) words.push('off the grid');
-  return 'already in the build, ' + words.join(' and ');
+  const off = list.some((p) => p.off || p.past);
+  const v = { cells: cells.join(', ') };
+  if (!cells.length) return t('already in the build, off the grid');
+  if (cells.length > 1) return off ? t('already in the build, cells {cells} and off the grid', v) : t('already in the build, cells {cells}', v);
+  return off ? t('already in the build, cell {cells} and off the grid', v) : t('already in the build, cell {cells}', v);
 }
 // A character's display name: the grid's, else the library's, else the id.
 function charName(id) {
@@ -4854,20 +4976,58 @@ function charName(id) {
 // shares keeps its other members, and one off the grid leaves that list
 // (takeFromLibrary, which serves a character only in the library as well).
 // `where` is the place to take him from (buildPlaces), his first by default.
-// Answers the entry, ready to be put in a cell, the log's words on where he
-// came from, and the unused cell he left when it is on the grid (`hole`),
-// which is where the one a swap displaces goes.
+// Answers the entry, ready to be put in a cell, where he came from (`from`,
+// null for one only in the library: `how` is 'off' the grid, 'past' its last
+// cell, out of a 'slot' or his own 'cell', and `cell` the cell), and the
+// unused cell he left when it is on the grid (`hole`), which is where the one
+// a swap displaces goes.
 function liftFromBuild(id, where) {
   const p = where || whereInBuild(id);
-  if (!p || p.off) return { entry: takeFromLibrary(id), from: p ? ' from off the grid' : '', hole: null };
+  if (!p || p.off) return { entry: takeFromLibrary(id), from: p ? { how: 'off' } : null, hole: null };
   const entry = order[p.at];
   let hole = null;
   if (p.shared) order.splice(p.at, 1);
   else { hole = { kind: 'dummy' }; order.splice(p.at, 1, hole); }
   entry.slot = '';
-  return { entry, hole: p.past ? null : hole, from: p.past ? ' from past the last cell of the grid'
-    : p.shared ? ' out of the slot in cell ' + p.cell
-    : ' from cell ' + p.cell + ', now an unused cell' };
+  return { entry, hole: p.past ? null : hole, from: { how: p.past ? 'past' : p.shared ? 'slot' : 'cell', cell: p.cell } };
+}
+
+// THE LOG'S LINE FOR A PLACED OR REPLACED CHARACTER, one whole sentence per
+// shape, since where he came from (liftFromBuild's `from`) is a clause other
+// languages put elsewhere. `holes` is how many unused cells were written to
+// reach a cell past the end of the list; `back`, the names a Replace… sends
+// back to the library.
+function placedLine(name, cell, from, holes) {
+  const v = { name, cell, n: holes, from: from && from.cell };
+  const how = from ? from.how : '';
+  if (holes) {
+    return how === 'off' ? t('Placed {name} → cell {cell} (+{n} empty) from off the grid', v)
+      : how === 'past' ? t('Placed {name} → cell {cell} (+{n} empty) from past the last cell of the grid', v)
+      : how === 'slot' ? t('Placed {name} → cell {cell} (+{n} empty) out of the slot in cell {from}', v)
+      : how === 'cell' ? t('Placed {name} → cell {cell} (+{n} empty) from cell {from}, now an unused cell', v)
+      : t('Placed {name} → cell {cell} (+{n} empty)', v);
+  }
+  return how === 'off' ? t('Placed {name} → cell {cell} from off the grid', v)
+    : how === 'past' ? t('Placed {name} → cell {cell} from past the last cell of the grid', v)
+    : how === 'slot' ? t('Placed {name} → cell {cell} out of the slot in cell {from}', v)
+    : how === 'cell' ? t('Placed {name} → cell {cell} from cell {from}, now an unused cell', v)
+    : t('Placed {name} → cell {cell}', v);
+}
+function replacedLine(name, other, from, back) {
+  const v = { name, other, from: from && from.cell, names: back.join(', ') };
+  const how = from ? from.how : '';
+  if (back.length) {
+    return how === 'off' ? t('Replaced {name} with {other} from off the grid ({names} back in the library)', v)
+      : how === 'past' ? t('Replaced {name} with {other} from past the last cell of the grid ({names} back in the library)', v)
+      : how === 'slot' ? t('Replaced {name} with {other} out of the slot in cell {from} ({names} back in the library)', v)
+      : how === 'cell' ? t('Replaced {name} with {other} from cell {from}, now an unused cell ({names} back in the library)', v)
+      : t('Replaced {name} with {other} ({names} back in the library)', v);
+  }
+  return how === 'off' ? t('Replaced {name} with {other} from off the grid', v)
+    : how === 'past' ? t('Replaced {name} with {other} from past the last cell of the grid', v)
+    : how === 'slot' ? t('Replaced {name} with {other} out of the slot in cell {from}', v)
+    : how === 'cell' ? t('Replaced {name} with {other} from cell {from}, now an unused cell', v)
+    : t('Replaced {name} with {other}', v);
 }
 
 // --- the actions the cell menu offers ------------------------------------
@@ -4875,16 +5035,15 @@ function liftFromBuild(id, where) {
 // moved here (its `lift`). A refusal goes back to the picker.
 function cellInsert(i) {
   if (lockRefuses(i, 'filled')) return;
-  pickCharacter('Insert into row ' + (Math.floor(i / MI.select.columns) + 1)
-    + ', col ' + ((i % MI.select.columns) + 1),
-  (c) => onDrop('lib:' + c.id, i, false, { lift: true }), 'Insert');
+  pickCharacter(t('Insert into row {row}, col {col}', { row: Math.floor(i / MI.select.columns) + 1, col: (i % MI.select.columns) + 1 }),
+    (c) => onDrop('lib:' + c.id, i, false, { lift: true }), t('Insert'));
 }
 
 function cellReplace(i) {
   const info = cellAt(i);
   if (!info || info.kind !== 'char') return;
   if (lockRefuses(i, 'replaced')) return;
-  pickCharacter('Replace ' + info.displayName, (c) => replaceWith(i, c), 'Replace');
+  pickCharacter(t('Replace {name}', { name: info.displayName }), (c) => replaceWith(i, c), t('Replace'));
 }
 
 // REPLACE X (cell i) WITH Y. One only in the library comes in as Replace
@@ -4903,7 +5062,7 @@ function cellReplace(i) {
 function replaceWith(i, c) {
   const info = cellAt(i);
   const span = orderIndexOfCell(i);
-  if (!info || info.kind !== 'char' || !span) return refused('Cell ' + i + ' holds no character to replace');
+  if (!info || info.kind !== 'char' || !span) return refused(t('Cell {cell} holds no character to replace', { cell: i }));
   const held = lockRefuses(i, 'replaced');
   if (held) return held;
   const X = info.displayName, Y = c.displayName;
@@ -4915,7 +5074,7 @@ function replaceWith(i, c) {
   // copies - nothing to see, and a step to undo. Alone in this cell he is
   // refused; one of its slot, that member is the one who stays.
   const mine = order.slice(span.start, span.end).find((e) => e.char && lc(e.char) === lc(c.id));
-  if (mine && !slotCell) return refused(Y + ' is already in cell ' + i);
+  if (mine && !slotCell) return refused(t('{name} is already in cell {cell}', { name: Y, cell: i }));
   const p = mine
     ? { cell: i, at: order.indexOf(mine), shared: true, past: i >= MI.select.rows * MI.select.columns }
     : whereInBuild(c.id);
@@ -4925,8 +5084,8 @@ function replaceWith(i, c) {
     if (!p.shared && !p.past && !slotCell) {
       return onDrop('cell:' + p.cell, i, false, {
         mode: 'swap',
-        swapLog: 'Swapped ' + X + ' (cell ' + i + ') and ' + Y + ' (cell ' + p.cell + ')',
-        swapStep: 'swapped ' + X + ' and ' + Y,
+        swapLog: t('Swapped {name} (cell {cell}) and {other} (cell {at})', { name: X, cell: i, other: Y, at: p.cell }),
+        swapStep: t('swapped {name} and {other}', { name: X, other: Y }),
       });
     }
   }
@@ -4936,8 +5095,8 @@ function replaceWith(i, c) {
   const l = liftFromBuild(c.id, p);
   setCellEntry(i, l.entry);
   trimTrailingHoles();
-  log('Replaced ' + X + ' with ' + Y + l.from + (back.length ? ' (' + back.join(', ') + ' back in the library)' : ''), true);
-  Session.record('replaced ' + X + ' with ' + Y, true);
+  log(replacedLine(X, Y, l.from, back), true);
+  Session.record(t('replaced {name} with {other}', { name: X, other: Y }), true);
   render(); drawInspector();
 }
 
@@ -4947,11 +5106,15 @@ function cellSetKind(i, kind) {
   if (lockRefuses(i, gone && kind === 'dummy' ? 'removed' : 'turned into another kind')) return;
   setCellEntry(i, { kind });
   trimTrailingHoles();
-  const what = kind === 'random' ? 'random-select'
-    : kind === 'dummy' ? 'an unused cell (the cursor can rest on it)'
-    : 'a skipslot (the cursor jumps over it)';
-  log('Cell ' + i + ' is now ' + what + (gone ? ' (' + gone + ' back in the library)' : ''), true);
-  Session.record('cell ' + i + ' -> ' + what, true);
+  const v = { cell: i, names: gone };
+  log(kind === 'random' ? (gone ? t('Cell {cell} is now random-select ({names} back in the library)', v) : t('Cell {cell} is now random-select', v))
+    : kind === 'dummy' ? (gone ? t('Cell {cell} is now an unused cell (the cursor can rest on it) ({names} back in the library)', v)
+      : t('Cell {cell} is now an unused cell (the cursor can rest on it)', v))
+    : (gone ? t('Cell {cell} is now a skipslot (the cursor jumps over it) ({names} back in the library)', v)
+      : t('Cell {cell} is now a skipslot (the cursor jumps over it)', v)), true);
+  Session.record(kind === 'random' ? t('cell {cell} -> random-select', { cell: i })
+    : kind === 'dummy' ? t('cell {cell} -> an unused cell (the cursor can rest on it)', { cell: i })
+    : t('cell {cell} -> a skipslot (the cursor jumps over it)', { cell: i }), true);
   if (kind === 'skip' || kind === 'dummy') sel = null;
   render(); drawInspector();
 }
@@ -4962,11 +5125,11 @@ function cellConvertToSlot(i) {
   const span = orderIndexOfCell(i);
   if (!span) return;
   if (lockRefuses(i, 'turned into a slot')) return;
-  if (order[span.start].slot) { log('That cell is already a slot'); return; }
+  if (order[span.start].slot) { log(t('That cell is already a slot')); return; }
   const sid = 'g' + Date.now().toString(36);
   for (let k = span.start; k < span.end; k++) order[k].slot = sid;
-  log('Cell ' + i + ' is a slot now - shift-drag characters onto it to add variants', true);
-  Session.record('cell ' + i + ' converted to a slot', true);
+  log(t('Cell {cell} is a slot now - shift-drag characters onto it to add variants', { cell: i }), true);
+  Session.record(t('cell {cell} converted to a slot', { cell: i }), true);
   render(); drawInspector();
   showSlotMembers(i);
 }
@@ -4992,10 +5155,13 @@ async function cellToggleExclude(i) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(Object.assign({ mountAs: info.char, props }, keepCell ? { keepCell: true } : {})),
   })).json();
-  if (r.error) { log('ERROR ' + r.error); return; }
-  log(info.displayName + (on ? ' is back on the grid' : ' excluded from the grid')
-    + (r.keptCell !== undefined ? '; cell ' + r.keptCell + ' is left as an unused cell, so the locked cells after it keep their places' : ''), true);
-  Session.record((on ? 'included ' : 'excluded ') + info.displayName);
+  if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
+  const v = { name: info.displayName, cell: r.keptCell };
+  log(r.keptCell !== undefined
+    ? (on ? t('{name} is back on the grid; cell {cell} is left as an unused cell, so the locked cells after it keep their places', v)
+      : t('{name} excluded from the grid; cell {cell} is left as an unused cell, so the locked cells after it keep their places', v))
+    : (on ? t('{name} is back on the grid', v) : t('{name} excluded from the grid', v)), true);
+  Session.record(on ? t('included {name}', { name: info.displayName }) : t('excluded {name}', { name: info.displayName }));
   await load(true);
 }
 
@@ -5006,8 +5172,8 @@ async function cellOpenFolder(i) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ char: info.char }),
   })).json();
-  if (r.error) { log('ERROR ' + r.error); return; }
-  log('Opened ' + r.dir);
+  if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
+  log(t('Opened {path}', { path: r.dir }));
 }
 
 // How many cells the list currently spells out. Same walk as padTo: a slot
@@ -5084,12 +5250,6 @@ function parkEntry(entry) {
   order.push(entry);
   return { cell: n, how: 'beyond' };
 }
-// The log's word on where parkEntry put him, when it was not the plain end.
-function parkedNote(entry, p) {
-  if (!p || p.how === 'end') return '';
-  if (p.how === 'beyond') return ' (' + entry.char + ' went past the last cell of the grid: every cell is taken)';
-  return ' (' + entry.char + ' took ' + (p.how === 'random' ? 'the RandomSelect cell ' : 'the free cell ') + p.cell + ')';
-}
 
 function strandedNote(list) {
   if (!list.length) return '';
@@ -5099,10 +5259,11 @@ function strandedNote(list) {
   const safe = (x) => String(x == null ? '' : x)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const names = list.map((c) => c.displayName || c.char);
-  const shown = names.slice(0, 4).join(', ')
-    + (names.length > 4 ? ' +' + (names.length - 4) + ' more' : '');
-  return '  ·  <span class="over">off the grid: ' + safe(shown)
-    + '</span> <button class="rescue" type="button">Move into the grid</button>';
+  const first = names.slice(0, 4).join(', ');
+  const shown = names.length > 4 ? t('{names} +{n} more', { names: first, n: names.length - 4 }) : first;
+  // In #geom, which is translate="no": the words are the viewer's already.
+  return '  ·  <span class="over">' + t('off the grid: {names}', { names: safe(shown) })
+    + '</span> <button class="rescue" type="button">' + t('Move into the grid') + '</button>';
 }
 
 // Reuses the drag path rather than touching order[] directly: onDrop() already
@@ -5122,15 +5283,15 @@ function rescueStranded() {
     const room = firstFreeCell();
     if (!room) break;
     const who = s[0];
-    moved.push((who.displayName || who.char)
-      + (room.how === 'random' ? ' (in the RandomSelect cell ' + room.cell + ')' : ''));
+    moved.push(room.how === 'random' ? t('{name} (in the RandomSelect cell {cell})', { name: who.displayName || who.char, cell: room.cell })
+      : (who.displayName || who.char));
     if (room.how === 'random') {
       const span = orderIndexOfCell(who.index);
       const m = order.splice(span.start, 1)[0];
       m.slot = '';
       setCellEntry(room.cell, m);
       trimTrailingHoles();
-      Session.record('put ' + m.char + ' in the RandomSelect cell ' + room.cell, true);
+      Session.record(t('put {name} in the RandomSelect cell {cell}', { name: m.char, cell: room.cell }), true);
       render();
     } else {
       onDrop('cell:' + who.index, room.cell);
@@ -5139,22 +5300,24 @@ function rescueStranded() {
   const all = strandedCells();
   const held = all.filter((c) => cellLocked(c.index));
   const left = all.filter((c) => !cellLocked(c.index));
-  if (moved.length) log('Moved onto the grid: ' + moved.join(', '), true);
+  if (moved.length) log(t('Moved onto the grid: {names}', { names: moved.join(', ') }), true);
   if (left.length) {
     const total = MI.select.rows * MI.select.columns;
     const randoms = !PREFS.dropReplaceRandom
       && CELLS.some((c) => c.variant === 0 && c.kind === 'random' && c.index < total);
-    log(left.length + ' still off the grid ('
-      + left.map((c) => c.displayName || c.char).join(', ')
-      + ') — every cell is taken. Give the grid more rows or columns, or free a cell.'
-      + (randoms ? ' Preferences › Replace RandomSelect cells when no free cells available'
-        + ' would let them take the RandomSelect cells.' : ''));
+    const v = { n: left.length, names: left.map((c) => c.displayName || c.char).join(', ') };
+    log(randoms
+      ? (v.n === 1 ? t('1 still off the grid ({names}) — every cell is taken. Give the grid more rows or columns, or free a cell. Preferences › Replace RandomSelect cells when no free cells available would let them take the RandomSelect cells.', v)
+        : t('{n} still off the grid ({names}) — every cell is taken. Give the grid more rows or columns, or free a cell. Preferences › Replace RandomSelect cells when no free cells available would let them take the RandomSelect cells.', v))
+      : (v.n === 1 ? t('1 still off the grid ({names}) — every cell is taken. Give the grid more rows or columns, or free a cell.', v)
+        : t('{n} still off the grid ({names}) — every cell is taken. Give the grid more rows or columns, or free a cell.', v)));
   }
   if (held.length) {
-    log(held.map((c) => c.displayName || c.char).join(', ')
-      + (held.length === 1 ? ' is' : ' are') + ' locked, so left off the grid.');
+    const names = held.map((c) => c.displayName || c.char).join(', ');
+    log(held.length === 1 ? t('{names} is locked, so left off the grid.', { names })
+      : t('{names} are locked, so left off the grid.', { names }));
   }
-  if (!moved.length && !left.length && !held.length) log('Nothing is off the grid.');
+  if (!moved.length && !left.length && !held.length) log(t('Nothing is off the grid.'));
 }
 
 function gridCellCount() {
@@ -5198,12 +5361,25 @@ function cellFill(from, kind, scope) {
     n++;
   }
   const padded = Math.max(0, (gridCellCount() - before) - beyond);
-  const what = kind === 'random' ? 'random-select'
-    : kind === 'dummy' ? 'unused cell' : 'skipslot';
-  log('Filled ' + n + ' cell(s) with ' + what
-    + (padded ? ' (+' + padded + ' unused cell(s) written to reach them)' : '')
-    + (kept ? '; ' + kept + ' locked cell(s) left as they are' : ''), true);
-  if (n) Session.record('filled ' + n + ' cell(s) with ' + what, true);
+  // The sentence is the kind and the count; the unused cells written to reach
+  // a column, and the locked cells left alone, are clauses added to it.
+  let line = kind === 'random' ? (n === 1 ? t('Filled 1 cell(s) with random-select') : t('Filled {n} cell(s) with random-select', { n }))
+    : kind === 'dummy' ? (n === 1 ? t('Filled 1 cell(s) with unused cell') : t('Filled {n} cell(s) with unused cell', { n }))
+    : (n === 1 ? t('Filled 1 cell(s) with skipslot') : t('Filled {n} cell(s) with skipslot', { n }));
+  if (padded) {
+    line = padded === 1 ? t('{line} (+1 unused cell(s) written to reach them)', { line })
+      : t('{line} (+{n} unused cell(s) written to reach them)', { line, n: padded });
+  }
+  if (kept) {
+    line = kept === 1 ? t('{line}; 1 locked cell(s) left as they are', { line })
+      : t('{line}; {n} locked cell(s) left as they are', { line, n: kept });
+  }
+  log(line, true);
+  if (n) {
+    Session.record(kind === 'random' ? t('filled {n} cell(s) with random-select', { n })
+      : kind === 'dummy' ? t('filled {n} cell(s) with unused cell', { n })
+      : t('filled {n} cell(s) with skipslot', { n }), true);
+  }
   render(); drawInspector();
 }
 
@@ -5264,27 +5440,40 @@ async function useThemeLayout() {
   const folder = (MI.motif || '').split('/')[0];
   const locked = locksOn() ? CELLS.filter((c) => c.variant === 0 && cellHasLock(c.index)).length : 0;
   if (locked) {
-    const go = await choose('Use this screenpack’s slot layout', [
-      'Rearranging the build into ' + (MI.name || 'the screenpack') + '’s own layout moves every cell, including your '
-        + plural(locked, 'locked cell') + ': the layout does not keep locks in place.',
-      'Locked characters keep their locks in their new cells; locked empty and random cells are replaced by the pack’s own.',
-    ], [{ label: 'Rearrange', value: true, primary: true }, { label: 'Cancel', value: false }], false);
+    // One sentence per case: the pack named or not, one lock or more.
+    const v = { pack: MI.name, n: locked };
+    const moves = MI.name
+      ? (locked === 1 ? t('Rearranging the build into {pack}’s own layout moves every cell, including your 1 locked cell: the layout does not keep locks in place.', v)
+        : t('Rearranging the build into {pack}’s own layout moves every cell, including your {n} locked cells: the layout does not keep locks in place.', v))
+      : (locked === 1 ? t('Rearranging the build into the screenpack’s own layout moves every cell, including your 1 locked cell: the layout does not keep locks in place.')
+        : t('Rearranging the build into the screenpack’s own layout moves every cell, including your {n} locked cells: the layout does not keep locks in place.', v));
+    const go = await choose(t('Use this screenpack’s slot layout'), [
+      moves,
+      t('Locked characters keep their locks in their new cells; locked empty and random cells are replaced by the pack’s own.'),
+    ], [{ label: t('Rearrange'), value: true, primary: true }, { label: t('Cancel'), value: false }], false);
     if (!go) return;
   }
   const r = await (await fetch('/api/theme-layout', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ folder, fromSystemDef: !!(THEMELAYOUT && THEMELAYOUT.source === 'system.def') }),
   })).json();
-  if (r.error) { log('ERROR ' + r.error); return; }
-  log('Took ' + MI.name + '\u2019s own layout \u2014 ' + r.holesPlaced + ' reserved cell'
-    + (r.holesPlaced === 1 ? '' : 's') + ', ' + r.placedGroups + ' character'
-    + (r.placedGroups === 1 ? '' : 's') + ' placed'
-    + (r.leftOver ? ', ' + r.leftOver + ' left after the end' : '')
-    + (r.randoms ? ', ' + r.randoms + ' random slot' + (r.randoms === 1 ? '' : 's') : '')
-    + (r.flooded ? ' (its ' + r.randomCount + ' randomselect cells were the author'
-      + '\u2019s way of bounding the grid, so they are free cells rather than '
-      + r.randomCount + ' random slots)' : ''), true);
-  Session.record('took ' + MI.name + '\u2019s slot layout');
+  if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
+  // What the layout did, as a list of counts, each one a phrase of its own
+  // (one or more); a pack that bounds its grid with randomselect cells adds
+  // a sentence about them.
+  const counts = [
+    r.holesPlaced === 1 ? t('1 reserved cell') : t('{n} reserved cells', { n: r.holesPlaced }),
+    r.placedGroups === 1 ? t('1 character placed') : t('{n} characters placed', { n: r.placedGroups }),
+  ];
+  if (r.leftOver) counts.push(r.leftOver === 1 ? t('1 left after the end') : t('{n} left after the end', { n: r.leftOver }));
+  if (r.randoms) counts.push(r.randoms === 1 ? t('1 random slot') : t('{n} random slots', { n: r.randoms }));
+  let line = t('Took {pack}\u2019s own layout \u2014 {counts}', { pack: MI.name, counts: counts.join(', ') });
+  if (r.flooded) {
+    line = t('{line} (its {n} randomselect cells were the author\u2019s way of bounding the grid, so they are free cells rather than {n} random slots)',
+      { line, n: r.randomCount });
+  }
+  log(line, true);
+  Session.record(t('took {name}\u2019s slot layout', { name: MI.name }));
   await load(true);
 }
 
@@ -5301,10 +5490,11 @@ function screenpackItems() {
   // to put a character.
   if (L && L.holes > 0 && L.usable > 0) {
     out.push({ sep: true });
+    const v = { usable: L.usable, holes: L.holes, randoms: L.randoms };
     out.push({
-      label: 'Use this screenpack\u2019s slot layout \u2014 ' + L.usable
-        + ' slots, ' + L.holes + ' reserved'
-        + (L.randoms ? ', ' + L.randoms + ' random' : ''),
+      label: L.randoms
+        ? t('Use this screenpack\u2019s slot layout \u2014 {usable} slots, {holes} reserved, {randoms} random', v)
+        : t('Use this screenpack\u2019s slot layout \u2014 {usable} slots, {holes} reserved', v),
       run: () => useThemeLayout(),
     });
   }
@@ -5315,21 +5505,21 @@ function screenpackItems() {
 //
 // Everything here edits the .def rather than the roster. Revert covers it: the
 // session baseline holds the motif file's bytes as well as the build order.
+// The head is the pack's own name (`isData`: a name, not words to translate).
 function buildStageMenu() {
   const S = MI.select, described = describedRows();
-  const items = [{ header: MI.name || 'Screenpack' }];
+  const items = [MI.name ? { header: MI.name, isData: true } : { header: t('Screenpack') }];
   for (const it of screenpackItems()) items.push(it);
   if (described) {
     items.push({ sep: true });
     const missing = S.rows - described;
     items.push(missing > 0
       ? {
-        label: 'Describe row' + (missing > 1 ? 's ' : ' ')
-          + (missing > 1 ? (described + 1) + '–' + S.rows : String(S.rows))
-          + ' in perspective',
+        label: missing > 1 ? t('Describe rows {from}–{to} in perspective', { from: described + 1, to: S.rows })
+          : t('Describe row {row} in perspective', { row: S.rows }),
         run: () => describeRows(),
       }
-      : { label: 'All ' + S.rows + ' rows are described', off: true });
+      : { label: t('All {n} rows are described', { n: S.rows }), off: true });
   }
   return items;
 }
@@ -5342,12 +5532,12 @@ function buildStageMenu() {
 // preview a worse guide to the build, not a better one. So it is asked for.
 async function describeRows() {
   const r = await (await fetch('/api/motif-describe-rows', { method: 'POST' })).json();
-  if (r.error) { log('ERROR ' + r.error); return; }
-  if (!r.rowsAdded) { log('Every row is already described'); return; }
-  log('Described ' + r.rowsAdded + ' row' + (r.rowsAdded > 1 ? 's' : '')
-    + " in the screenpack, continuing this grid's perspective", true);
-  Session.record('described ' + r.rowsAdded + ' row'
-    + (r.rowsAdded > 1 ? 's' : '') + ' on ' + MI.name);
+  if (r.error) { log(t('ERROR {error}', { error: r.error })); return; }
+  if (!r.rowsAdded) { log(t('Every row is already described')); return; }
+  log(r.rowsAdded > 1 ? t('Described {n} rows in the screenpack, continuing this grid\'s perspective', { n: r.rowsAdded })
+    : t('Described {n} row in the screenpack, continuing this grid\'s perspective', { n: r.rowsAdded }), true);
+  Session.record(r.rowsAdded > 1 ? t('described {n} rows on {name}', { n: r.rowsAdded, name: MI.name })
+    : t('described {n} row on {name}', { n: r.rowsAdded, name: MI.name }));
   await load(true);
 }
 
@@ -5363,7 +5553,9 @@ function buildCellMenu(i) {
   const lk = lockUi && cellHasLock(i);
   const why = lk ? 'This cell is locked. Choose Unlock cell first.' : undefined;
   const lockItem = { label: lk ? 'Unlock cell' : 'Lock cell', run: () => cellToggleLock(i) };
-  const items = [{ header: cellLabel(info, i) }];
+  // The head is the cell's label: its character's name, and words already
+  // the viewer's (cellLabel) - `isData`, like the pack's name further down.
+  const items = [{ header: cellLabel(info, i), isData: true }];
   items.push({ label: 'Insert\u2026', off: occupied || lk, title: why, run: () => cellInsert(i) });
   if (isSlot) {
     items.push({ label: 'View chars in slot\u2026', run: () => showSlotMembers(i) });
@@ -5424,7 +5616,7 @@ function buildCellMenu(i) {
   const rowLk = lockUi ? rowDeleteBlock(rowOf) : null;
   const colLk = lockUi ? colDeleteBlock(colOf) : null;
   items.push({ sep: true });
-  items.push({ label: 'Row ' + (rowOf + 1), sub: [
+  items.push({ label: t('Row {n}', { n: rowOf + 1 }), sub: [
     { label: 'Insert a row above', run: () => insertRow(rowOf) },
     { label: 'Insert a row below', run: () => insertRow(rowOf + 1) },
     { sep: true },
@@ -5432,7 +5624,7 @@ function buildCellMenu(i) {
       title: rowLk ? lockedWhy(rowLk.cell, rowLk.what) : undefined,
       run: () => deleteRow(rowOf) },
   ] });
-  items.push({ label: 'Column ' + (colOf + 1), sub: [
+  items.push({ label: t('Column {n}', { n: colOf + 1 }), sub: [
     { label: 'Insert a column left', run: () => insertColumn(colOf) },
     { label: 'Insert a column right', run: () => insertColumn(colOf + 1) },
     { sep: true },
@@ -5444,7 +5636,7 @@ function buildCellMenu(i) {
   // The screenpack's own actions, reachable without hunting for a patch of
   // bare stage - on a 13x24 grid there is barely any, which is how the layout
   // import came to be invisible.
-  items.push({ label: MI.name || 'Screenpack', sub: screenpackItems() });
+  items.push(MI.name ? { label: MI.name, isData: true, sub: screenpackItems() } : { label: t('Screenpack'), sub: screenpackItems() });
   items.push({ sep: true });
   if (lockUi) items.push(lockItem);
   items.push({ label: 'Properties\u2026', run: () => openProperties(i) });
@@ -5465,7 +5657,10 @@ function buildCellMenu(i) {
 // Items: {header}, {sep}, or {label, run, off, sub} plus, all optional,
 // {key: 'Ctrl+S'} (the shortcut, right-aligned), {check: true|false} (a box
 // before the label; left out for plain items), {state: true} (a check that
-// reports rather than acts: disabled and dimmed), and {title} (a tooltip).
+// reports rather than acts: disabled and dimmed), {title} (a tooltip), and
+// {isData: true} for a header or label that is DATA - a character's or a stage's
+// name, a path - which is marked translate="no" so no language pack turns a
+// character called "Random" into a word.
 //
 // One renderer for the right-click menus AND the three menus in the title
 // row. open(x, y) places a menu at the pointer; openAt(anchor) opens it under
@@ -5533,7 +5728,9 @@ const Menu = {
       if (it.sep) { const d = document.createElement('div'); d.className = 'msep'; m.appendChild(d); continue; }
       if (it.header !== undefined) {
         const d = document.createElement('div');
-        d.className = 'mhead'; d.textContent = it.header; m.appendChild(d); continue;
+        d.className = 'mhead'; d.textContent = it.header;
+        if (it.isData) d.setAttribute('translate', 'no');
+        m.appendChild(d); continue;
       }
       const d = document.createElement('div');
       d.className = 'mi' + (it.off ? ' off' : '') + (it.state ? ' state' : '');
@@ -5548,10 +5745,12 @@ const Menu = {
       }
       const t = document.createElement('span');
       t.textContent = it.label;
+      if (it.isData) t.setAttribute('translate', 'no');
       d.appendChild(t);
       if (it.key) {
         const k = document.createElement('span');
         k.className = 'mkey'; k.textContent = it.key;
+        k.setAttribute('translate', 'no');
         d.appendChild(k);
       }
       if (it.sub) {
@@ -5754,10 +5953,10 @@ function pickCharacter(title, onPick, actionLabel) {
               PREFS.dropReplaceRandom ? { replaceRandom: 1 } : null)),
           })).json();
         } catch (err) {
-          r = { error: 'the Studio did not answer (' + ((err && err.message) || err) + ')' };
+          r = { error: I18n.t('the Studio did not answer ({error})', { error: (err && err.message) || err }) };
         }
         // In the picker as well as the log, which its backdrop covers.
-        if (r.error) { log('ERROR ' + r.error); showWhy('Could not add it: ' + r.error); return; }
+        if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); showWhy(I18n.t('Could not add it: {error}', { error: r.error })); return; }
         // THIS PAGE HAS SEEN HIM. The roster on disk holds him now, and
         // order[] only once he is placed here, so a Save that leaves him out
         // (never placed, or placed and removed again) takes him out of the
@@ -5765,7 +5964,7 @@ function pickCharacter(title, onPick, actionLabel) {
         // keeps only the ones this page never saw. modlib.addCharacter
         // answers his roster mountAs as `name`.
         if (r.result && r.result.name) LOADED.add(lc(r.result.name));
-        log('Added ' + (r.result && r.result.mountAs ? r.result.mountAs : t) + ' to the library', true);
+        log(I18n.t('Added {name} to the library', { name: r.result && r.result.mountAs ? r.result.mountAs : t }), true);
         LIB = await (await fetch('/api/library')).json();
         AUTHOR_BY_ID = null; ONDISK_IDS = null;
         const added = r.result && r.result.mountAs
@@ -5791,8 +5990,12 @@ function pickCharacter(title, onPick, actionLabel) {
       t.style.minWidth = '0';
       const nm = document.createElement('div');
       nm.className = 'nm'; nm.textContent = c.displayName;
+      nm.setAttribute('translate', 'no');
       const sub = document.createElement('div');
       sub.className = 'sub';
+      // The author and the folder are names; placeWords says its words in the
+      // reader's language already.
+      sub.setAttribute('translate', 'no');
       // WHERE, for one already in the build: Insert and Replace take him from
       // there, so the row says which cell that is (every cell, when he is in
       // the build more than once).
@@ -5887,7 +6090,7 @@ function drawList() {
       e.preventDefault();
       const placed = CELLS.find((x) => x.kind === 'char' && lc(x.char) === lc(c.id));
       Menu.open(e.clientX, e.clientY, [
-        { header: c.displayName },
+        { header: c.displayName, isData: true },
         { label: 'Find on select screen', off: !placed, run: () => findOnGrid(c.id) },
         // Into the FIRST FREE CELL (firstFreeCell), which is where a
         // character added to the build lands as well; past the end of the
@@ -5897,10 +6100,11 @@ function drawList() {
           const entry = takeFromLibrary(c.id);
           if (room) setCellEntry(room.cell, entry); else order.push(entry);
           trimTrailingHoles();
-          log(c.displayName + ' is back on the grid, '
-            + (!room ? 'past its last cell (every cell is taken)'
-              : 'in cell ' + room.cell + (room.how === 'random' ? ', replacing its RandomSelect' : '')), true);
-          Session.record('put ' + c.displayName + ' back on the grid', true);
+          const v = { name: c.displayName, cell: room && room.cell };
+          log(!room ? I18n.t('{name} is back on the grid, past its last cell (every cell is taken)', v)
+            : room.how === 'random' ? I18n.t('{name} is back on the grid, in cell {cell}, replacing its RandomSelect', v)
+            : I18n.t('{name} is back on the grid, in cell {cell}', v), true);
+          Session.record(I18n.t('put {name} back on the grid', { name: c.displayName }), true);
           markDirty(true); render();
         } }] : []),
         { sep: true },
@@ -5912,18 +6116,22 @@ function drawList() {
     t.style.minWidth = '0';
     const nm = document.createElement('div');
     nm.className = 'nm'; nm.textContent = c.displayName;
+    nm.setAttribute('translate', 'no');
     const sub = document.createElement('div');
     sub.className = 'sub';
+    // The author, the folder and the .def are names; the words after them are
+    // put into the reader's language here, so the line is kept from the
+    // language observer as a whole.
+    sub.setAttribute('translate', 'no');
     // The FOLDER identifies where it lives; the .def identifies WHICH version,
     // which is the only thing separating two rows out of one folder.
     const folder = c.folder || c.id;
-    sub.textContent = (c.author ? c.author + ' · ' : '') + folder
-      + (c.def ? ' · ' + c.def : '')
-      + (onGrid ? '' : off ? ' · off grid' : ' · library only');
-    sub.title = (c.author ? c.author + String.fromCharCode(10) : '')
-      + 'cache/' + folder + '/' + (c.def || '')
-      + (off ? String.fromCharCode(10) + 'In the build but off the grid (exclude = 1): its files ship, for any character that reads them. Drag it onto a cell to put it back.'
-        : onGrid ? '' : String.fromCharCode(10) + 'Library only: on disk, not in the build.');
+    const where = (c.author ? c.author + ' · ' : '') + folder + (c.def ? ' · ' + c.def : '');
+    sub.textContent = onGrid ? where
+      : off ? I18n.t('{where} · off grid', { where }) : I18n.t('{where} · library only', { where });
+    const file = (c.author ? c.author + String.fromCharCode(10) : '') + 'cache/' + folder + '/' + (c.def || '');
+    sub.title = off ? file + String.fromCharCode(10) + I18n.t('In the build but off the grid (exclude = 1): its files ship, for any character that reads them. Drag it onto a cell to put it back.')
+      : onGrid ? file : file + String.fromCharCode(10) + I18n.t('Library only: on disk, not in the build.');
     t.appendChild(nm); t.appendChild(sub);
     if (im) row.appendChild(im); else row.classList.add('noport');
     row.appendChild(t);
@@ -5958,8 +6166,8 @@ function drawList() {
     order.splice(span.start, 1);
     unpinLocks(pins);
     trimTrailingHoles();
-    log('Removed ' + id + ' from the build (still on disk)', true);
-    Session.record('removed ' + id + ' from the build', true);
+    log(I18n.t('Removed {id} from the build (still on disk)', { id }), true);
+    Session.record(I18n.t('removed {id} from the build', { id }), true);
     sel = null; markDirty(true); render();
   };
 }
@@ -5974,7 +6182,7 @@ function drawList() {
 //   two-match arcade, so a carefully ordered roster was being ignored.
 //
 // Ten slots per mode is the engine's shape, not a choice: slot N is tier N+1.
-const MM_MODES = [['arcade', 'Arcade'], ['team', 'Team'], ['timeattack', 'TA'], ['survival', 'Surv']];
+const MM_MODES = [['arcade', I18n.t('Arcade')], ['team', I18n.t('Team')], ['timeattack', I18n.t('TA')], ['survival', I18n.t('Surv')]];
 let MM = null;
 
 // Ordering is PER MODE in the engine: `order` drives the arcade ladder and
@@ -6006,9 +6214,12 @@ async function setCharOrder(cell, tier) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mountAs: cell.char, props }),
   })).json();
-  if (r.error) { log('ERROR ' + r.error); return; }
-  log(cell.displayName + ' -> ' + ORDMODE + ' order ' + tier, true);
-  Session.record(cell.displayName + ' -> ' + ORDMODE + ' order ' + tier);
+  if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); return; }
+  const said = ORDMODE === 'survival'
+    ? I18n.t('{name} -> survival order {n}', { name: cell.displayName, n: tier })
+    : I18n.t('{name} -> arcade order {n}', { name: cell.displayName, n: tier });
+  log(said, true);
+  Session.record(said);
   ORD_EXTRA[ORDMODE].delete(String(tier));
   await load(true);
   drawOrder();
@@ -6023,7 +6234,7 @@ function drawOrder() {
   panel.innerHTML = '';
   const seg = document.createElement('div');
   seg.className = 'seg';
-  for (const [key, label] of [['arcade', 'Arcade'], ['survival', 'Survival']]) {
+  for (const [key, label] of [['arcade', I18n.t('Arcade')], ['survival', I18n.t('Survival')]]) {
     const b = document.createElement('button');
     b.textContent = label;
     b.className = ORDMODE === key ? 'on' : '';
@@ -6065,12 +6276,13 @@ function drawOrder() {
   // it - an order with no members is not a thing select.def can record.
   const add = document.createElement('button');
   add.id = 'addOrder';
-  add.textContent = '+ Add ' + (ORDMODE === 'survival' ? 'survival' : 'arcade') + ' order';
+  add.textContent = ORDMODE === 'survival' ? I18n.t('+ Add survival order') : I18n.t('+ Add arcade order');
   add.onclick = () => {
     const next = String(Math.max(0, ...keys.map(Number)) + 1);
     ORD_EXTRA[ORDMODE].add(next);
     ORD_SHUT.delete(ORDMODE + ':' + next);
-    log('Added ' + ORDMODE + ' order ' + next + ' - drag a character into it');
+    log(ORDMODE === 'survival' ? I18n.t('Added survival order {n} - drag a character into it', { n: next })
+      : I18n.t('Added arcade order {n} - drag a character into it', { n: next }));
     drawOrder();
   };
   panel.appendChild(add);
@@ -6084,7 +6296,7 @@ function drawOrder() {
     tw.className = 'tw';
     tw.textContent = ORD_SHUT.has(shutKey) ? '\u25b6' : '\u25bc';
     const cap = document.createElement('span');
-    cap.textContent = 'Order ' + t + ' (' + tiers.get(t).length + ')';
+    cap.textContent = I18n.t('Order {n} ({count})', { n: t, count: tiers.get(t).length });
     h.appendChild(tw); h.appendChild(cap);
     h.onclick = () => {
       if (ORD_SHUT.has(shutKey)) ORD_SHUT.delete(shutKey); else ORD_SHUT.add(shutKey);
@@ -6100,7 +6312,8 @@ function drawOrder() {
       del.onclick = (e) => {
         e.stopPropagation();
         ORD_EXTRA[ORDMODE].delete(t);
-        log('Removed empty ' + ORDMODE + ' order ' + t);
+        log(ORDMODE === 'survival' ? I18n.t('Removed empty survival order {n}', { n: t })
+          : I18n.t('Removed empty arcade order {n}', { n: t }));
         drawOrder();
       };
       h.appendChild(del);
@@ -6122,12 +6335,12 @@ function drawOrder() {
       if (!m) {
         // A library row is not in the build yet, so it has no cell to reorder.
         const lib = /^lib:(.+)$/.exec(d);
-        if (lib) log('Place ' + lib[1] + ' on the grid first, then drag it into an order');
+        if (lib) log(I18n.t('Place {name} on the grid first, then drag it into an order', { name: lib[1] }));
         return;
       }
       const cell = CELLS.find((x) => x.index === +m[1]);
       if (cell && cell.kind === 'char') setCharOrder(cell, t);
-      else if (cell) log('Only a character can have an order');
+      else if (cell) log(I18n.t('Only a character can have an order'));
     };
     if (!tiers.get(t).length) {
       const em = document.createElement('div');
@@ -6141,7 +6354,9 @@ function drawOrder() {
       const im = listPortrait(c.char);
       const nm = document.createElement('div');
       nm.className = 'nm'; nm.textContent = c.displayName;
-      nm.title = 'cell ' + c.index + ' · ' + ORDMODE + ' order ' + t;
+      nm.setAttribute('translate', 'no');
+      nm.title = ORDMODE === 'survival' ? I18n.t('cell {cell} · survival order {n}', { cell: c.index, n: t })
+        : I18n.t('cell {cell} · arcade order {n}', { cell: c.index, n: t });
       if (im) r.appendChild(im);
       r.appendChild(nm);
       r.onclick = () => { sel = c.index; drawGrid(); drawInspector(); };
@@ -6201,14 +6416,14 @@ function drawOrder() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })).json();
-    if (r.error) { log('ERROR ' + r.error); return; }
+    if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); return; }
     MM = r.maxMatches;
     log(Object.keys(body).length
-      ? 'Max matches saved: ' + Object.keys(body).join(', ')
-      : 'Max matches cleared - back to the exporter defaults', true);
+      ? I18n.t('Max matches saved: {modes}', { modes: Object.keys(body).join(', ') })
+      : I18n.t('Max matches cleared - back to the exporter defaults'), true);
     Session.record(Object.keys(body).length
-      ? 'max matches (' + Object.keys(body).join(', ') + ')'
-      : 'max matches cleared');
+      ? I18n.t('max matches ({modes})', { modes: Object.keys(body).join(', ') })
+      : I18n.t('max matches cleared'));
     drawOrder();
   };
   panel.appendChild(save);
@@ -6323,11 +6538,11 @@ function stageTreeModel() {
 
 // What the build plays on a stage, as one line.
 function stageMusicSummary(g) {
-  if (!g.st) return 'not in [ExtraStages]';
+  if (!g.st) return I18n.t('not in [ExtraStages]');
   const m = g.st.music || [];
   return m.length
-    ? (m.length > 1 ? m.length + ' songs, random each match' : m[0].replace(/^sound\//, ''))
-    : 'no music of its own';
+    ? (m.length > 1 ? I18n.t('{n} songs, random each match', { n: m.length }) : m[0].replace(/^sound\//, ''))
+    : I18n.t('no music of its own');
 }
 
 // WHICH GROUPS ARE SHUT, per viewer, across re-renders and reloads. Keys are
@@ -6440,10 +6655,15 @@ function paintStageBanner(h, pic, spr) {
   if (pic) {
     h.classList.add('pic');
     h.style.backgroundImage = 'var(--stscrim), url("' + pic.url + '")';
-    lines.push(pic.from === 'thumb' ? 'Picture: the Studio’s stage thumbnail'
-      : 'Picture: stage.portrait.spr ' + spr.g + ',' + spr.i + (pic.from === 'pack'
-        ? ', from ' + (MI.name || 'the screenpack')
-        : ', from Preferences (' + (MI.name || 'the screenpack') + ' sets none)'));
+    // Four whole lines: the pack by its name, or "the screenpack" when it
+    // has none, and the sprite from the pack or from Preferences.
+    const v = { g: spr && spr.g, i: spr && spr.i, pack: MI.name };
+    lines.push(pic.from === 'thumb' ? I18n.t('Picture: the Studio’s stage thumbnail')
+      : pic.from === 'pack'
+        ? (MI.name ? I18n.t('Picture: stage.portrait.spr {g},{i}, from {pack}', v)
+          : I18n.t('Picture: stage.portrait.spr {g},{i}, from the screenpack', v))
+        : (MI.name ? I18n.t('Picture: stage.portrait.spr {g},{i}, from Preferences ({pack} sets none)', v)
+          : I18n.t('Picture: stage.portrait.spr {g},{i}, from Preferences (the screenpack sets none)', v)));
   }
   h.title = lines.join(String.fromCharCode(10));
 }
@@ -6520,8 +6740,13 @@ function drawStages() {
     const t = $new('div');
     t.style.minWidth = '0';
     const nm = $new('div', 'nm', c.displayName);
-    nm.title = 'cell ' + c.index + (c.variants > 1 ? ' · slot member ' + (c.variant + 1) + ' of ' + c.variants : '');
-    t.append(nm, $new('div', 'sub', (w.author ? w.author + ' · ' : '') + w.folder));
+    nm.setAttribute('translate', 'no');
+    nm.title = c.variants > 1
+      ? I18n.t('cell {cell} · slot member {k} of {n}', { cell: c.index, k: c.variant + 1, n: c.variants })
+      : I18n.t('cell {cell}', { cell: c.index });
+    const sub = $new('div', 'sub', (w.author ? w.author + ' · ' : '') + w.folder);
+    sub.setAttribute('translate', 'no');
+    t.append(nm, sub);
     r.appendChild(t);
     r.onclick = () => selectFromTree(c);
     r.ondragstart = (e) => {
@@ -6532,7 +6757,7 @@ function drawStages() {
       e.preventDefault();
       const has = !!stageKey(c.props && c.props.stage);
       Menu.open(e.clientX, e.clientY, [
-        { header: c.displayName },
+        { header: c.displayName, isData: true },
         { label: 'Find on select screen', run: () => selectFromTree(c, true) },
         { sep: true },
         { label: 'Open containing folder', run: () => openFolderById(w.folder) },
@@ -6604,17 +6829,22 @@ function drawStages() {
       + (portraits ? ' banner' : '') + (g.missing ? ' invalid' : '') + (STAGE_SEL === g.key ? ' sel' : ''));
     el.dataset.key = key;
     const h = $new('div', 'sthead');
+    // The title is the file and, for a missing one, a line of words: put
+    // together here, in the reader's language, since the joined title is no
+    // key the language observer could find.
     h.dataset.tip = 'stages/' + g.file
-      + (g.missing ? String.fromCharCode(10) + 'stage file not found - would not load in the game' : '');
+      + (g.missing ? String.fromCharCode(10) + I18n.t('stage file not found - would not load in the game') : '');
     h.title = h.dataset.tip;
     const gear = eBtn('⚙', (e) => { e.stopPropagation(); stageDetails(g); }, 'stgear');
     gear.title = 'Stage details';
-    gear.setAttribute('aria-label', 'Stage details: ' + g.name);
+    gear.setAttribute('aria-label', I18n.t('Stage details: {name}', { name: g.name }));
     gear.ondblclick = (e) => e.stopPropagation();
     const tw = $new('span', 'sttw', isShut(key) || empty ? '▶' : '▼');
-    h.append(tw, $new('span', 'stnm', g.name), $new('span', 'stn', '(' + g.rows.length + ')'));
+    const nm = $new('span', 'stnm', g.name);
+    nm.setAttribute('translate', 'no');
+    h.append(tw, nm, $new('span', 'stn', '(' + g.rows.length + ')'));
     if (g.noRandom) {
-      const chip = $new('span', 'stchip', 'no-random');
+      const chip = $new('span', 'stchip', I18n.t('no-random'));
       chip.title = 'selectable from the stage list but never picked at random';
       h.appendChild(chip);
     }
@@ -6644,8 +6874,8 @@ function drawStages() {
       const info = sel === null ? null : cellAt(sel);
       const ch = info && info.kind === 'char' ? info : null;
       Menu.open(e.clientX, e.clientY, [
-        { header: g.name },
-        { label: ch ? 'Use for ' + ch.displayName : 'Use for the selected character', off: !ch,
+        { header: g.name, isData: true },
+        { label: ch ? I18n.t('Use for {name}', { name: ch.displayName }) : 'Use for the selected character', off: !ch,
           title: ch ? '' : 'Select a character’s cell first', run: () => setCharStage(ch, g) },
         { sep: true },
         { label: 'Collapse all stages', run: () => stageTreeAll(true) },
@@ -6679,9 +6909,9 @@ function drawStages() {
     s.append(h, body);
     return s;
   };
-  tree.appendChild(section('section:included', 'Included', T.included,
-    (MI.stageList || []).length ? 'No stages here.' : 'No stages in [ExtraStages] yet. Add them from the main Studio page.'));
-  tree.appendChild(section('section:excluded', 'Excluded', T.excluded, 'No stages here.'));
+  tree.appendChild(section('section:included', I18n.t('Included'), T.included,
+    (MI.stageList || []).length ? 'No stages here.' : I18n.t('No stages in [ExtraStages] yet. Add them from the main Studio page.')));
+  tree.appendChild(section('section:excluded', I18n.t('Excluded'), T.excluded, 'No stages here.'));
 
   panel.appendChild(tree);
   panel.scrollTop = top;
@@ -6695,7 +6925,7 @@ function selectStage(g, el) {
   for (const e of $('#orderPanel').querySelectorAll('.stgrp.sel')) e.classList.remove('sel');
   el.classList.add('sel');
   const hv = $('#hover');
-  hv.textContent = 'Stage: ' + g.name + ' · stages/' + g.file + ' · ' + stageMusicSummary(g);
+  hv.textContent = I18n.t('Stage: {name} · stages/{file} · {music}', { name: g.name, file: g.file, music: stageMusicSummary(g) });
   hv.title = hv.textContent;
 }
 
@@ -6704,7 +6934,7 @@ function selectStage(g, el) {
 function selectFromTree(c, say) {
   sel = c.index;
   drawGrid(); drawInspector();
-  if (flashCell(c.index) && say) log('Found ' + c.displayName + ' at row ' + (c.row + 1) + ', col ' + (c.col + 1));
+  if (flashCell(c.index) && say) log(I18n.t('Found {name} at row {row}, col {col}', { name: c.displayName, row: c.row + 1, col: c.col + 1 }));
 }
 
 // ONE CHARACTER'S ARCADE STAGE, set or cleared (g null): a drop, Use for and
@@ -6714,21 +6944,23 @@ async function setCharStage(c, g) {
   if (!c) return;
   const was = stageKey(c.props && c.props.stage);
   if (was === (g ? g.key : '')) {
-    log(c.displayName + (g ? ' already fights on ' + g.name : ' already gets a random stage'));
+    log(g ? I18n.t('{name} already fights on {stage}', { name: c.displayName, stage: g.name })
+      : I18n.t('{name} already gets a random stage', { name: c.displayName }));
     return;
   }
   const r = await (await fetch('/api/char-props', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mountAs: c.char, props: { stage: g ? 'stages/' + g.file : '' } }),
   })).json();
-  if (r.error) { log('ERROR ' + r.error); return; }
+  if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); return; }
   // The newest word on the stage: it replaces one typed into the form and
   // not applied, which Apply would otherwise write back over it.
   const pend = PENDING.get(c.char);
   if (pend) pend.stage = g ? 'stages/' + g.file : '';
-  const to = g ? g.name : 'random stage';
-  log(c.displayName + ' → ' + to, true);
-  Session.record('stage of ' + c.displayName + ' → ' + to);
+  log(g ? I18n.t('{name} → {stage}', { name: c.displayName, stage: g.name })
+    : I18n.t('{name} → random stage', { name: c.displayName }), true);
+  Session.record(g ? I18n.t('stage of {name} → {stage}', { name: c.displayName, stage: g.name })
+    : I18n.t('stage of {name} → random stage', { name: c.displayName }));
   await load(true);
 }
 
@@ -6743,7 +6975,7 @@ function stageDropChar(p) {
   if (m) {
     const c = cellAt(+m[1]);
     if (c && c.kind === 'char') return c;
-    if (c) log('Only a character can have a stage');
+    if (c) log(I18n.t('Only a character can have a stage'));
     return null;
   }
   m = /^lib:(.+)$/.exec(p);
@@ -6752,8 +6984,8 @@ function stageDropChar(p) {
     if (c) return c;
     const l = ((LIB && LIB.chars) || []).find((x) => lc(x.id) === lc(m[1]));
     const name = (l && l.displayName) || m[1];
-    log(isOffGridId(m[1]) ? name + ' is off the grid: put it back on the grid first, then give it a stage'
-      : 'Place ' + name + ' on the grid first, then drag it onto a stage');
+    log(isOffGridId(m[1]) ? I18n.t('{name} is off the grid: put it back on the grid first, then give it a stage', { name })
+      : I18n.t('Place {name} on the grid first, then drag it onto a stage', { name }));
   }
   return null;
 }
@@ -6772,40 +7004,41 @@ function stageDetails(g) {
   const d = eDialog('Stage details', { width: 440, cls: 'stdlg' });
   const dl = $new('dl', 'stinfo');
   const add = (label, dd) => { dl.append($new('dt', '', label), dd); };
-  add('Name', $new('dd', '', g.name));
-  add('File', $new('dd', 'mono', 'stages/' + g.file));
+  // The stage's name, its file and its songs are data (asData).
+  add(I18n.t('Name'), asData($new('dd', '', g.name)));
+  add(I18n.t('File'), asData($new('dd', 'mono', 'stages/' + g.file)));
   const mus = $new('dd', 'mono');
-  if (g.st && (g.st.music || []).length) for (const t of g.st.music) mus.appendChild($new('div', '', t));
+  if (g.st && (g.st.music || []).length) { asData(mus); for (const t of g.st.music) mus.appendChild($new('div', '', t)); }
   else mus.textContent = g.st ? 'no music of its own' : 'not in [ExtraStages]: the stage’s own music plays';
-  add('Music', mus);
+  add(I18n.t('Music'), mus);
   const users = $new('dd', 'users');
   users.appendChild($new('div', '', !g.rows.length ? 'No character uses this stage'
-    : g.rows.length === 1 ? '1 character uses this stage' : g.rows.length + ' characters use this stage'));
+    : g.rows.length === 1 ? '1 character uses this stage' : I18n.t('{n} characters use this stage', { n: g.rows.length })));
   if (g.rows.length) {
-    const names = $new('div', 'names');
+    const names = asData($new('div', 'names'));
     g.rows.forEach((c, k) => {
       if (k) names.appendChild(document.createTextNode(', '));
       const a = $new('a', '', c.displayName);
       a.href = '#';
-      a.title = 'Select cell ' + c.index + ' on the grid';
+      a.title = I18n.t('Select cell {cell} on the grid', { cell: c.index });
       a.onclick = (e) => { e.preventDefault(); d.close(); selectFromTree(c); };
       names.appendChild(a);
     });
     users.appendChild(names);
   }
-  add('Used by', users);
+  add(I18n.t('Used by'), users);
   d.body.appendChild(dl);
   if (g.missing) d.body.appendChild($new('p', 'emsg bad', '⚠ stage file not found - would not load in the game'));
   if (g.noRandom) {
-    d.body.appendChild($new('p', 'emsg', 'No-random: its first user has includestage = -1, so it is selectable from the stage list but never picked at random.'));
+    d.body.appendChild($new('p', 'emsg', I18n.t('No-random: its first user has includestage = -1, so it is selectable from the stage list but never picked at random.')));
   }
   const info = sel === null ? null : cellAt(sel);
   const ch = info && info.kind === 'char' ? info : null;
-  const use = eBtn(ch ? 'Use for ' + ch.displayName : 'Use for the selected character',
+  const use = eBtn(ch ? I18n.t('Use for {name}', { name: ch.displayName }) : 'Use for the selected character',
     () => { d.close(); setCharStage(ch, g); }, 'left');
   use.disabled = !ch;
   if (!ch) use.title = 'Select a character’s cell first';
-  d.foot.append(use, eBtn('Close', () => d.close(), 'primary'));
+  d.foot.append(use, eBtn(I18n.t('Close'), () => d.close(), 'primary'));
   d.focus(d.foot.lastChild);
 }
 
@@ -6832,12 +7065,13 @@ function printSlot(info) {
   if (no) {
     no.hidden = !(has && info.kind === 'char');
     no.textContent = '';
-    if (!no.hidden) no.textContent = 'No.' + slotPad(sel + 1);
+    if (!no.hidden) no.textContent = I18n.t('No.{slot}', { slot: slotPad(sel + 1) });
   }
-  if (fno) fno.textContent = has ? 'No.' + slotPad(sel + 1) : 'No. –';
+  // No slot: the same "No." with a dash for its number.
+  if (fno) fno.textContent = I18n.t('No.{slot}', { slot: has ? slotPad(sel + 1) : ' –' });
   // "of 32 cells", as the Studio's folio counts (studio.html charSlots: the
   // number is a CELL, so the count says what it counts).
-  if (fof) fof.textContent = has ? 'of ' + of + ' cells' : '';
+  if (fof) fof.textContent = has ? I18n.t('of {n} cells', { n: of }) : '';
 }
 // THE BAND'S MASCOT in the head (Booklet.mascot): it deals E-Select's own tips
 // first ('eselect' in the Studio's TIP_PAGES), then the general ones, from the
@@ -6854,12 +7088,16 @@ function drawInspector() {
   // sel is a CELL index, not an order index.
   const info = sel === null ? null : cellAt(sel);
   printSlot(info);
+  // THE HEAD NAMES A CHARACTER ("Properties · Kung Fu Man"), so it is kept
+  // from the language observer and every line written to it is put into the
+  // reader's language here.
+  $('#inshead').setAttribute('translate', 'no');
   // A cell that holds no character is still a real thing to edit: it is either
   // a skipslot, a randomselect, or past the end of the roster. Returning early
   // for all three left randomselect unreachable from the editor.
   if (!info || info.kind !== 'char') {
     if (sel === null) {
-      $('#inshead').textContent = 'no cell selected';
+      $('#inshead').textContent = I18n.t('no cell selected');
       ins.innerHTML = '<div class="hint">Click a cell to edit its select.def properties.</div>';
       CURRENT_TOUCH = null;
       return;
@@ -6869,33 +7107,39 @@ function drawInspector() {
     // the only empty kind the editor could make - and is now the one it makes
     // least often.
     const kind = (info && info.kind) || 'dummy';   // no entry at all reads as unused
-    const NAME = { dummy: 'Empty cell', skip: 'Skipslot', random: 'Random select' };
     // WHAT THIS PACK DOES WITH AN EMPTY CELL is read from the motif, not
     // assumed: the stock Default pack jumps the cursor over empty cells and
     // draws no box (both flags 0, the engine's defaults); ikemen1, big and
     // mugen1 let the cursor rest and draw the box.
     const S0 = MI.select || {};
     const rests = !!S0.moveOverEmptyBoxes, drawn = !!S0.showEmptyBoxes;
+    // Each sentence is ONE key, its bold words inside it. The select.def and
+    // motif words are placeholders kept as they are (translate="no"), and the
+    // pack's name is filled in as text below, into its own <b>.
+    const code = (w) => '<b translate="no">' + w + '</b>';
+    const v = { pack: '<b id="insPack" translate="no"></b>' };
     const WHAT = {
-      dummy: 'An <b>empty cell</b> is a <b>dummyslot</b>: nothing is in it. On <b id="insPack"></b> the cursor '
-        + (rests ? '<b>can rest on it</b>' : '<b>jumps over it</b>')
-        + ' (moveoveremptyboxes = ' + (rests ? 1 : 0) + ') and the empty box is '
-        + (drawn ? 'drawn' : '<b>not drawn</b>') + ' (showemptyboxes = ' + (drawn ? 1 : 0)
-        + '). An unused cell past the last entry behaves the same way. This is what the engine pads a short grid with.',
-      skip: 'A <b>skipslot</b> draws nothing at all and the cursor can <b>never</b> '
-        + 'enter it, on any screenpack. Use it for ground a pack keeps clear - '
-        + 'behind a portrait panel, say - not for a gap you just want empty.',
-      random: 'A <b>randomselect</b> cell. The cursor can land on it and picking it '
-        + 'gives a random character. The motif draws <b>cell.random.spr</b> here '
-        + 'instead of a portrait, cycling every <b>cell.random.switchtime</b> ticks.',
+      dummy: I18n.t('An <b>empty cell</b> is a {dummyslot}: nothing is in it.', { dummyslot: code('dummyslot') }) + ' '
+        + (rests
+          ? (drawn ? I18n.t('On {pack} the cursor <b>can rest on it</b> (moveoveremptyboxes = 1) and the empty box is drawn (showemptyboxes = 1).', v)
+            : I18n.t('On {pack} the cursor <b>can rest on it</b> (moveoveremptyboxes = 1) and the empty box is <b>not drawn</b> (showemptyboxes = 0).', v))
+          : (drawn ? I18n.t('On {pack} the cursor <b>jumps over it</b> (moveoveremptyboxes = 0) and the empty box is drawn (showemptyboxes = 1).', v)
+            : I18n.t('On {pack} the cursor <b>jumps over it</b> (moveoveremptyboxes = 0) and the empty box is <b>not drawn</b> (showemptyboxes = 0).', v)))
+        + ' ' + I18n.t('An unused cell past the last entry behaves the same way. This is what the engine pads a short grid with.'),
+      skip: I18n.t('A {skipslot} draws nothing at all and the cursor can <b>never</b> enter it, on any screenpack. Use it for ground a pack keeps clear - behind a portrait panel, say - not for a gap you just want empty.',
+        { skipslot: code('skipslot') }),
+      random: I18n.t('A {randomselect} cell. The cursor can land on it and picking it gives a random character. The motif draws {spr} here instead of a portrait, cycling every {time} ticks.',
+        { randomselect: code('randomselect'), spr: code('cell.random.spr'), time: code('cell.random.switchtime') }),
     };
     const BTN = {
       dummy: ['mkhole2', 'Make this an empty cell'],
       skip: ['mkskip2', 'Make this a skipslot'],
       random: ['mkrandom2', 'Make this a random-select cell'],
     };
-    $('#inshead').textContent = NAME[kind] + ' \u00b7 cell ' + sel;
-    ins.innerHTML = '<div class="grp">CELL ' + sel + '</div>'
+    $('#inshead').textContent = kind === 'skip' ? I18n.t('Skipslot \u00b7 cell {cell}', { cell: sel })
+      : kind === 'random' ? I18n.t('Random select \u00b7 cell {cell}', { cell: sel })
+      : I18n.t('Empty cell \u00b7 cell {cell}', { cell: sel });
+    ins.innerHTML = '<div class="grp">' + I18n.t('CELL {cell}', { cell: sel }) + '</div>'
       + '<div class="hint">' + WHAT[kind] + '</div>'
       + ['dummy', 'skip', 'random'].filter((k) => k !== kind)
           .map((k, n) => '<button id="' + BTN[k][0] + '" style="width:100%'
@@ -6913,30 +7157,46 @@ function drawInspector() {
       // is where the question comes up. Written into the screenpack's own
       // system.def ([Select Info], a .orig kept beside it), for every empty
       // cell at once - the same file the grid size goes to.
-      + '<div class="grp" style="margin-top:10px" id="insEmptyHead"></div>'
-      + '<label class="hint" style="display:block"><input type="checkbox" id="emptyRest"' + (rests ? ' checked' : '') + '> cursor can rest on empty cells <span style="opacity:.7">(moveoveremptyboxes)</span></label>'
-      + '<label class="hint" style="display:block"><input type="checkbox" id="emptyDraw"' + (drawn ? ' checked' : '') + '> draw the empty box <span style="opacity:.7">(showemptyboxes)</span></label>'
+      // Its head names the pack: kept from the language observer, and its
+      // words put into the reader's language below.
+      + '<div class="grp" style="margin-top:10px" id="insEmptyHead" translate="no"></div>'
+      + '<label class="hint" style="display:block"><input type="checkbox" id="emptyRest"' + (rests ? ' checked' : '') + '> cursor can rest on empty cells <span style="opacity:.7" translate="no">(moveoveremptyboxes)</span></label>'
+      + '<label class="hint" style="display:block"><input type="checkbox" id="emptyDraw"' + (drawn ? ' checked' : '') + '> draw the empty box <span style="opacity:.7" translate="no">(showemptyboxes)</span></label>'
       + '<div class="hint" style="opacity:.75">Written into the screenpack\'s system.def; applies to every empty cell.</div>'
       // Preferences > Empty cell display overrides only what is DRAWN here.
       + (PREFS.showEmpty !== '0'
-        ? '<div class="hint" style="opacity:.75">E-Select is set to ' + (PREFS.showEmpty === '1' ? 'always show' : 'always hide')
-          + ' the empty box (Preferences › Empty cell display), so the grid here does not follow this setting. The game does.</div>'
+        ? '<div class="hint" style="opacity:.75">' + (PREFS.showEmpty === '1'
+          ? I18n.t('E-Select is set to always show the empty box (Preferences › Empty cell display), so the grid here does not follow this setting. The game does.')
+          : I18n.t('E-Select is set to always hide the empty box (Preferences › Empty cell display), so the grid here does not follow this setting. The game does.'))
+          + '</div>'
         : '');
     // The pack's name is its system.def's text: filled in as text (C-21).
-    if ($('#insPack')) $('#insPack').textContent = MI.name || 'this screenpack';
-    $('#insEmptyHead').textContent = 'EMPTY CELLS ON ' + (MI.name || 'THIS SCREENPACK').toUpperCase();
+    if ($('#insPack')) $('#insPack').textContent = MI.name || I18n.t('this screenpack');
+    $('#insEmptyHead').textContent = MI.name ? I18n.t('EMPTY CELLS ON {pack}', { pack: MI.name.toUpperCase() })
+      : I18n.t('EMPTY CELLS ON THIS SCREENPACK');
     for (const [id, key] of [['emptyRest', 'moveOverEmptyBoxes'], ['emptyDraw', 'showEmptyBoxes']]) {
       const cb = $('#' + id);
       if (!cb) continue;
       cb.onchange = async () => {
         const body = {}; body[key] = cb.checked;
         const r = await (await fetch('/api/motif-grid', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
-        if (r.error) { log('ERROR ' + r.error); cb.checked = !cb.checked; return; }
+        if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); cb.checked = !cb.checked; return; }
         // The file has it now; so does the page, before the full reload lands
         // - a redraw in between must not show the old value.
         if (MI && MI.select) MI.select[key] = cb.checked;
-        log((key === 'moveOverEmptyBoxes' ? 'Cursor ' + (cb.checked ? 'can rest on' : 'jumps over') + ' empty cells' : 'Empty boxes ' + (cb.checked ? 'drawn' : 'not drawn')) + ' on ' + (MI.name || 'this screenpack') + ' — written to its system.def now; Revert undoes it', true);
-        Session.record((key === 'moveOverEmptyBoxes' ? 'moveoveremptyboxes' : 'showemptyboxes') + ' = ' + (cb.checked ? 1 : 0) + ' on ' + MI.name);
+        const v = { pack: MI.name };
+        const rest = key === 'moveOverEmptyBoxes';
+        log(MI.name
+          ? (rest ? (cb.checked ? I18n.t('Cursor can rest on empty cells on {pack} — written to its system.def now; Revert undoes it', v)
+              : I18n.t('Cursor jumps over empty cells on {pack} — written to its system.def now; Revert undoes it', v))
+            : (cb.checked ? I18n.t('Empty boxes drawn on {pack} — written to its system.def now; Revert undoes it', v)
+              : I18n.t('Empty boxes not drawn on {pack} — written to its system.def now; Revert undoes it', v)))
+          : (rest ? (cb.checked ? I18n.t('Cursor can rest on empty cells on this screenpack — written to its system.def now; Revert undoes it')
+              : I18n.t('Cursor jumps over empty cells on this screenpack — written to its system.def now; Revert undoes it'))
+            : (cb.checked ? I18n.t('Empty boxes drawn on this screenpack — written to its system.def now; Revert undoes it')
+              : I18n.t('Empty boxes not drawn on this screenpack — written to its system.def now; Revert undoes it'))), true);
+        Session.record(I18n.t('{key} = {value} on {pack}', { key: key === 'moveOverEmptyBoxes' ? 'moveoveremptyboxes' : 'showemptyboxes',
+          value: cb.checked ? 1 : 0, pack: String(MI.name) }));
         await load(true);
       };
     }
@@ -6946,10 +7206,12 @@ function drawInspector() {
       if (span) order.splice(span.start, span.end - span.start, { kind: k });
       else { padTo(sel); order.push({ kind: k }); }
       trimTrailingHoles();
-      const said = { random: 'random-select', dummy: 'an empty cell',
-                     skip: 'a skipslot (the cursor jumps over it)' }[k];
-      log('Cell ' + sel + ' is now ' + said, true);
-      Session.record('cell ' + sel + ' -> ' + said, true);
+      log(k === 'random' ? I18n.t('Cell {cell} is now random-select', { cell: sel })
+        : k === 'dummy' ? I18n.t('Cell {cell} is now an empty cell', { cell: sel })
+        : I18n.t('Cell {cell} is now a skipslot (the cursor jumps over it)', { cell: sel }), true);
+      Session.record(k === 'random' ? I18n.t('cell {cell} -> random-select', { cell: sel })
+        : k === 'dummy' ? I18n.t('cell {cell} -> an empty cell', { cell: sel })
+        : I18n.t('cell {cell} -> a skipslot (the cursor jumps over it)', { cell: sel }), true);
       markDirty(true); render(); drawInspector();
     };
     for (const [id2, k] of [['mkrandom2', 'random'], ['mkhole2', 'dummy'], ['mkskip2', 'skip']]) {
@@ -6965,11 +7227,14 @@ function drawInspector() {
   const saved = Object.assign({}, info.props || {});
   saved.params = (info.props && info.props.params) || {};
   const p = PENDING.get(id) || saved;
-  $('#inshead').textContent = 'Properties · ' + info.displayName;
+  $('#inshead').textContent = I18n.t('Properties · {name}', { name: info.displayName });
+  // An option that is its own value - a stage's file, a track - is data, kept
+  // from the language observer; the worded ones ("(stage default)") are not.
   const fld = (label, key, value, opts) => {
     if (opts) {
       return '<div class="fld"><label>' + label + '</label><select data-k="' + key + '">'
-        + opts.map(([v, t]) => '<option value="' + v + '"' + (String(value) === v ? ' selected' : '') + '>' + t + '</option>').join('')
+        + opts.map(([v, t]) => '<option value="' + v + '"' + (String(value) === v ? ' selected' : '')
+          + (v !== '' && v === t ? ' translate="no"' : '') + '>' + t + '</option>').join('')
         + '</select></div>';
     }
     return '<div class="fld"><label>' + label + '</label>'
@@ -6988,7 +7253,7 @@ function drawInspector() {
     if (curStage && stageKey(s) === stageKey(curStage)) { stageHit = true; return [curStage, s]; }
     return [s, s];
   }));
-  if (!stageHit && !/[<>"&]/.test(curStage)) stageOpts.push([curStage, stageBare(curStage) + ' (not in [ExtraStages])']);
+  if (!stageHit && !/[<>"&]/.test(curStage)) stageOpts.push([curStage, I18n.t('{stage} (not in [ExtraStages])', { stage: stageBare(curStage) })]);
   const musicOpts = [['', '(stage default)']].concat((MI.music || []).map((m) => [m, m]));
   // Everything the editor does not give its own field lives in `params`, and
   // the ADVANCED block is a set of named views onto it.
@@ -7010,18 +7275,18 @@ function drawInspector() {
     '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
     + '<img src="' + portraitSrc(id, palOf(id)) + '" style="width:44px;height:44px;object-fit:cover;image-rendering:pixelated;border:1px solid var(--line);border-radius:3px">'
     // The name and id are filled in as text below (C-21), never as markup.
-    + '<div><div style="font-weight:600" id="insName"></div><div class="sub" id="insSub" style="color:var(--dim);font-size:11px"></div></div></div>'
+    + '<div><div style="font-weight:600" id="insName" translate="no"></div><div class="sub" id="insSub" style="color:var(--dim);font-size:11px" translate="no"></div></div></div>'
     + (() => {
       const v = portraitVerdict(id, info.row);
       if (!v) return '';
       const esc = (x) => String(x).replace(/"/g, '&quot;');
       return '<div class="diag" title="' + esc(portraitAdvice(v)) + '">'
         + '<span class="ico">!</span><span>'
-        + '<b>Its cell portrait is not a portrait.</b> Sprite ' + v.spr + ' is '
-        + v.w + '\u00d7' + v.h + ', which the engine draws at '
-        + v.drawnW + '\u00d7' + v.drawnH + ' in a ' + v.cellW + '\u00d7' + v.cellH + ' cell.'
-        + '<span class="more">A sprite of about ' + v.wantW + '\u00d7' + v.wantH
-        + ' would fill it. Hover for the full explanation.</span>'
+        + '<b>' + I18n.t('Its cell portrait is not a portrait.') + '</b> '
+        + I18n.t('Sprite {spr} is {w}\u00d7{h}, which the engine draws at {dw}\u00d7{dh} in a {cw}\u00d7{ch} cell.',
+          { spr: v.spr, w: v.w, h: v.h, dw: v.drawnW, dh: v.drawnH, cw: v.cellW, ch: v.cellH })
+        + '<span class="more">' + I18n.t('A sprite of about {w}\u00d7{h} would fill it. Hover for the full explanation.',
+          { w: v.wantW, h: v.wantH }) + '</span>'
         + '</span></div>';
     })()
     + (() => {
@@ -7030,22 +7295,21 @@ function drawInspector() {
       const esc = (x) => String(x).replace(/"/g, '&quot;');
       return '<div class="diag" title="' + esc(bigPortraitAdvice(v)) + '">'
         + '<span class="ico">!</span><span>'
+        // `against` is a phrase of bigPortraitVerdict's ("the screen"):
+        // looked up on its own, in case it arrives in English.
+        + '<b>' + (v.kind === 'over'
+          ? I18n.t('Its big portrait overflows {against}.', { against: I18n.server(v.against) })
+          : I18n.t('Its big portrait is far too small for {against}.', { against: I18n.server(v.against) })) + '</b> '
         + (v.kind === 'over'
-          ? '<b>Its big portrait overflows ' + v.against + '.</b> '
-          : '<b>Its big portrait is far too small for ' + v.against + '.</b> ')
-        + 'Sprite ' + v.spr + ' is ' + v.w + '\u00d7' + v.h
-        + (v.kind === 'over'
-          ? ', which the engine draws at ' + v.drawnW + '\u00d7' + v.drawnH
-            + ' against ' + v.fitW + '\u00d7' + v.fitH + '.'
-            + '<span class="more">A sprite of about ' + v.wantW + '\u00d7' + v.wantH
-            + ' would fit. Hover for the full explanation.</span>'
-          : ' \u2014 an ordinary size \u2014 but its .def declares localcoord '
-            + v.localcoord + ', so the engine scales it by ' + v.resFix
-            + ' instead of ' + Math.round((v.resFix * v.localcoord / 320) * 100) / 100
-            + ' and it lands at ' + v.drawnW + '\u00d7' + v.drawnH + '.'
-            + '<span class="more">At a 320 localcoord the same sprite would draw at '
-            + v.asIf320W + '\u00d7' + v.asIf320H
-            + ', like the rest of the roster. Hover for the full explanation.</span>')
+          ? I18n.t('Sprite {spr} is {w}\u00d7{h}, which the engine draws at {dw}\u00d7{dh} against {fw}\u00d7{fh}.',
+            { spr: v.spr, w: v.w, h: v.h, dw: v.drawnW, dh: v.drawnH, fw: v.fitW, fh: v.fitH })
+            + '<span class="more">' + I18n.t('A sprite of about {w}\u00d7{h} would fit. Hover for the full explanation.',
+              { w: v.wantW, h: v.wantH }) + '</span>'
+          : I18n.t('Sprite {spr} is {w}\u00d7{h} \u2014 an ordinary size \u2014 but its .def declares localcoord {localcoord}, so the engine scales it by {by} instead of {want} and it lands at {dw}\u00d7{dh}.',
+            { spr: v.spr, w: v.w, h: v.h, localcoord: v.localcoord, by: v.resFix,
+              want: Math.round((v.resFix * v.localcoord / 320) * 100) / 100, dw: v.drawnW, dh: v.drawnH })
+            + '<span class="more">' + I18n.t('At a 320 localcoord the same sprite would draw at {w}\u00d7{h}, like the rest of the roster. Hover for the full explanation.',
+              { w: v.asIf320W, h: v.asIf320H }) + '</span>')
         + '</span></div>';
     })()
     + '<div class="blk" id="blkAbout"><div class="grp"><span class="tw">\u25be</span>ABOUT</div>'
@@ -7053,13 +7317,13 @@ function drawInspector() {
     + '<dt>reading\u2026</dt><dd></dd></dl></div></div>'
     + '<div class="blk" id="blkCommon"><div class="grp"><span class="tw">\u25be</span>SETTINGS \u00b7 COMMON</div>'
     + '<div class="body">'
-    + fld('Stage', 'stage', p.stage, stageOpts)
-    + fld('Music', 'music', p.music, musicOpts)
-    + fld('Order', 'order', p.order)
+    + fld(I18n.t('Stage'), 'stage', p.stage, stageOpts)
+    + fld(I18n.t('Music'), 'music', p.music, musicOpts)
+    + fld(I18n.t('Order'), 'order', p.order)
     + fld('Order (surv)', 'ordersurvival', p.ordersurvival)
-    + fld('AI', 'ai', p.ai)
-    + fld('Hidden', 'hidden', p.hidden, HIDDEN_OPTS)
-    + fld('Include stage', 'includestage', p.includestage, [['', 'yes (default)'], ['-1', 'not random, still pickable'], ['0', 'neither']])
+    + fld(I18n.t('AI'), 'ai', p.ai)
+    + fld(I18n.t('Hidden'), 'hidden', p.hidden, HIDDEN_OPTS)
+    + fld('Include stage', 'includestage', p.includestage, [['', 'yes (default)'], ['-1', 'not random, still pickable'], ['0', I18n.t('neither')]])
     + '</div></div>'
     // THE ADVANCED BLOCK. Every field here writes a real select.def param that
     // the engine reads; the ones with no field of their own end up in CUSTOM.
@@ -7074,7 +7338,7 @@ function drawInspector() {
     + musicField('Victory music', 'victory.music', px)
     + musicField('Round 1 music', 'round1.music', px)
     + musicField('Round 2 music', 'round2.music', px)
-    + pfld('Rounds', 'rounds')
+    + pfld(I18n.t('Rounds'), 'rounds')
     + pfld('Time (s)', 'time')
     // arcadepath really is a LUA FILE - start.lua:1797 calls it "lua file with
     // custom arcade path detection" and swaps it in for main.luaPath.
@@ -7085,8 +7349,8 @@ function drawInspector() {
     + 'swallowed. It may contain commas for that reason.</div>'
     + pchk('VS screen', 'vsscreen', true)
     + pchk('Victory screen', 'victoryscreen', true)
-    + pchk('Single', 'single', false)
-    + pchk('Bonus', 'bonus', false)
+    + pchk(I18n.t('Single'), 'single', false)
+    + pchk(I18n.t('Bonus'), 'bonus', false)
     + '</div></div>'
     + '<div class="blk shut" id="blkCustom"><div class="grp"><span class="tw">\u25b8</span>CUSTOM</div>'
     + '<div class="body"><div class="hint">Any other select.def parameter, written as '
@@ -7098,22 +7362,19 @@ function drawInspector() {
     // 24 cells out of 25 that never need them. Slots get their own window,
     // opened when one is made or asked for - which is where VSelect puts them.
     + (info.slot || info.variants > 1
-        ? '<div class="hint">This cell is a <b>slot</b>. '
-          + '<a href="#" id="openSlot">View its ' + info.variants + ' character(s)\u2026</a></div>'
+        ? '<div class="hint">' + I18n.t('This cell is a <b>slot</b>.') + ' '
+          + '<a href="#" id="openSlot">' + I18n.t('View its {n} character(s)\u2026', { n: info.variants }) + '</a></div>'
         : '')
-    + '<button id="applyProps" style="margin-top:8px;width:100%">Apply to ' + id + '</button>'
+    + '<button id="applyProps" style="margin-top:8px;width:100%">' + I18n.t('Apply to {id}', { id }) + '</button>'
     + (info.variants > 1
         ? '<button id="ungroup" style="margin-top:6px;width:100%">Split this cell apart</button>' : '')
     + '<div class="grp">CELL</div>'
     + '<button id="mkhole" style="width:100%">Replace with an empty cell</button>'
     + '<button id="mkrandom" style="margin-top:6px;width:100%">Replace with a random-select cell</button>'
-    + '<div class="hint">The empty cell is an <b>unused cell</b>: nothing is placed there, '
-    + 'the screenpack draws its empty box when it shows empty boxes, and the cursor can '
-    + 'rest on it when the pack lets it move over empty boxes. A random-select cell shows '
-    + 'the motif\'s own random icon and gives a random character when picked. Either way '
-    + 'the character returns to the library, not deleted from disk.</div>';
+    + '<div class="hint">' + I18n.t('The empty cell is an <b>unused cell</b>: nothing is placed there, the screenpack draws its empty box when it shows empty boxes, and the cursor can rest on it when the pack lets it move over empty boxes. A random-select cell shows the motif\'s own random icon and gives a random character when picked. Either way the character returns to the library, not deleted from disk.')
+    + '</div>';
   $('#insName').textContent = info.displayName;
-  $('#insSub').textContent = id + ' · cell ' + sel;
+  $('#insSub').textContent = I18n.t('{id} · cell {cell}', { id, cell: sel });
   const ug = $('#ungroup');
   if (ug) ug.onclick = () => {
     // Members must be CONSECUTIVE to form a block, so clearing the slot id on
@@ -7127,8 +7388,8 @@ function drawInspector() {
     const pins = pinLocks();
     for (let k = span.start; k < span.end; k++) order[k].slot = '';
     unpinLocks(pins);
-    log('Split cell ' + sel + ' into ' + n + ' separate cells', true);
-    Session.record('split cell ' + sel + ' into ' + n + ' cells', true);
+    log(I18n.t('Split cell {cell} into {n} separate cells', { cell: sel, n }), true);
+    Session.record(I18n.t('split cell {cell} into {n} cells', { cell: sel, n }), true);
     sel = null; markDirty(true); render(); drawInspector();
   };
   const replaceCellWith = (kind) => {
@@ -7138,10 +7399,12 @@ function drawInspector() {
     const gone = order.slice(span.start, span.end).map((e) => e.char).filter(Boolean);
     order.splice(span.start, span.end - span.start, { kind });
     trimTrailingHoles();
-    log('Cell ' + sel + ' is now ' + (kind === 'random' ? 'random-select' : 'empty')
-        + ' (' + gone.join(', ') + ' back in the library)', true);
-    Session.record('cell ' + sel + ' -> ' + (kind === 'random' ? 'random-select'
-      : kind === 'dummy' ? 'unused cell' : 'skipslot'), true);
+    const v = { cell: sel, names: gone.join(', ') };
+    log(kind === 'random' ? I18n.t('Cell {cell} is now random-select ({names} back in the library)', v)
+      : I18n.t('Cell {cell} is now empty ({names} back in the library)', v), true);
+    Session.record(kind === 'random' ? I18n.t('cell {cell} -> random-select', { cell: sel })
+      : kind === 'dummy' ? I18n.t('cell {cell} -> unused cell', { cell: sel })
+      : I18n.t('cell {cell} -> skipslot', { cell: sel }), true);
     // The cell stays selected when it becomes a randomselect, because that is
     // a thing you go on to inspect; an emptied cell has nothing to look at.
     if (kind === 'skip' || kind === 'dummy') sel = null;
@@ -7171,10 +7434,10 @@ function drawInspector() {
     if (!dl) return;
     if (!a || a.error) { dl.innerHTML = '<dt>unreadable</dt><dd></dd>'; return; }
     const rows = [
-      ['Display name', a.displayName], ['Internal name', a.name], ['Author', a.author],
+      ['Display name', a.displayName], ['Internal name', a.name], [I18n.t('Author'), a.author],
       ['Version date', a.versionDate], ['Mugen version', a.mugenVersion],
       ['SFF version', a.sffVersion], ['Palette count', a.paletteCount],
-      ['Sprites', a.sprites], ['localcoord', a.localcoord], ['Folder', a.folder + '/' + a.def],
+      [I18n.t('Sprites'), a.sprites], ['localcoord', a.localcoord, 'code'], [I18n.t('Folder'), a.folder + '/' + a.def],
     ];
     // AS TEXT: a .def is a third party's file, and its name or author can
     // hold '<' or '&' ("Ryu <Evil>"), which markup would swallow or parse.
@@ -7182,9 +7445,12 @@ function drawInspector() {
     for (const r of rows.filter((x) => x[1] !== '' && x[1] !== undefined && x[1] !== null)) {
       const dt = document.createElement('dt');
       dt.textContent = r[0];
+      // The .def's own word for it (localcoord) stays as the file spells it.
+      if (r[2] === 'code') dt.setAttribute('translate', 'no');
       const dd = document.createElement('dd');
       dd.textContent = String(r[1]);
       dd.title = String(r[1]);
+      dd.setAttribute('translate', 'no');
       dl.append(dt, dd);
     }
   })();
@@ -7229,7 +7495,7 @@ function drawInspector() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: 'lua' }),
       })).json();
-      if (r.error) { log('ERROR ' + r.error); return; }
+      if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); return; }
       if (r.canceled) return;
       // A path inside the build is more use to select.def than an absolute one.
       arcField.value = r.relative || r.path;
@@ -7345,8 +7611,8 @@ function drawInspector() {
     if (printOf(now) === SAVED_PRINT) PENDING.delete(id);
     else { PENDING.set(id, now); PENDING_BASE.set(now, saved); }
     Session.formTouched = PENDING.size
-      ? (PENDING.size === 1 ? 'properties of ' + info.displayName
-         : PENDING.size + ' characters with property edits')
+      ? (PENDING.size === 1 ? I18n.t('properties of {name}', { name: info.displayName })
+         : I18n.t('{n} characters with property edits', { n: PENDING.size }))
       : null;
     Session.sync();
   };
@@ -7360,11 +7626,11 @@ function drawInspector() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mountAs: id, props }),
     })).json();
-    if (r.error) { log('ERROR ' + r.error); return; }
-    log('Saved properties for ' + id, true);
+    if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); return; }
+    log(I18n.t('Saved properties for {id}', { id }), true);
     PENDING.delete(id);
-    Session.formTouched = PENDING.size ? PENDING.size + ' character(s) with property edits' : null;
-    Session.record('properties of ' + id);
+    Session.formTouched = PENDING.size ? I18n.t('{n} character(s) with property edits', { n: PENDING.size }) : null;
+    Session.record(I18n.t('properties of {name}', { name: id }));
     await load(true);
     const back = MI.cells.find((c) => lc(c.char || '') === lc(id));
   sel = back ? back.index : null; drawGrid(); drawInspector();
@@ -7455,6 +7721,20 @@ const $new = (tag, cls, text) => {
   if (text !== undefined) e.textContent = text;
   return e;
 };
+// DATA, NOT WORDS: a name, a file or a path the page shows is marked
+// translate="no", so a language pack never turns a pack called "Default" or a
+// character called "Random" into a word. Words around it go through I18n.t.
+function asData(e) { e.setAttribute('translate', 'no'); return e; }
+// A SENTENCE WITH ELEMENTS IN IT - a link that carries a listener - is one key
+// with a {placeholder} per element: the translation is laid out as text around
+// the elements themselves, in its own order, so nothing is re-parsed and every
+// listener stays. In English the nodes are the ones a plain append made.
+function appendSentence(parent, said, els) {
+  String(said).split(/\{([A-Za-z_][A-Za-z0-9_]*)\}/).forEach((part, k) => {
+    if (k % 2) parent.append(els[part] || '{' + part + '}');
+    else if (part) parent.append(part);
+  });
+}
 function eBtn(label, onclick, cls) {
   const b = $new('button', cls || '', label);
   b.type = 'button';
@@ -7474,7 +7754,6 @@ async function esApi(url, body) {
   if (!res.ok || !j || j.error) throw new Error((j && j.error) || (res.status + ' ' + res.statusText));
   return j;
 }
-const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
 
 // ---- what is unsaved ----------------------------------------------------------
 //
@@ -7590,7 +7869,7 @@ function choose(title, message, buttons, focus) {
   });
 }
 function tell(title, message) {
-  return choose(title, message, [{ label: 'OK', value: true, primary: true }]);
+  return choose(title, message, [{ label: I18n.t('OK'), value: true, primary: true }]);
 }
 
 // ---- Preferences: the store ----------------------------------------------------
@@ -7841,18 +8120,23 @@ function engineTarget(info) {
 //
 // ELEMENTS, NEVER MARKUP. The pack's name and author are read out of its own
 // system.def; written in with innerHTML, a name holding '<' or '&' was markup.
+// THE NAME AND THE AUTHOR ARE DATA: both elements are kept from the language
+// observer, and the words around the name are put into the reader's language
+// here.
 function setCrumb() {
   const w = $('#packWord'), by = $('#packBy');
   if (!w || !by) return;
+  w.setAttribute('translate', 'no');
+  by.setAttribute('translate', 'no');
   if (!MI || MI.error) {
-    w.textContent = '(screenpack not found)';
+    w.textContent = I18n.t('(screenpack not found)');
     by.textContent = '';
     return;
   }
   const name = MI.name || MI.motif || 'screenpack';
   w.textContent = '"' + name + '"';
-  w.title = name + ' - the screenpack this build uses (' + (MI.motif ? 'data/' + MI.motif : '?') + ')';
-  by.textContent = MI.author ? 'by ' + MI.author : '';
+  w.title = I18n.t('{name} - the screenpack this build uses ({file})', { name, file: MI.motif ? 'data/' + MI.motif : '?' });
+  by.textContent = MI.author ? I18n.t('by {author}', { author: MI.author }) : '';
 }
 
 // ---- Undo / Redo ------------------------------------------------------------
@@ -7936,10 +8220,15 @@ function canRedo() {
 }
 // The label of the step Undo would take back, or Redo would make again. Given
 // even while busy, so a disabled button still says what it will do.
-function undoLabel() { const H = HIST; return H.at > 0 ? H.states[H.at].label : ''; }
+// IN THE READER'S LANGUAGE: a step's labels are joined here one by one, each
+// looked up on its own (I18n.server: the same as `label` in English), so a
+// label recorded as a plain English key still reads translated inside the
+// joined title, where the language observer cannot find it.
+const stepWords = (st) => (st.labels || []).map((l) => I18n.server(l)).join(', ');
+function undoLabel() { const H = HIST; return H.at > 0 ? stepWords(H.states[H.at]) : ''; }
 function redoLabel() {
   const H = HIST;
-  return H.at >= 0 && H.at + 1 < H.states.length ? H.states[H.at + 1].label : '';
+  return H.at >= 0 && H.at + 1 < H.states.length ? stepWords(H.states[H.at + 1]) : '';
 }
 function historyHasSteps() { return HIST.states.length > 1; }
 function undo() { return canUndo() ? historyMove(HIST.at - 1) : Promise.resolve(false); }
@@ -7978,8 +8267,8 @@ function syncUndoButtons() {
   const ul = undoLabel(), rl = redoLabel();
   u.disabled = !canUndo();
   r.disabled = !canRedo();
-  u.title = ul ? 'Undo ' + ul : 'Nothing to undo';
-  r.title = rl ? 'Redo ' + rl : 'Nothing to redo';
+  u.title = ul ? I18n.t('Undo {what}', { what: ul }) : 'Nothing to undo';
+  r.title = rl ? I18n.t('Redo {what}', { what: rl }) : 'Nothing to redo';
 }
 
 // What the page holds now, copied: later edits change these lists in place.
@@ -8018,9 +8307,13 @@ function changedOutside(live, known) {
   const seen = Session.packSeen.has(packKey(live.rel)) ? Session.packSeen.get(packKey(live.rel)) : known;
   return typeof seen === 'string' && seen !== live.text;
 }
+// `who` is the step that left it ('Revert', 'Undo', 'Redo'): a code, each
+// its own sentence.
 function outsideNote(rel, who) {
-  return 'data/' + rel + ' was changed outside E-Select since it was last read here, so ' + who
-    + ' left it as it is. Reload (F5) or Save makes that change the new starting point.';
+  const v = { file: 'data/' + rel };
+  return who === 'Revert' ? I18n.t('{file} was changed outside E-Select since it was last read here, so Revert left it as it is. Reload (F5) or Save makes that change the new starting point.', v)
+    : who === 'Redo' ? I18n.t('{file} was changed outside E-Select since it was last read here, so Redo left it as it is. Reload (F5) or Save makes that change the new starting point.', v)
+    : I18n.t('{file} was changed outside E-Select since it was last read here, so Undo left it as it is. Reload (F5) or Save makes that change the new starting point.', v);
 }
 
 // Nothing of the history still in flight: no step waiting for its task, no
@@ -8037,7 +8330,8 @@ async function historySettled() {
 
 // REVERT, ONE PACK: put `first` - its text when this session first saw it -
 // back into that pack's file, named explicitly (it need not be the pack the
-// roster names). '' when it is back or never moved, else why it was left.
+// roster names). '' when it is back or never moved, else why it was left, in
+// the viewer's words: the reason is only ever shown, in the log.
 async function restorePack(first, who) {
   const vpath = 'data/' + first.rel;
   let live = null;
@@ -8046,7 +8340,7 @@ async function restorePack(first, who) {
     const j = res.ok ? await res.json() : null;
     if (j && typeof j.text === 'string') live = { rel: j.rel || first.rel, text: j.text };
   } catch (e) { live = null; }
-  if (!live) return vpath + ' could not be read back, so ' + who + ' left it as it is';
+  if (!live) return I18n.t('{file} could not be read back, so Revert left it as it is', { file: vpath });
   if (live.text === first.text) return '';
   if (changedOutside(live)) return outsideNote(first.rel, who);
   let j = null;
@@ -8056,7 +8350,7 @@ async function restorePack(first, who) {
       body: JSON.stringify({ motif: vpath, text: first.text }),
     })).json();
   } catch (e) { j = { error: e.message }; }
-  if (!j || j.error) return vpath + ' could not be written back (' + ((j && j.error) || 'no answer') + ')';
+  if (!j || j.error) return I18n.t('{file} could not be written back ({error})', { file: vpath, error: (j && j.error) || I18n.t('no answer') });
   Session.packSeen.set(packKey(first.rel), first.text);
   return '';
 }
@@ -8073,7 +8367,7 @@ function historyEnqueue(fn) {
   H.queued++;
   syncUndoButtons();
   H.queue = H.queue.then(fn)
-    .catch((e) => log('ERROR undo history: ' + ((e && e.message) || e)))
+    .catch((e) => log(I18n.t('ERROR undo history: {error}', { error: (e && e.message) || e })))
     .then(() => { H.queued--; syncUndoButtons(); });
 }
 
@@ -8167,8 +8461,8 @@ async function restoreDisk(from, to, who) {
       j = await res.json();
     } catch (e) { /* reported below */ }
     if (!res || !res.ok || !j || j.error) {
-      log('ERROR could not put the roster back: '
-        + ((j && j.error) || (res ? res.status + ' ' + res.statusText : 'no answer')));
+      log(I18n.t('ERROR could not put the roster back: {error}',
+        { error: (j && j.error) || (res ? res.status + ' ' + res.statusText : I18n.t('no answer')) }));
       return null;
     }
     done.roster = true;
@@ -8182,16 +8476,23 @@ async function restoreDisk(from, to, who) {
       now = await readMotif(true);
     }
     if (!now || now.motif !== to.motif.motif) {
-      log('ERROR could not put the screenpack file back: the build names '
-        + (now ? (now.motif || 'the default screenpack') : 'no readable screenpack')
-        + ', not ' + (to.motif.motif || 'the default screenpack'));
+      // Which pack the build names now - one by name, the default one, or none
+      // that reads - and which the step expected, by name or the default one,
+      // each pair its own sentence. (Both the default one is the same pack,
+      // which never comes here.)
+      const v = { now: now && now.motif, to: to.motif.motif };
+      log(!now ? (v.to ? I18n.t('ERROR could not put the screenpack file back: the build names no readable screenpack, not {to}', v)
+          : I18n.t('ERROR could not put the screenpack file back: the build names no readable screenpack, not the default screenpack'))
+        : !v.now ? I18n.t('ERROR could not put the screenpack file back: the build names the default screenpack, not {to}', v)
+        : (v.to ? I18n.t('ERROR could not put the screenpack file back: the build names {now}, not {to}', v)
+          : I18n.t('ERROR could not put the screenpack file back: the build names {now}, not the default screenpack', v)));
     } else if (now.text !== to.motif.text) {
       // Only over what E-Select itself left there. The recorded text is what
       // it expects; the file is looked at once more before it is replaced.
       const live = done.pack ? now : await readMotif(true);
       if (live && changedOutside(live, now.text)) {
         done.outside = true;
-        log('WARNING ' + outsideNote(live.rel || to.motif.rel || '?', who || 'Undo'));
+        log(I18n.t('WARNING {why}', { why: outsideNote(live.rel || to.motif.rel || '?', who || 'Undo') }));
         return done;
       }
       let j = null;
@@ -8201,7 +8502,7 @@ async function restoreDisk(from, to, who) {
           body: JSON.stringify({ text: to.motif.text }),
         })).json();
       } catch (e) { j = { error: e.message }; }
-      if (!j || j.error) log('ERROR could not put the screenpack file back: ' + ((j && j.error) || 'no answer'));
+      if (!j || j.error) log(I18n.t('ERROR could not put the screenpack file back: {error}', { error: (j && j.error) || I18n.t('no answer') }));
       else {
         done.motif = true;
         if (to.motif.rel) Session.packSeen.set(packKey(to.motif.rel), to.motif.text);
@@ -8215,7 +8516,7 @@ function historyMove(to) {
   const H = HIST;
   if (historyBusy() || to < 0 || to >= H.states.length || to === H.at) return Promise.resolve(false);
   const p = historyMoveRun(to)
-    .catch((e) => { log('ERROR ' + ((e && e.message) || e)); return false; })
+    .catch((e) => { log(I18n.t('ERROR {error}', { error: (e && e.message) || e })); return false; })
     .finally(() => { if (H.moving === p) H.moving = null; syncUndoButtons(); });
   H.moving = p;
   syncUndoButtons();
@@ -8249,7 +8550,7 @@ async function historyMoveRun(to) {
     render();
     drawInspector();
   }
-  log((back ? 'Undo: ' : 'Redo: ') + step.label, true);
+  log(back ? I18n.t('Undo: {what}', { what: stepWords(step) }) : I18n.t('Redo: {what}', { what: stepWords(step) }), true);
   return true;
 }
 
@@ -8272,10 +8573,10 @@ async function saveNow() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })).json();
-    if (r.error) { log('ERROR ' + r.error); return false; }
-    log('Saved — ' + r.inBuild + ' characters across ' + r.cells + ' cells', true);
+    if (r.error) { log(I18n.t('ERROR {error}', { error: r.error })); return false; }
+    log(I18n.t('Saved — {n} characters across {cells} cells', { n: r.inBuild, cells: r.cells }), true);
     logStudioAdds(kept);
-    if (r.backup) log('Backed up the previous roster to ' + r.backup);
+    if (r.backup) log(I18n.t('Backed up the previous roster to {file}', { file: r.backup }));
     // Saving declares a new starting point, so the baseline moves with it.
     resetHistory();
     await Session.capture();
@@ -8295,11 +8596,11 @@ async function saveAll() {
     try {
       await esApi('/api/char-props', { mountAs: id, props });
     } catch (e) {
-      log('ERROR saving the properties of ' + id + ': ' + e.message);
+      log(I18n.t('ERROR saving the properties of {id}: {error}', { id, error: e.message }));
       return false;
     }
     PENDING.delete(id);
-    log('Saved properties for ' + id, true);
+    log(I18n.t('Saved properties for {id}', { id }), true);
   }
   Session.formTouched = null;
   if (dirty) return saveNow();
@@ -8329,7 +8630,8 @@ async function reloadFromDisk() {
   if (RELOADING) return;
   const n = unsavedCount();
   if (n) {
-    const ok = await choose('Reload', 'Reload from disk? Your ' + plural(n, 'unsaved change') + ' will be lost.',
+    const ok = await choose(I18n.t('Reload'), n === 1 ? I18n.t('Reload from disk? Your 1 unsaved change will be lost.')
+      : I18n.t('Reload from disk? Your {n} unsaved changes will be lost.', { n }),
       [{ label: 'Reload', value: true, primary: true }, { label: 'Cancel', value: false }], false);
     if (!ok) return;
   }
@@ -8345,7 +8647,7 @@ async function reloadFromDisk() {
     resetHistory();
     await Session.capture();
     await load(true);
-    log('Reloaded from disk', true);
+    log(I18n.t('Reloaded from disk'), true);
   } finally {
     RELOADING = false;
     syncUndoButtons();
@@ -8367,27 +8669,30 @@ async function switchPack(motif, name) {
   let cur = null;
   try { cur = await esApi('/api/roster'); } catch (e) { cur = null; }
   if (cur && String(cur.motif || '').toLowerCase() === String(motif || '').toLowerCase()) {
-    log(name.charAt(0).toUpperCase() + name.slice(1) + ' is already this build’s screenpack');
+    log(I18n.t('{name} is already this build’s screenpack', { name: name.charAt(0).toUpperCase() + name.slice(1) }));
     return false;
   }
   const n = stagedCount();
   if (n) {
     const ok = await choose('Switch screenpack',
-      'Switch to ' + name + '? Your ' + plural(n, 'unsaved change') + ' will be lost.',
+      n === 1 ? I18n.t('Switch to {name}? Your 1 unsaved change will be lost.', { name })
+        : I18n.t('Switch to {name}? Your {n} unsaved changes will be lost.', { name, n }),
       [{ label: 'Switch', value: true, primary: true }, { label: 'Cancel', value: false }], false);
     if (!ok) return false;
   }
   let r;
   try { r = await esApi('/api/theme', { motif }); }
-  catch (e) { log('ERROR ' + e.message); return false; }
+  catch (e) { log(I18n.t('ERROR {error}', { error: e.message })); return false; }
   const res = r.result || {};
-  log('Screenpack is now ' + name
-    + (res.layout ? ', and the build took its slot layout' : '')
-    + (res.layoutCleared ? ' (the previous pack’s reserved cells were cleared)' : ''), true);
+  log(res.layout
+    ? (res.layoutCleared ? I18n.t('Screenpack is now {name}, and the build took its slot layout (the previous pack’s reserved cells were cleared)', { name })
+      : I18n.t('Screenpack is now {name}, and the build took its slot layout', { name }))
+    : (res.layoutCleared ? I18n.t('Screenpack is now {name} (the previous pack’s reserved cells were cleared)', { name })
+      : I18n.t('Screenpack is now {name}', { name })), true);
   // A NEW HISTORY, whose first state is the one being left: the switch is
   // then a step Undo can take back, and nothing before it is (see Undo / Redo).
   resetHistory(true);
-  Session.record('screenpack → ' + name);
+  Session.record(I18n.t('screenpack → {name}', { name }));
   forgetPackCaches();
   zoomLocked = false;
   await load(false);
@@ -8406,14 +8711,14 @@ async function openMotifDialog() {
   d.body.appendChild(list);
   d.foot.append(
     eBtn('Open new motif…', () => { d.close(); openNewMotif(); }, 'left'),
-    eBtn('Cancel', () => d.close()));
+    eBtn(I18n.t('Cancel'), () => d.close()));
   d.focus();
   let j;
   try { j = await esApi('/api/themes'); }
   catch (e) {
     if (d.closed) return;
     list.textContent = '';
-    list.appendChild($new('p', 'emsg bad', 'Could not list the screenpacks: ' + e.message));
+    list.appendChild($new('p', 'emsg bad', I18n.t('Could not list the screenpacks: {error}', { error: e.message })));
     return;
   }
   if (d.closed) return;
@@ -8425,16 +8730,18 @@ async function openMotifDialog() {
     const row = $new('div', 'mrow' + (isCur ? ' cur' : ''));
     row.tabIndex = 0;
     row.setAttribute('role', 'button');
-    row.appendChild($new('span', 'nm', t.name || t.folder || t.path));
-    row.appendChild($new('span', 'fd', t.folder ? t.folder + '/' : 'data/'));
+    // A pack's name and its folder are data (translate="no"); the words
+    // around them go through I18n.t (`t` is the pack in this loop).
+    row.appendChild(asData($new('span', 'nm', t.name || t.folder || t.path)));
+    row.appendChild(asData($new('span', 'fd', t.folder ? t.folder + '/' : 'data/')));
     const tags = $new('span', 'tags');
-    if (isCur) tags.appendChild($new('span', 'on', 'current' + (j.isDefault ? ' (default) · ' : ' · ')));
-    tags.appendChild(document.createTextNode(t.custom ? 'installed' : 'built-in'));
+    if (isCur) tags.appendChild($new('span', 'on', (j.isDefault ? I18n.t('current (default)') : I18n.t('current')) + ' · '));
+    tags.appendChild(document.createTextNode(t.custom ? I18n.t('installed') : I18n.t('built-in')));
     row.appendChild(tags);
-    const miss = (t.missingAnims || []).map((a) => 'animation ' + a.anim + ' (' + a.key + ')');
+    const miss = (t.missingAnims || []).map((a) => I18n.t('animation {anim} ({key})', { anim: a.anim, key: a.key }));
     if (miss.length) {
-      row.appendChild($new('span', 'why', 'Incomplete: asks for ' + miss.join(', ')
-        + ', which its system.def never defines. Those parts draw nothing.'));
+      row.appendChild($new('span', 'why', I18n.t('Incomplete: asks for {list}, which its system.def never defines. Those parts draw nothing.',
+        { list: miss.join(', ') })));
     }
     row.title = t.path;
     const pick = async () => {
@@ -8454,17 +8761,20 @@ async function openMotifDialog() {
     for (const t of bad) {
       const row = $new('div', 'mrow off');
       row.setAttribute('aria-disabled', 'true');
-      row.appendChild($new('span', 'nm', t.name || t.folder || t.path || '?'));
-      row.appendChild($new('span', 'fd', t.folder ? t.folder + '/' : 'data/'));
-      row.appendChild($new('span', 'tags', t.custom ? 'installed' : 'built-in'));
+      row.appendChild(asData($new('span', 'nm', t.name || t.folder || t.path || '?')));
+      row.appendChild(asData($new('span', 'fd', t.folder ? t.folder + '/' : 'data/')));
+      row.appendChild($new('span', 'tags', t.custom ? I18n.t('installed') : I18n.t('built-in')));
       // The server's reason for each file (modlib.themeBootWhy), as the
       // Studio's Theme tab shows it.
       const whys = (t.missing || []).map((m) => m && typeof m === 'object' && m.why).filter(Boolean);
       const what = (t.missing || []).map((m) => (m && typeof m === 'object')
         ? (m.key ? m.key + ' = ' : '') + (m.path || '') : String(m)).join(', ');
+      // Each reason is looked up BEFORE it is capitalized and joined: the
+      // server's English is the key, and the joined line is no key at all.
       row.appendChild($new('span', 'why', whys.length
-        ? whys.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('. ') + '.'
-        : 'Missing ' + (what || 'files it needs') + '. The engine stops with an error on a pack like this, so it is not offered.'));
+        ? whys.map((s) => { const w = I18n.server(s); return w.charAt(0).toUpperCase() + w.slice(1); }).join('. ') + '.'
+        : what ? I18n.t('Missing {files}. The engine stops with an error on a pack like this, so it is not offered.', { files: what })
+          : I18n.t('Missing files it needs. The engine stops with an error on a pack like this, so it is not offered.')));
       list.appendChild(row);
     }
   }
@@ -8487,17 +8797,17 @@ function openNewMotif() {
     status.className = 'emsg' + (bad ? ' bad' : '');
   };
   const fb = eBtn('Choose folder…');
-  const zb = eBtn('Choose .zip…');
+  const zb = eBtn(I18n.t('Choose .zip…'));
   const busy = (on) => { fb.disabled = on; zb.disabled = on; };
   const go = async (kind) => {
     busy(true);
-    say('Waiting for the ' + (kind === 'zip' ? 'file' : 'folder') + ' dialog…');
+    say(kind === 'zip' ? I18n.t('Waiting for the file dialog…') : I18n.t('Waiting for the folder dialog…'));
     let pick;
     try { pick = await esApi('/api/pick-file', { kind }); }
     catch (e) { if (!d.closed) { busy(false); say(e.message, true); } return; }
     if (d.closed) return;
     if (!pick || pick.canceled || !pick.path) { busy(false); say(''); return; }
-    say('Installing ' + pick.path + '…');
+    say(I18n.t('Installing {path}…', { path: pick.path }));
     let r;
     try { r = await esApi('/api/add-local', { kind: 'theme', path: pick.path }); }
     catch (e) { if (!d.closed) { busy(false); say(e.message, true); } return; }
@@ -8517,17 +8827,18 @@ function openNewMotif() {
       return;
     }
     d.close();
-    log('Installed the screenpack ' + name + (res.folder ? ' (themes/' + res.folder + ')' : ''), true);
+    log(res.folder ? I18n.t('Installed the screenpack {name} (themes/{folder})', { name, folder: res.folder })
+      : I18n.t('Installed the screenpack {name}', { name }), true);
     await switchPack(motif, name);
   };
   fb.onclick = () => go('folder');
   zb.onclick = () => go('zip');
-  d.foot.append(fb, zb, eBtn('Cancel', () => d.close()));
+  d.foot.append(fb, zb, eBtn(I18n.t('Cancel'), () => d.close()));
   d.focus(fb);
 }
 
 async function openDefaultMotif() {
-  await switchPack('', 'the default screenpack');
+  await switchPack('', I18n.t('the default screenpack'));
 }
 
 // ---- Launch -----------------------------------------------------------------
@@ -8547,15 +8858,17 @@ async function launchEngine() {
       await tell('Launch Ikemen GO', 'The Studio server did not say where the engine is. Is it still running?');
       return;
     }
-    const badExe = exe && info.custom && !info.custom.ok
-      ? 'The Engine executable in Preferences cannot be used: ' + (info.custom.reason || 'it is not an Ikemen GO program') + '.'
-      : '';
+    // The reason a chosen program cannot be used: the server's English, or
+    // the page's when it gave none. The dialog and the log both say it in the
+    // reader's language (`reason` is a message, looked up as it is filled in).
+    const badWhy = exe && info.custom && !info.custom.ok ? (info.custom.reason || 'it is not an Ikemen GO program') : '';
+    const badSay = badWhy ? I18n.t('The Engine executable in Preferences cannot be used: {reason}.', { reason: badWhy }) : '';
     const t = engineTarget(info);
     if (!t) {
-      const looked = (info.engine && (info.engine.exportExe || info.engine.exportDir)) || 'the desktop export folder';
+      const looked = (info.engine && (info.engine.exportExe || info.engine.exportDir)) || I18n.t('the desktop export folder');
       await tell('Launch Ikemen GO', [
-        'No Ikemen GO install was found. E-Select looked for ' + looked + '.',
-        badExe,
+        I18n.t('No Ikemen GO install was found. E-Select looked for {path}.', { path: looked }),
+        badSay,
         'Export Desktop from the Studio to make one, or set Preferences › Engine executable to an'
           + ' Ikemen GO program (Select engine… in the Ikemen GO menu does the same).',
       ]);
@@ -8572,15 +8885,18 @@ async function launchEngine() {
       // to date.
       const norm = (p) => String(p || '').replace(/[\\/]+$/, '').replace(/\//g, '\\').toLowerCase();
       const elsewhere = t.custom && norm(t.dir) !== norm(info.engine && info.engine.exportDir);
+      // Whole sentences, chosen here (`t` is the engine in this function).
       const how = elsewhere
-        ? 'Export into that folder from the Studio (Export to folder…) to include them.'
-        : 'Export Desktop from the Studio to include them.';
+        ? I18n.t('Export into that folder from the Studio (Export to folder…) to include them.')
+        : I18n.t('Export Desktop from the Studio to include them.');
       const lines = stale
-        ? [(elsewhere ? 'This build (' + t.dir + ')' : 'This build') + ' was exported before your latest changes,'
-            + ' so it will start without them. ' + how,
-          n ? 'You also have ' + plural(n, 'unsaved change') + '.' : '']
-        : ['You have ' + plural(n, 'unsaved change') + ', so the build will start without them.'
-            + ' Save, then ' + (elsewhere ? 'export' + how.slice('Export'.length) : how)];
+        ? [(elsewhere ? I18n.t('This build ({dir}) was exported before your latest changes, so it will start without them.', { dir: t.dir })
+            : I18n.t('This build was exported before your latest changes, so it will start without them.')) + ' ' + how,
+          n ? (n === 1 ? I18n.t('You also have 1 unsaved change.') : I18n.t('You also have {n} unsaved changes.', { n })) : '']
+        : [(n === 1 ? I18n.t('You have 1 unsaved change, so the build will start without them.')
+            : I18n.t('You have {n} unsaved changes, so the build will start without them.', { n }))
+            + ' ' + (elsewhere ? I18n.t('Save, then export into that folder from the Studio (Export to folder…) to include them.')
+              : I18n.t('Save, then Export Desktop from the Studio to include them.'))];
       const go = await choose('Launch Ikemen GO', lines,
         [{ label: 'Launch anyway', value: true, primary: true }, { label: 'Cancel', value: false }]);
       if (!go) return;
@@ -8588,12 +8904,12 @@ async function launchEngine() {
     let r;
     try { r = await esApi('/api/launch-build', t.custom ? { exe: t.exe } : {}); }
     catch (e) {
-      log('ERROR ' + e.message);
-      await tell('Launch Ikemen GO', 'Ikemen GO did not start: ' + e.message);
+      log(I18n.t('ERROR {error}', { error: e.message }));
+      await tell('Launch Ikemen GO', I18n.t('Ikemen GO did not start: {error}', { error: e.message }));
       return;
     }
-    if (badExe) log(badExe + ' The desktop export was started instead.');
-    log('Started Ikemen GO: ' + (r.exe || t.exe), true);
+    if (badWhy) log(I18n.t('The Engine executable in Preferences cannot be used: {reason}. The desktop export was started instead.', { reason: badWhy }));
+    log(I18n.t('Started Ikemen GO: {exe}', { exe: r.exe || t.exe }), true);
   } finally {
     LAUNCHING = false;
   }
@@ -8604,16 +8920,17 @@ async function launchEngine() {
 async function selectEngine() {
   let pick;
   try { pick = await esApi('/api/pick-file', { kind: 'exe' }); }
-  catch (e) { log('ERROR ' + e.message); return; }
+  catch (e) { log(I18n.t('ERROR {error}', { error: e.message })); return; }
   if (!pick || pick.canceled || !pick.path) return;
   const c = await exeCheck(pick.path);
   if (c && c.ok) {
     setPref('engineExe', c.exe || pick.path);
-    log('Launch now starts ' + (c.exe || pick.path), true);
+    log(I18n.t('Launch now starts {exe}', { exe: c.exe || pick.path }), true);
     return;
   }
   await tell('Select engine', [
-    pick.path + ' cannot be used: ' + (c ? (c.reason || 'it is not an Ikemen GO program') : 'the Studio server could not check it') + '.',
+    I18n.t('{path} cannot be used: {reason}.', { path: pick.path,
+      reason: c ? (c.reason || I18n.t('it is not an Ikemen GO program')) : I18n.t('the Studio server could not check it') }),
     'Pick the Ikemen GO program itself, in the folder that holds its data folder.',
   ]);
 }
@@ -8623,8 +8940,8 @@ async function openInstallFolder() {
   const exe = String(PREFS.engineExe || '').trim();
   try {
     const r = await esApi('/api/open-path', exe ? { which: 'install-folder', exe } : { which: 'install-folder' });
-    log('Opened ' + (r.path || 'the install folder'), true);
-  } catch (e) { log('ERROR ' + e.message); }
+    log(r.path ? I18n.t('Opened {path}', { path: r.path }) : I18n.t('Opened the install folder'), true);
+  } catch (e) { log(I18n.t('ERROR {error}', { error: e.message })); }
 }
 
 // ENGINE SETTINGS are the Studio's Settings tab, never config.ini in Notepad:
@@ -8636,7 +8953,7 @@ function openEngineSettings() {
       window.opener.setTab('settings');
       if (typeof window.opener.setSettingsTab === 'function') window.opener.setSettingsTab('common');
       raiseStudio();
-      log('The Studio is showing its Settings tab');
+      log(I18n.t('The Studio is showing its Settings tab'));
       return;
     } catch (e) { /* the Studio page is not the one that opened this; go the long way */ }
   }
@@ -8652,14 +8969,14 @@ function openEngineSettings() {
 async function editSystemDef() {
   try {
     await esApi('/api/open-path', { which: 'system.def' });
-    log('Opened system.def in Notepad. Save it there, then press F5 here to see the change.', true);
-  } catch (e) { log('ERROR ' + e.message); }
+    log(I18n.t('Opened system.def in Notepad. Save it there, then press F5 here to see the change.'), true);
+  } catch (e) { log(I18n.t('ERROR {error}', { error: e.message })); }
 }
 async function openMotifFolder() {
   try {
     const r = await esApi('/api/open-path', { which: 'motif-folder' });
-    log('Opened ' + (r.path || 'the screenpack folder'), true);
-  } catch (e) { log('ERROR ' + e.message); }
+    log(r.path ? I18n.t('Opened {path}', { path: r.path }) : I18n.t('Opened the screenpack folder'), true);
+  } catch (e) { log(I18n.t('ERROR {error}', { error: e.message })); }
 }
 
 // VIEW select.def. It is GENERATED from the build every time the build is
@@ -8667,14 +8984,20 @@ async function openMotifFolder() {
 // This is the live generated file: what an export would write right now.
 async function viewSelectDef() {
   const d = eDialog('select.def', { width: 760, cls: 'seldef' });
+  asData(d.box.querySelector('.ehead .t'));   // a file's name for a title
   const n = stagedCount();
-  if (n) d.body.appendChild($new('p', 'emsg note', 'As last saved. Save to include your ' + plural(n, 'unsaved change') + '.'));
+  if (n) {
+    d.body.appendChild($new('p', 'emsg note', n === 1 ? I18n.t('As last saved. Save to include your 1 unsaved change.')
+      : I18n.t('As last saved. Save to include your {n} unsaved changes.', { n })));
+  }
   d.body.appendChild($new('p', 'emsg hint',
     'Written from the cells every time the build is exported, so it is read here rather than edited: change the cells, then Save.'));
-  const pre = $new('pre', 'deftext', 'Loading…');
+  // A <pre> is never visited by the language observer: its words are said
+  // here (the file itself is the file).
+  const pre = $new('pre', 'deftext', I18n.t('Loading…'));
   d.body.appendChild(pre);
   let text = '';
-  const copy = eBtn('Copy', async () => {
+  const copy = eBtn(I18n.t('Copy'), async () => {
     if (!text) return;
     let ok = false;
     try { await navigator.clipboard.writeText(text); ok = true; } catch (e) { ok = false; }
@@ -8686,11 +9009,11 @@ async function viewSelectDef() {
       s.removeAllRanges(); s.addRange(r);
       try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
     }
-    copy.textContent = ok ? 'Copied' : 'Select and copy';
-    setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+    copy.textContent = ok ? I18n.t('Copied') : 'Select and copy';
+    setTimeout(() => { copy.textContent = I18n.t('Copy'); }, 1500);
   }, 'left');
   copy.disabled = true;
-  d.foot.append(copy, eBtn('Close', () => d.close(), 'primary'));
+  d.foot.append(copy, eBtn(I18n.t('Close'), () => d.close(), 'primary'));
   d.focus(d.foot.lastChild);
   try {
     // The DESKTOP build's select.def (lock labels included); the web build's
@@ -8706,7 +9029,7 @@ async function viewSelectDef() {
     pre.textContent = text;
     copy.disabled = false;
   } catch (e) {
-    if (!d.closed) pre.textContent = 'Could not read the generated select.def: ' + e.message;
+    if (!d.closed) pre.textContent = I18n.t('Could not read the generated select.def: {error}', { error: e.message });
   }
 }
 
@@ -8731,7 +9054,7 @@ async function exitEditor(beforeLeave, closing) {
   EXIT_REARM = !!closing;
   try {
     if (unsavedCount()) {
-      const c = await choose('Exit', 'You have unsaved changes.', [
+      const c = await choose(I18n.t('Exit'), 'You have unsaved changes.', [
         { label: 'Save and exit', value: 'save', primary: true },
         { label: 'Exit without saving', value: 'discard' },
         { label: 'Cancel', value: null },
@@ -8816,24 +9139,26 @@ try {
 // from the click itself (the shell hands a user-clicked mailto: to the system).
 // A plain same-window link would navigate the editor away.
 function openAbout() {
-  const d = eDialog('About', { width: 420, vw: 80, cls: 'about' });
+  const d = eDialog(I18n.t('About'), { width: 420, vw: 80, cls: 'about' });
   d.foot.remove();
   const B = d.body;
   B.appendChild($new('div', 'an', 'E-Select'));
-  B.appendChild($new('div', 'av', 'Version ' + ESELECT_VERSION));
-  B.appendChild($new('div', 'av', 'by energy.jp'));
+  B.appendChild($new('div', 'av', I18n.t('Version {v}', { v: ESELECT_VERSION })));
+  B.appendChild($new('div', 'av', I18n.t('by {author}', { author: 'energy.jp' })));
   B.appendChild($new('div', 'gap'));
   B.appendChild($new('div', '', 'Tested against Ikemen GO 1.0'));
   B.appendChild($new('div', 'gap'));
   const credit = $new('div', 'credit');
-  const site = $new('a', '', 'VSelect');
+  const site = asData($new('a', '', 'VSelect'));
   site.href = 'https://vselect.neocities.org';
   site.target = '_blank';
   site.rel = 'noopener';
-  const mail = $new('a', '', 'tunglashor');
+  const mail = asData($new('a', '', 'tunglashor'));
   mail.href = 'mailto:tunglashor@gmail.com';
   mail.onclick = (e) => { e.preventDefault(); window.open(mail.href); };
-  credit.append('Based on ', site, ' by ', mail);
+  // One sentence, the two links its placeholders (the mail link keeps its
+  // listener, so the words are laid around the elements, never re-parsed).
+  appendSentence(credit, I18n.t('Based on {site} by {author}'), { site, author: mail });
   B.appendChild(credit);
   d.focus();
 }
@@ -8858,7 +9183,7 @@ const PrefsDlg = {
   show() {
     if (this.isOpen) { this.d.focus(); return; }
     const commits = [];   // text fields to write back when the dialog closes
-    const d = eDialog('Preferences', {
+    const d = eDialog(I18n.t('Preferences'), {
       width: 560, cls: 'prefs',
       // A text field only reports on blur or Enter, and a dialog closed by a
       // press on the backdrop is gone before its field ever blurs.
@@ -8920,7 +9245,7 @@ const PrefsDlg = {
     };
 
     // STARTUP
-    const s1 = section('Startup');
+    const s1 = section(I18n.t('Startup'));
     pick(s1, 'On startup', 'startup', [
       ['fit', 'Fit the screen to the window'],
       ['actual', 'Actual size (100%)'],
@@ -8931,7 +9256,7 @@ const PrefsDlg = {
       const inp = $new('input', 'grow');
       inp.id = 'pref-engineExe';
       inp.placeholder = 'The Studio’s desktop export';
-      const browse = eBtn('Browse…', () => selectEngine());
+      const browse = eBtn(I18n.t('Browse…'), () => selectEngine());
       c.append(inp, browse);
       const h = help(s1, 'The Ikemen GO program that Launch starts. Leave blank to use the Studio’s desktop export folder.');
       const bad = help(s1, '', true);
@@ -8945,7 +9270,7 @@ const PrefsDlg = {
         if (me !== asked || !this.isOpen) return;
         if (!cst) { bad.hidden = true; return; }   // the server could not say; say nothing
         bad.hidden = !!cst.ok;
-        bad.textContent = cst.ok ? '' : 'Cannot be used: ' + (cst.reason || 'it is not an Ikemen GO program') + '.';
+        bad.textContent = cst.ok ? '' : I18n.t('Cannot be used: {reason}.', { reason: cst.reason || I18n.t('it is not an Ikemen GO program') });
       };
       text(inp, () => {
         const v = inp.value.trim();
@@ -8959,14 +9284,13 @@ const PrefsDlg = {
       eselectInfo().then((info) => {
         const dir = info && info.engine && info.engine.exportDir;
         if (dir && this.isOpen) {
-          h.textContent = 'The Ikemen GO program that Launch starts. Leave blank to use the Studio’s'
-            + ' desktop export folder: ' + dir + '.';
+          h.textContent = I18n.t('The Ikemen GO program that Launch starts. Leave blank to use the Studio’s desktop export folder: {dir}.', { dir });
         }
       });
     }
 
     // DISPLAY
-    const s2 = section('Display');
+    const s2 = section(I18n.t('Display'));
     {
       const { r, c } = row(s2, 'Highlight tint', null, 'tint');
       const box = $new('div', 'tintctl');
@@ -8974,20 +9298,21 @@ const PrefsDlg = {
         const line = $new('div', 'sl');
         const rg = $new('input');
         rg.type = 'range'; rg.min = '-255'; rg.max = '255'; rg.step = '1';
-        rg.setAttribute('aria-label', 'Highlight tint, ' + ch.toUpperCase());
+        rg.setAttribute('aria-label', I18n.t('Highlight tint, {channel}', { channel: ch.toUpperCase() }));
         const v = $new('span', 'v');
         rg.oninput = () => {
           v.textContent = rg.value;
           setPref('highlight', Object.assign({}, PREFS.highlight, { [ch]: Number(rg.value) }));
         };
-        line.append($new('span', 'n', ch.toUpperCase()), rg, v);
+        // R, G, B: the channel's letter, not a word ("G" is a key elsewhere).
+        line.append(asData($new('span', 'n', ch.toUpperCase())), rg, v);
         box.appendChild(line);
         on('highlight', () => { rg.value = String(PREFS.highlight[ch]); v.textContent = String(PREFS.highlight[ch]); });
       }
       // THE PREVIEW IS THE REAL THING: the selected character's portrait (or
       // the build's first), through the same filter the grid uses.
       const prev = $new('div', 'tprev');
-      prev.appendChild($new('span', '', 'Preview:'));
+      prev.appendChild($new('span', '', I18n.t('Preview:')));
       const who = previewChar();
       if (who && MI && MI.select && MI.select.portraitSpr) {
         const img = new Image();
@@ -9005,9 +9330,11 @@ const PrefsDlg = {
     pick(s2, 'Empty cell display', 'showEmpty', [
       ['0', 'Use motif setting'], ['1', 'Always show'], ['2', 'Always hide'],
     ]);
-    check(s2, 'Show offscreen cells', 'showOffscreen');
-    check(s2, 'Show "hidden" indicator', 'showHiddenIcons');
-    check(s2, 'Show portraits in lists', 'listPortraits');
+    // check() is a name the language extractor reads as never UI, so its
+    // labels are said through I18n.t, which makes each one a key.
+    check(s2, I18n.t('Show offscreen cells'), 'showOffscreen');
+    check(s2, I18n.t('Show "hidden" indicator'), 'showHiddenIcons');
+    check(s2, I18n.t('Show portraits in lists'), 'listPortraits');
     {
       const { c } = row(s2, 'Default stage portrait sprite', 'pref-stagePortraitSpr');
       const inp = $new('input', 'spr');
@@ -9054,7 +9381,7 @@ const PrefsDlg = {
       // disabled - not hidden - until they are: VSelect shows the option and
       // grays it, which tells you it exists.
       const icon = pick(s3, 'Show lock icon', 'showLocks',
-        [['0', 'Never'], ['1', 'While dragging'], ['2', 'Always']], 'child');
+        [['0', I18n.t('Never')], ['1', 'While dragging'], ['2', I18n.t('Always')]], 'child');
       on('checkLocks', () => {
         const onNow = !!PREFS.checkLocks;
         cb.checked = onNow;
@@ -9066,16 +9393,16 @@ const PrefsDlg = {
     pick(s3, 'When dropping on occupied cells', 'dropOnOccupied', [
       ['move', 'Move existing characters'], ['swap', 'Swap with dragged characters'],
     ]);
-    check(s3, 'Replace RandomSelect cells when no free cells available', 'dropReplaceRandom');
+    check(s3, I18n.t('Replace RandomSelect cells when no free cells available'), 'dropReplaceRandom');
 
     // TOOLTIPS
-    const s4 = section('Tooltips');
-    check(s4, 'Show character info on hover', 'tooltipCharacter');
-    check(s4, 'Show hidden-state tooltip on hover', 'tooltipHidden');
+    const s4 = section(I18n.t('Tooltips'));
+    check(s4, I18n.t('Show character info on hover'), 'tooltipCharacter');
+    check(s4, I18n.t('Show hidden-state tooltip on hover'), 'tooltipHidden');
 
     // SAVING
-    const s5 = section('Saving');
-    check(s5, 'Make a backup before each save', 'saveBackup');
+    const s5 = section(I18n.t('Saving'));
+    check(s5, I18n.t('Make a backup before each save'), 'saveBackup');
 
     // RESET ASKS TWICE, the way the Studio's deletes do: the first click only
     // arms it, and it disarms itself after three seconds.
@@ -9095,9 +9422,9 @@ const PrefsDlg = {
       }
       disarm();
       resetPrefs();
-      log('Preferences are back to their defaults', true);
+      log(I18n.t('Preferences are back to their defaults'), true);
     };
-    d.foot.append(reset, eBtn('Done', () => d.close(), 'primary'));
+    d.foot.append(reset, eBtn(I18n.t('Done'), () => d.close(), 'primary'));
     d.focus();
   },
 };
@@ -9116,8 +9443,8 @@ function mainMenuItems() {
     { label: 'Open Motif…', run: () => openMotifDialog() },
     { label: 'Save', key: 'Ctrl+S', off: !dirty, run: () => saveNow() },
     { label: 'Reload', key: 'F5', run: () => reloadFromDisk() },
-    { label: 'Undo', key: 'Ctrl+Z', off: !canUndo(), title: canUndo() ? 'Undo ' + undoLabel() : '', run: () => undo() },
-    { label: 'Redo', key: 'Ctrl+Y', off: !canRedo(), title: canRedo() ? 'Redo ' + redoLabel() : '', run: () => redo() },
+    { label: 'Undo', key: 'Ctrl+Z', off: !canUndo(), title: canUndo() ? I18n.t('Undo {what}', { what: undoLabel() }) : '', run: () => undo() },
+    { label: 'Redo', key: 'Ctrl+Y', off: !canRedo(), title: canRedo() ? I18n.t('Redo {what}', { what: redoLabel() }) : '', run: () => redo() },
     { sep: true },
     { label: 'Launch Ikemen GO', key: 'Ctrl+M', run: () => launchEngine() },
     { sep: true },
@@ -9139,7 +9466,7 @@ async function engineMenuItems() {
   const t = engineTarget(info);
   const isDefault = !!(info && info.motif && info.motif.isDefault);
   return [
-    { header: t ? t.dir : 'No desktop build yet' },
+    { header: t ? t.dir : 'No desktop build yet', isData: !!t },
     { label: 'Engine settings (config.ini)…', run: () => openEngineSettings(),
       title: 'The Studio’s Settings tab, which writes config.ini into every export' },
     { label: 'Open install folder', off: !t, run: () => openInstallFolder() },
@@ -9154,7 +9481,7 @@ async function packMenuItems() {
   const info = await eselectInfo();
   const m = (info && info.motif) || {};
   const items = [
-    { header: m.abs || ('data/' + ((MI && MI.motif) || 'system.def')) },
+    { header: m.abs || ('data/' + ((MI && MI.motif) || 'system.def')), isData: true },
     { label: 'Default motif', check: !!m.isDefault, off: true, state: true,
       title: m.isDefault ? 'This build uses the default screenpack' : 'This build uses its own screenpack' },
     { sep: true },
@@ -9185,7 +9512,7 @@ async function openHeaderMenu(idx, keyboard) {
   if (!anchor) return;
   const token = ++HDR_TOKEN;
   let items;
-  try { items = await h.items(); } catch (e) { log('ERROR ' + e.message); return; }
+  try { items = await h.items(); } catch (e) { log(I18n.t('ERROR {error}', { error: e.message })); return; }
   if (token !== HDR_TOKEN) return;
   Menu.openAt(anchor, items, {
     kind: h.kind, keyboard,
@@ -9348,7 +9675,7 @@ if (gridBus) {
     forgetPackCaches();
     PACK_SWITCHED = true;
     if (unsavedCount() > 0) {
-      log('This screenpack’s options changed in the Studio. Reload (F5) before you save: Save would put your order back over it.');
+      log(I18n.t('This screenpack’s options changed in the Studio. Reload (F5) before you save: Save would put your order back over it.'));
       return;
     }
     resetHistory();
@@ -9453,7 +9780,7 @@ function announceRosterChange() {
       .filter((en) => en && en.isDirectory);
     const files = dirs.length ? [] : Array.prototype.slice.call(e.dataTransfer.files);
     const first = dirs.length ? dirs[0].name : files.length ? files[0].name : '';
-    if (!(await stagedWorkFirst(dirs.length + files.length === 1 ? first : 'these characters'))) return;
+    if (!(await stagedWorkFirst(dirs.length + files.length === 1 ? first : null))) return;
     if (dirs.length) { for (const d of dirs) await addCharFolder(d); return; }
     for (const f of files) await addCharFile(f);
   });
@@ -9463,12 +9790,18 @@ function announceRosterChange() {
   // switch do - and both of those ask. Unapplied property edits (PENDING)
   // survive a reload (rebasePending), so only the staged ones are counted.
   // Answers whether to go on: Save first (and stop if the Save fails), add
-  // and lose them, or Cancel (Escape, the ×).
+  // and lose them, or Cancel (Escape, the ×). `what` names the one being
+  // added; null is several.
   async function stagedWorkFirst(what) {
     const n = stagedCount();
     if (!n) return true;
+    const v = { name: what, n };
     const c = await choose('Add a character',
-      'Add ' + what + '? Adding reloads the grid from disk, and your ' + plural(n, 'unsaved change') + ' will be lost unless you save first.',
+      what !== null
+        ? (n === 1 ? I18n.t('Add {name}? Adding reloads the grid from disk, and your 1 unsaved change will be lost unless you save first.', v)
+          : I18n.t('Add {name}? Adding reloads the grid from disk, and your {n} unsaved changes will be lost unless you save first.', v))
+        : (n === 1 ? I18n.t('Add these characters? Adding reloads the grid from disk, and your 1 unsaved change will be lost unless you save first.')
+          : I18n.t('Add these characters? Adding reloads the grid from disk, and your {n} unsaved changes will be lost unless you save first.', v)),
       [{ label: 'Save, then add', value: 'save', primary: true },
         { label: 'Add and discard my changes', value: 'discard' },
         { label: 'Cancel', value: null }], 'save');
@@ -9524,20 +9857,20 @@ function announceRosterChange() {
   }
 
   async function addCharFile(file) {
-    log('Adding ' + file.name + '...');
+    log(I18n.t('Adding {name}...', { name: file.name }));
     try {
       const { result } = await post('/api/upload', file, Object.assign({
         'x-kind': 'char', 'x-filename': encodeURIComponent(file.name),
       }, replaceRandom() ? { 'x-replace-random': '1' } : null));
       await added(result, file.name);
-    } catch (err) { log('ERROR ' + err.message); }
+    } catch (err) { log(I18n.t('ERROR {error}', { error: err.message })); }
   }
 
   async function addCharFolder(dirEntry) {
     const files = [];
     await walk(dirEntry, dirEntry.name, files);
-    if (!files.length) { log('ERROR ' + dirEntry.name + ' is empty'); return; }
-    log('Adding ' + dirEntry.name + ' (' + files.length + ' files)...');
+    if (!files.length) { log(I18n.t('ERROR {name} is empty', { name: dirEntry.name })); return; }
+    log(I18n.t('Adding {name} ({n} files)...', { name: dirEntry.name, n: files.length }));
     const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
     try {
       for (const f of files) {
@@ -9549,7 +9882,7 @@ function announceRosterChange() {
         JSON.stringify(Object.assign({ token, kind: 'char' }, replaceRandom() ? { replaceRandom: 1 } : null)),
         { 'Content-Type': 'application/json' });
       await added(result, dirEntry.name);
-    } catch (err) { log('ERROR ' + err.message); }
+    } catch (err) { log(I18n.t('ERROR {error}', { error: err.message })); }
   }
 
   // A dropped character goes INTO THE BUILD, in the first free cell (modlib
@@ -9558,12 +9891,15 @@ function announceRosterChange() {
   async function added(result, what) {
     const name = (result && (result.name || result.folder)) || what;
     const p = result && result.placed;
-    log('Added ' + name + (!p ? ' to the library'
-      : p.replacedRandom ? ' to the build, in the RandomSelect cell ' + p.cell
-      : p.beyondGrid ? ' to the build, past the last cell of the grid (every cell is taken)'
-      : ' to the build, in cell ' + p.cell), true);
+    const v = { name, cell: p && p.cell };
+    log(!p ? I18n.t('Added {name} to the library', v)
+      : p.replacedRandom ? I18n.t('Added {name} to the build, in the RandomSelect cell {cell}', v)
+      : p.beyondGrid ? I18n.t('Added {name} to the build, past the last cell of the grid (every cell is taken)', v)
+      : I18n.t('Added {name} to the build, in cell {cell}', v), true);
     if (result && result.missing && result.missing.length) {
-      log('WARNING ' + name + ' is missing ' + result.missing.length + ' referenced file(s)');
+      const n = result.missing.length;
+      log(n === 1 ? I18n.t('WARNING {name} is missing 1 referenced file(s)', { name })
+        : I18n.t('WARNING {name} is missing {n} referenced file(s)', { name, n }));
     }
     // NOT AN UNDO STEP, AND WHERE A NEW HISTORY STARTS. The server has
     // written the character into roster.json, and every state before this

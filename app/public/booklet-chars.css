@@ -357,7 +357,7 @@ body.adv #panel-chars #charDetail .card.char .line.opts.adv-face {
   padding: 10px 0 0; margin: 4px 0 0; border-top: 2px solid var(--ink);
 }
 body.adv #panel-chars #charDetail .card.char .line.opts.adv-face::before {
-  content: 'Advanced'; grid-column: 1 / -1; grid-row: 1; margin-bottom: 4px;
+  content: var(--word-advanced, 'Advanced'); grid-column: 1 / -1; grid-row: 1; margin-bottom: 4px;
   font: 800 var(--t-13)/1.2 var(--f-disp); font-stretch: 104%; text-transform: uppercase; color: var(--ink);
 }
 #panel-chars #charDetail .adv-face > label {
@@ -469,3 +469,22 @@ body.adv #panel-chars #charDetail .card.char .line.opts.adv-face::before {
 }
 /* the read-only build: nothing on the page is a key to press */
 body.readonly #panel-chars #charDetail .who > b { cursor: default; }
+
+/* ---------- a translated window: room for longer words ----------
+   i18n.js sets <html lang> only while a language pack is in force; English sets
+   nothing, so none of these rules can reach an English line. Each one gives a
+   longer word the room the English never needed, and only where the English
+   layout would otherwise cut it.
+   - The roster bar gives way in steps (fitCharBar): in English the count is the
+     first thing to shorten (c2), but "3 en la compilación" shortened at a 1400px
+     window reads "3 en l...". Here it keeps its words and the other controls give
+     way first (Select and Filter turn into glyphs, the sort box narrows); from
+     c6 on it may shorten or drop exactly as in English.
+   - Stage / Music: the 50px label column fits "Stage"; "Escenario" is wider.
+   - The side heads (Palettes, Animation...) carry buttons after the rule; when
+     the longer labels no longer fit beside the title they move under it, whole and
+     to the right, rather than being clipped. */
+:root[lang] #panel-chars #charBar.c2:not(.c6) #gridCount { flex-shrink: 0; }
+:root[lang] #panel-chars #charDetail .card.char .line.opts.basic-face { grid-template-columns: minmax(50px, max-content) minmax(0, 1fr); }
+:root[lang] #panel-chars #charDetail .dsec > .h { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
+:root[lang] #panel-chars #charDetail .dsec > .h > button { flex: none; }

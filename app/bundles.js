@@ -255,7 +255,7 @@ function create(name, L, opts) {
     // Half a bundle is worse than none: it would list, open, and have no roster.
     // A checked delete (lifebars.js); if even that fails, the error says so.
     try { require('./lifebars.js').rmTree(dir); } catch (e2) {
-      e.message += ' - and the half-made folder "' + n + '" could not be removed (' + e2.message + ')';
+      e.message = e.message + ' - and the half-made folder "' + n + '" could not be removed (' + e2.message + ')';
     }
     throw e;
   }
@@ -523,7 +523,7 @@ function openExternal(dir, name, L) {
     fs.writeFileSync(path.join(at, 'roster.json'), JSON.stringify(made.roster, null, 2) + '\n');
   } catch (e) {
     try { require('./lifebars.js').rmTree(at); } catch (e2) {
-      e.message += ' - and the half-made folder "' + n + '" could not be removed (' + e2.message + ')';
+      e.message = e.message + ' - and the half-made folder "' + n + '" could not be removed (' + e2.message + ')';
     }
     throw e;
   }

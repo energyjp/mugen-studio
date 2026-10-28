@@ -275,8 +275,8 @@ function apply(sffPath, moves) {
       const want = geomOf(sff, Number(mv.from));
       const got = geomOf(check, Number(mv.to));
       if (want && got && (want.w !== got.w || want.h !== got.h)) {
-        throw new Error('sprite ' + PORTRAIT_GROUP + ',' + mv.to + ' is '
-          + got.w + 'x' + got.h + ', expected ' + want.w + 'x' + want.h);
+        const size = got.w + 'x' + got.h, wanted = want.w + 'x' + want.h;
+        throw new Error('sprite ' + PORTRAIT_GROUP + ',' + mv.to + ' is ' + size + ', expected ' + wanted);
       }
     }
   } catch (e) {
@@ -298,9 +298,9 @@ function apply(sffPath, moves) {
     const held = e && (e.code === 'EPERM' || e.code === 'EBUSY' || e.code === 'EACCES');
     let readOnly = false;
     if (held) try { readOnly = !(fs.statSync(sffPath).mode & 0o200); } catch (e2) { /* say held */ }
-    throw new Error((readOnly ? 'the sprite file is marked read-only - clear Read-only in its Properties and try again'
-      : held ? 'the sprite file is open in another program - close it and try again'
-      : 'could not replace the sprite file: ' + (e && e.message)) + ' (nothing was changed)');
+    throw new Error(readOnly ? 'the sprite file is marked read-only - clear Read-only in its Properties and try again (nothing was changed)'
+      : held ? 'the sprite file is open in another program - close it and try again (nothing was changed)'
+        : 'could not replace the sprite file: ' + (e && e.message) + ' (nothing was changed)');
   }
   fs.writeFileSync(sidecarPath(sffPath), JSON.stringify({
     version, moves, writes, plan,

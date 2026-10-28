@@ -16,6 +16,10 @@
 (function () {
   'use strict';
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  // THE STUDIO'S LANGUAGE (public/i18n.js) in a page that loads it before this
+  // file, English in any other: the glyphs' spoken names and the hold marks'
+  // words go through I18n.t, which fills {placeholders} either way.
+  const I18n = window.I18n || { t: (en, vars) => String(en).replace(/\{([A-Za-z_$][\w$]*)\}/g, (m, k) => (vars && vars[k] != null ? String(vars[k]) : m)) };
 
   // ---- printings (theme.js owns the state; this only names it) -------------------
   const LOOKS = ['energy', 'wb', 'ar', 'sz', 'contrast'];
@@ -29,18 +33,29 @@
   // ---- command glyphs -----------------------------------------------------------
   // Written for a fighter facing right. Arrow angles from "right".
   const DIRS = { F: 0, DF: 45, D: 90, DB: 135, B: 180, UB: 225, U: 270, UF: 315 };
-  const SAY = { F: 'forward', DF: 'down-forward', D: 'down', DB: 'down-back', B: 'back', UB: 'up-back', U: 'up', UF: 'up-forward' };
+  const SAY = { F: I18n.t('forward'), DF: I18n.t('down-forward'), D: I18n.t('down'), DB: I18n.t('down-back'), B: I18n.t('back'), UB: I18n.t('up-back'), U: I18n.t('up'), UF: I18n.t('up-forward') };
   const PUNCH = { x: 1, y: 1, z: 1 }, KICK = { a: 1, b: 1, c: 1 };
   const ARROW = 'M1 6.3h7.4V2.2L15.2 8l-6.8 5.8V9.7H1z';
   // hollow: a held or charged direction, drawn as the engine's own glyphs.sff draws ~B..~UF (sprites 92-99)
   const arrow = (d, hollow) => '<svg class="ar' + (hollow ? ' hollow' : '') + '" viewBox="0 0 16 16" aria-hidden="true"><path transform="rotate(' + DIRS[d] + ' 8 8)" d="' + ARROW + '"/></svg>';
   // the hold mark: the hollow arrow (or a chip) on the spot bar with a small word; a charge reads "charge"
-  const holdMark = (inner, word, title) => '<span class="hold" title="' + esc(title) + '">' + inner + '<em>' + word + '</em></span>';
+  const holdMark = (inner, word, title) => '<span class="hold" title="' + esc(title) + '">' + inner + '<em>' + esc(word) + '</em></span>';
+  // "hold x 30 ticks", "charge: hold back, then": a held direction's or button's words
+  const holdSay = (what, ticks, release) => (ticks
+    ? (release ? I18n.t('hold {what} {n} ticks, then release', { what, n: ticks }) : I18n.t('hold {what} {n} ticks', { what, n: ticks }))
+    : (release ? I18n.t('hold {what}, then release', { what }) : I18n.t('hold {what}', { what })));
+  const chargeSay = (what, ticks) => (ticks ? I18n.t('charge: hold {what} {n} ticks, then', { what, n: ticks }) : I18n.t('charge: hold {what}, then', { what }));
+  // x, y and z: "x or y or z"; parts of one press: "down and x"
+  const orSay = (list) => list.reduce((a, b) => I18n.t('{a} or {b}', { a, b }));
+  const andSay = (list) => list.reduce((a, b) => I18n.t('{a} and {b}', { a, b }));
   const THEN = '<span class="then" aria-hidden="true"></span>';
+  // A button's letter is its label on the pad, not a word: translate="no", so a
+  // language pack that has the bare letter "A" or "C" as a key elsewhere cannot
+  // rename the button. A title on it is put in the reader's language here.
   const chip = (k, extra) => {
     const l = k.toLowerCase();
     const cls = PUNCH[l] ? 'p' : KICK[l] ? 'k' : 's';
-    return '<span class="b ' + cls + (extra ? ' ' + extra : '') + '" data-btn="' + esc(l) + '">' + esc(l.toUpperCase()) + '</span>';
+    return '<span class="b ' + cls + (extra ? ' ' + extra : '') + '" data-btn="' + esc(l) + '" translate="no">' + esc(l.toUpperCase()) + '</span>';
   };
   // One element of a .cmd step: the modifiers ~[n] / $ > then a direction or a button.
   // .cmd is CASE-SENSITIVE like the engine: directions upper case (B = back), buttons lower case (b).
@@ -55,19 +70,19 @@
     if (DIRS[t] !== undefined) {
       // a CHARGE (the command's first step, chargeStart's rule: glyphsCmd decides) gets the hollow
       // arrow reading "charge"; /D (held) the hollow arrow reading "hold"; ~D (the usual motion start) prints plain
-      if (charge) return { dir: true, charge: true, html: holdMark(arrow(t, true), 'charge', 'charge: hold ' + SAY[t] + (ticks ? ' ' + ticks + ' ticks' : '') + ', then'), say: 'charge ' + SAY[t] };
-      if (hold) return { dir: true, html: holdMark(arrow(t, true), 'hold', 'hold ' + SAY[t] + (ticks ? ' ' + ticks + ' ticks' : '')), say: 'hold ' + SAY[t] };
+      if (charge) return { dir: true, charge: true, html: holdMark(arrow(t, true), I18n.t('charge'), chargeSay(SAY[t], ticks)), say: I18n.t('charge {what}', { what: SAY[t] }) };
+      if (hold) return { dir: true, html: holdMark(arrow(t, true), I18n.t('hold'), holdSay(SAY[t], ticks)), say: I18n.t('hold {what}', { what: SAY[t] }) };
       return { dir: true, html: arrow(t), say: SAY[t] };
     }
     if (/^[a-z]$/.test(t)) {
-      if (hold || (release && ticks)) return { dir: false, html: holdMark(chip(t), 'hold', 'hold ' + t + (ticks ? ' ' + ticks + ' ticks' : '') + (release ? ', then release' : '')), say: 'hold ' + t };
-      if (release) return { dir: false, html: chip(t, 'rel').replace('<span ', '<span title="release" '), say: 'release ' + t };
+      if (hold || (release && ticks)) return { dir: false, html: holdMark(chip(t), I18n.t('hold'), holdSay(t, ticks, release)), say: I18n.t('hold {what}', { what: t }) };
+      if (release) return { dir: false, html: chip(t, 'rel').replace('<span ', '<span title="' + esc(I18n.t('release')) + '" '), say: I18n.t('release {what}', { what: t }) };
       return { dir: false, html: chip(t), say: t };
     }
     // a move's strength versions on one line (the Command List writer): x/y/z = any of them
-    if (/^[a-z](?:\/[a-z])+$/.test(t)) return { dir: false, html: t.split('/').map((b) => chip(b)).join('<span class="plus">/</span>'), say: t.split('/').join(' or ') };
+    if (/^[a-z](?:\/[a-z])+$/.test(t)) return { dir: false, html: t.split('/').map((b) => chip(b)).join('<span class="plus">/</span>'), say: orSay(t.split('/')) };
     if (!t) return { dir: false, html: '', say: '' };
-    return { dir: false, html: '<span class="b s">' + esc(t) + '</span>', say: t };
+    return { dir: false, html: '<span class="b s" translate="no">' + esc(t) + '</span>', say: t };
   }
   // The Command List writer's rule (cmdlist.js chargeStart), so the page draws a .cmd notation
   // without the server: the first step is ONE direction released (~) or held (/) N > 0 ticks
@@ -101,9 +116,9 @@
       if (!parts.length) return;
       const isDir = parts.every((p) => p.dir);
       if (i > 0 && prevDir !== null) html += prevCharge ? THEN : prevDir && !isDir ? '<span class="plus">+</span>' : '<span class="sep"></span>';
-      if (i > 0 && prevCharge) say.push('then');
+      if (i > 0 && prevCharge) say.push(I18n.t('then'));
       html += parts.map((p) => p.html).join('<span class="plus">+</span>');
-      say.push(parts.map((p) => p.say).join(' and '));
+      say.push(andSay(parts.map((p) => p.say)));
       prevDir = isDir;
       prevCharge = charge && i === 0;
     });
@@ -122,22 +137,22 @@
     const re = /_\+|_\.|_AIR|_HOLD|~(UF|UB|DF|DB|F|B|U|D)|_(UF|UB|DF|DB|F|B|U|D)|\^([ABCXYZS])|\^([PK])|\/|([^_^/~]+)/g;
     let m;
     while ((m = re.exec(s))) {
-      if (m[0] === '_+') { html += '<span class="plus">+</span>'; say.push('plus'); }
-      else if (m[0] === '_.') { html += THEN; say.push('then'); }
-      else if (m[0] === '_AIR') { html += '<span class="w" title="in the air (jumping)">AIR</span>'; say.push('in the air'); }
+      if (m[0] === '_+') { html += '<span class="plus">+</span>'; say.push(I18n.t('plus')); }
+      else if (m[0] === '_.') { html += THEN; say.push(I18n.t('then')); }
+      else if (m[0] === '_AIR') { html += '<span class="w" title="in the air (jumping)">AIR</span>'; say.push(I18n.t('in the air')); }
       else if (m[0] === '_HOLD') { heldBtn = true; }
-      else if (m[0] === '/') { html += '<span class="plus">/</span>'; say.push('or'); }
+      else if (m[0] === '/') { html += '<span class="plus">/</span>'; say.push(I18n.t('or')); }
       else if (m[1]) {
         const charge = s.startsWith('_.', re.lastIndex);
-        html += holdMark(arrow(m[1], true), charge ? 'charge' : 'hold', charge ? 'charge: hold ' + SAY[m[1]] + ', then' : 'hold ' + SAY[m[1]]);
-        say.push((charge ? 'charge ' : 'hold ') + SAY[m[1]]);
+        html += holdMark(arrow(m[1], true), charge ? I18n.t('charge') : I18n.t('hold'), charge ? chargeSay(SAY[m[1]]) : holdSay(SAY[m[1]]));
+        say.push(charge ? I18n.t('charge {what}', { what: SAY[m[1]] }) : I18n.t('hold {what}', { what: SAY[m[1]] }));
       }
       else if (m[2]) { html += arrow(m[2]); say.push(SAY[m[2]]); }
       else if (m[3] || m[4]) {
         const k = m[3] || m[4];
-        const word = m[4] ? 'any ' + (k === 'P' ? 'punch' : 'kick') : k.toLowerCase();
-        const c = m[4] ? '<span class="b ' + (k === 'P' ? 'p' : 'k') + '" data-btn="' + k.toLowerCase() + '" title="' + word + '">' + k + '</span>' : chip(k);
-        if (heldBtn) { html += holdMark(c, 'hold', 'hold ' + word); say.push('hold ' + word); heldBtn = false; }
+        const word = m[4] ? (k === 'P' ? I18n.t('any punch') : I18n.t('any kick')) : k.toLowerCase();
+        const c = m[4] ? '<span class="b ' + (k === 'P' ? 'p' : 'k') + '" data-btn="' + k.toLowerCase() + '" title="' + esc(word) + '" translate="no">' + k + '</span>' : chip(k);
+        if (heldBtn) { html += holdMark(c, I18n.t('hold'), holdSay(word)); say.push(I18n.t('hold {what}', { what: word })); heldBtn = false; }
         else { html += c; say.push(word); }
       }
       else if (m[5] && m[5].trim()) { html += '<span class="txt">' + esc(m[5].trim()) + '</span>'; say.push(m[5].trim()); }
@@ -440,6 +455,7 @@
     slip.dataset.member = t.id;
     const who = document.createElement('b');
     who.className = 'who';
+    who.setAttribute('translate', 'no');   // the member's name; the tip is in the reader's language already
     who.textContent = t.name + ':';
     slip.replaceChildren(who, document.createTextNode(' ' + t.text));
     const vw = document.documentElement.clientWidth;

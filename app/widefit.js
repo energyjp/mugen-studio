@@ -67,7 +67,7 @@ function plan(text, aspect) {
   if (marker >= 0) return { fitted: true, localcoord: [W, H], was: parseMarker(ls[info.start + marker]) };
   // a hair under, never over: 854x480 (the web default) puts 240 x 1.7792 on exactly 427
   const Wt = Math.floor(H * aspect - 1e-3);
-  if (Wt <= W) return { fitted: false, fits: false, localcoord: [W, H], reason: 'already ' + (Math.abs(H * aspect - W) < 2 ? 'this shape' : 'wider than the build') };
+  if (Wt <= W) return { fitted: false, fits: false, localcoord: [W, H], reason: Math.abs(H * aspect - W) < 2 ? 'already this shape' : 'already wider than the build' };
   const pull = Math.ceil((Wt - W) / 2);
   const bl = findKey(ls, cam, 'boundleft'), br = findKey(ls, cam, 'boundright');
   const blv = bl ? nums(bl.value)[0] || 0 : 0, brv = br ? nums(br.value)[0] || 0 : 0;

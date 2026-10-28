@@ -1003,7 +1003,7 @@ function analyzeGiver(charDir, defName, opts) {
       if (X.parses(raw) && X.varsOf(raw).length) { edges.push({ kind: 'hitdef-expr', from: s.no, sc, expr: raw, p1 }); continue; }
       const leaves = X.parses(raw) ? [...new Set([...X.evalRandom(raw, {}), ...X.leavesOf(raw)])].filter((t) => !isBasic(t)) : [];
       if (leaves.length) for (const t of leaves) edges.push({ to: t, from: s.no, kind: 'hitdef', sc, p1, expr: raw });
-      else unsolvable.push({ state: s.no, expr: raw, reason: 'p2stateno ' + (X.parses(raw) ? 'has no literal to reach' : 'is unreadable') });
+      else unsolvable.push({ state: s.no, expr: raw, reason: X.parses(raw) ? 'p2stateno has no literal to reach' : 'p2stateno is unreadable' });
     }
   }
   // Computed targets: which custom states exist is only known once the
@@ -1317,7 +1317,9 @@ function analyzeGiver(charDir, defName, opts) {
       const txt = [...sc.trig.all, ...sc.trig.groups.flat()].join(' ').toLowerCase();
       if (!/\b(animtime|time)\s*[=<>]/.test(txt)) continue;
       const later = posesOf(t, assignments, 1, new Set([fromNo]), false);
-      for (const p of later.poses) if (p.anim !== null) r.poses.push(Object.assign({}, p, { kind: 'later', label: 'then, state ' + t + (p.label && p.label !== 'header' && p.label !== 'certain' ? ' (' + p.label + ')' : '') }));
+      for (const p of later.poses) {
+        if (p.anim !== null) r.poses.push(Object.assign({}, p, { kind: 'later', label: p.label && p.label !== 'header' && p.label !== 'certain' ? 'then, state ' + t + ' (' + p.label + ')' : 'then, state ' + t }));
+      }
     }
   };
   const order = { certain: 0, conditional: 1, timed: 2, random: 3, later: 4, unresolved: 5 };
@@ -1391,10 +1393,16 @@ function analyzeGiver(charDir, defName, opts) {
         // nothing else was solved.)
         if (e.prev !== undefined) ent.prev = e.prev;
         const named = ent.assignments.filter(Boolean);
-        ent.label = 'computed TargetState ' + e.expr + (e.prev !== undefined ? ' after state ' + e.prev : '') + (named.length || !e.fixed ? ' -> ' + named.join(' | ') + (assignments.length > 8 ? ' | ...' : '') : '');
+        const to = named.length || !e.fixed ? named.join(' | ') + (assignments.length > 8 ? ' | ...' : '') : null;
+        ent.label = e.prev !== undefined
+          ? (to !== null ? 'computed TargetState ' + e.expr + ' after state ' + e.prev + ' -> ' + to : 'computed TargetState ' + e.expr + ' after state ' + e.prev)
+          : (to !== null ? 'computed TargetState ' + e.expr + ' -> ' + to : 'computed TargetState ' + e.expr);
       }
       else if (assignments) { ent.assignments = assignments.slice(0, 8).map(nameOfAssign); ent.label = (ent.implied ? 'state ' + e.to + ' implies ' : 'TargetState under ') + ent.assignments.join(' | ') + (assignments.length > 8 ? ' | ...' : ''); }
-      if (I && deadState(e.from)) { ent.dead = true; ent.label = 'unreachable: nothing enters state ' + e.from + (ent.label ? '; ' + ent.label : ''); }
+      if (I && deadState(e.from)) {
+        const detail = ent.label;
+        ent.dead = true; ent.label = detail ? 'unreachable: nothing enters state ' + e.from + '; ' + detail : 'unreachable: nothing enters state ' + e.from;
+      }
       // Rule B: a ChangeState on the same tick as the TargetState means the
       // issuer's header never shows for this scene.
       let handoff = null;

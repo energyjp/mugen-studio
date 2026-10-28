@@ -706,11 +706,10 @@ function commonStateFiles(product) {
   const merged = theme && theme.lines.length
     ? require('./themecommon.js').mergeLines(common ? common.lines : [], theme.lines)
     : (common ? common.lines : []);
-  const themeFrom = theme ? 'this screenpack (' + theme.name + ', Theme tab)' : null;
   const themePrefix = theme ? ('data/' + theme.folder + '/').toLowerCase() : null;
   const themeEntry = (key, rel) => {
     const p = path.join(theme.dir, ...rel.slice(themePrefix.length).split('/'));
-    return { key, rel, found: fs.existsSync(p), from: themeFrom, path: path.relative(L.APP, p).replace(/\\/g, '/') };
+    return { key, rel, found: fs.existsSync(p), from: 'this screenpack (' + theme.name + ', Theme tab)', path: path.relative(L.APP, p).replace(/\\/g, '/') };
   };
   const replaced = merged.find((l) => l.key === 'States');
   const engineEntries = cfg.states.map((rel) => {

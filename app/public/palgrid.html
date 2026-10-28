@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="/themes.css">
 <script src="/theme.js"></script>
+<script src="/i18n.js"></script>
 <link rel="stylesheet" href="/booklet.css">
 <script src="/booklet.js"></script>
 <title>All palette slots</title>
@@ -79,7 +80,7 @@
 </head>
 <body>
   <header class="bk-secband" id="band">
-    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who">&hellip;</span><span class="k" lang="ja">カラー</span></h1>
+    <h1 class="bk-secband-t"><span class="t bk-nocaps" id="who" translate="no">&hellip;</span><span class="k" lang="ja">カラー</span></h1>
     <div class="bk-secband-meta">
       <span class="zoom" id="zoom" hidden>
         <span class="lbl">Size</span>
@@ -111,8 +112,10 @@
   // and the character a receiver, hmodule.js) - never on the scan's word alone.
   const pairArt = q.get('pair') === '1';
   const name = q.get('name') || char;
-  document.getElementById('who').textContent = name || 'no character';
-  document.title = (name || 'Palettes') + ' — all slots';
+  // IN THE READER'S LANGUAGE (i18n.js): the words go through I18n.t; the
+  // character's name, a palette's name and its file kind are translate="no".
+  document.getElementById('who').textContent = name || I18n.t('no character');
+  document.title = name ? I18n.t('{name} — all slots', { name }) : I18n.t('Palettes — all slots');
   const facts = document.getElementById('facts'), grid = document.getElementById('grid'), note = document.getElementById('note');
   const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const get = async (u) => { const r = await fetch(u); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.statusText); return j; };
@@ -206,7 +209,7 @@
         get('/api/char-anim?char=' + encodeURIComponent(char) + '&action=0').catch(() => null),
         get('/api/char-actions?char=' + encodeURIComponent(char)).catch(() => null),
       ]);
-    } catch (e) { facts.textContent = 'Could not read this character: ' + e.message; return; }
+    } catch (e) { facts.textContent = I18n.t('Could not read this character: {error}', { error: e.message }); return; }
     const list = pals.palettes || [];
     if (!list.length) { facts.textContent = 'No selectable palettes declared.'; return; }
     let stance = firstFrame(stand);
@@ -252,17 +255,25 @@
     }
     const following = scenes.filter((s) => s.frame.follows), fixed = scenes.filter((s) => !s.frame.follows);
 
-    facts.innerHTML = '<b>' + list.length + ' selectable</b>'
-      + (pals.distinct && pals.distinct !== list.length ? ', ' + pals.distinct + ' distinct' : '')
-      + (pals.totalSffPalettes ? ' · ' + pals.totalSffPalettes + ' in the .sff' : '')
-      + (pals.defaults && pals.defaults.length ? ' · pal.defaults ' + esc(pals.defaults.join(', ')) : '')
+    // The counts are a list of facts, each its own phrase; the stance line is
+    // one sentence per case; a pair art entry lists its facts in brackets.
+    const and = (list) => list.reduce((a, b) => I18n.t('{a} and {b}', { a, b }));
+    const pose = stance ? { group: stance.group, index: stance.index, action: bodyNo } : null;
+    facts.innerHTML = I18n.t('<b>{n} selectable</b>', { n: list.length })
+      + (pals.distinct && pals.distinct !== list.length ? ', ' + I18n.t('{n} distinct', { n: pals.distinct }) : '')
+      + (pals.totalSffPalettes ? ' · ' + I18n.t('{n} in the .sff', { n: pals.totalSffPalettes }) : '')
+      + (pals.defaults && pals.defaults.length ? ' · ' + I18n.t('pal.defaults {list}', { list: esc(pals.defaults.join(', ')) }) : '')
       + '.<br>'
-      + (stance ? 'Stance: sprite ' + stance.group + ',' + stance.index
-          + (bodyNo !== null ? ' (action ' + bodyNo + '; action 0 draws nothing)' : '')
-          + (stance.follows ? ', follows the palette pick.' : ', <b>does not follow the palette pick</b> - selection is dead for this character, every cell shows the same colors.')
-        : standBlank ? 'Action 0 draws no sprite, so there is no stance to draw.'
-        : 'No action 0 to draw a stance from.')
-      + (scenes.length ? '<br>Pair art: ' + scenes.map((s) => 'action ' + s.action + ' (' + esc(s.family) + (s.also.length ? ', same first sprite as ' + s.also.map((o) => o.action + ' ' + esc(o.family)).join(' and ') : '') + ', sprite ' + s.frame.group + ',' + s.frame.index + (s.frame.follows ? ', <b>shares the body palette</b>' : ', own palette') + ')').join('; ') + '.'
+      + (stance ? (bodyNo !== null
+          ? (stance.follows ? I18n.t('Stance: sprite {group},{index} (action {action}; action 0 draws nothing), follows the palette pick.', pose)
+            : I18n.t('Stance: sprite {group},{index} (action {action}; action 0 draws nothing), <b>does not follow the palette pick</b> - selection is dead for this character, every cell shows the same colors.', pose))
+          : (stance.follows ? I18n.t('Stance: sprite {group},{index}, follows the palette pick.', pose)
+            : I18n.t('Stance: sprite {group},{index}, <b>does not follow the palette pick</b> - selection is dead for this character, every cell shows the same colors.', pose)))
+        : standBlank ? I18n.t('Action 0 draws no sprite, so there is no stance to draw.')
+        : I18n.t('No action 0 to draw a stance from.'))
+      + (scenes.length ? '<br>' + I18n.t('Pair art: {list}.', { list: scenes.map((s) => I18n.t('action {n} ({facts})', { n: s.action, facts: [esc(s.family)]
+        .concat(s.also.length ? [I18n.t('same first sprite as {list}', { list: and(s.also.map((o) => o.action + ' ' + esc(o.family))) })] : [],
+          [I18n.t('sprite {group},{index}', { group: s.frame.group, index: s.frame.index }), s.frame.follows ? I18n.t('<b>shares the body palette</b>') : I18n.t('own palette')]).join(', ') })).join('; ') })
         // NOTHING WHERE THERE IS NOTHING (2026-09-20). The empty case used to
         // explain itself, naming the role the character had not been detected
         // as - to every ordinary character that opened this window. That is
@@ -276,29 +287,30 @@
     const cells = list.map((p) => {
       const sw = (p.colors || []).map((c) => '<i style="background:' + esc(c) + '"></i>').join('');
       const twin = p.same !== undefined ? (numOf.get(p.same) || p.same) : null;
-      const tag = p.missing ? 'missing on disk' : (twin !== null ? 'as pal' + twin : (p.source || ''));
+      const tag = p.missing ? I18n.t('missing on disk') : (twin !== null ? I18n.t('as pal{n}', { n: twin }) : (p.source || ''));
       // The header is the palette's name, as on the Studio's Palettes rows; the
       // tooltip carries its number (pos: as the build ships it; slot: in the files).
-      const num = 'pal' + (p.pos || p.slot) + (p.pos && p.pos !== p.slot ? ' (was pal' + p.slot + ')' : '');
-      const about = p.missing ? 'declared as ' + (p.file || '?') + ' but not found on disk'
-        : twin !== null ? 'identical colors to pal' + twin
+      const num = 'pal' + (p.pos || p.slot) + (p.pos && p.pos !== p.slot ? ' ' + I18n.t('(was pal{n})', { n: p.slot }) : '');
+      const about = p.missing ? I18n.t('declared as {file} but not found on disk', { file: p.file || '?' })
+        : twin !== null ? I18n.t('identical colors to pal{n}', { n: twin })
         : (p.source !== 'studio' && p.file && p.file !== p.label ? p.file : '');
       const title = num + (about ? ' \u00b7 ' + about : '');
-      let h = '<div class="cell' + (p.missing ? ' gone' : '') + '" title="' + esc(title) + '"><div class="hd"><span class="no">' + esc(p.pos || p.slot) + '</span><span class="nm">' + esc(p.label || num) + '</span><span class="tag">' + esc(tag) + '</span></div><div class="sw">' + sw + '</div>';
+      let h = '<div class="cell' + (p.missing ? ' gone' : '') + '" title="' + esc(title) + '"><div class="hd"><span class="no">' + esc(p.pos || p.slot) + '</span><span class="nm" translate="no">' + esc(p.label ? I18n.server(p.label) : num) + '</span><span class="tag" translate="no">' + esc(tag) + '</span></div><div class="sw">' + sw + '</div>';
       const size = (f) => ' style="--w:' + (f.w | 0) + ';--h:' + (f.h | 0) + '"';
       if (stance) h += '<div class="art bk-plate"><img src="' + spr([stance.group, stance.index], p.slot) + '" alt="" loading="lazy"' + size(stance) + '></div>';
-      for (const s of following) h += '<div class="art bk-plate"><img src="' + spr([s.frame.group, s.frame.index], p.slot) + '" alt="" loading="lazy"' + size(s.frame) + '></div><div class="lab">pair art · action ' + s.action + '</div>';
+      for (const s of following) h += '<div class="art bk-plate"><img src="' + spr([s.frame.group, s.frame.index], p.slot) + '" alt="" loading="lazy"' + size(s.frame) + '></div><div class="lab">' + I18n.t('pair art · action {n}', { n: s.action }) + '</div>';
       return h + '</div>';
     });
     grid.innerHTML = cells.join('');
     for (const im of grid.querySelectorAll('img')) im.onerror = () => { im.style.visibility = 'hidden'; };
     sizing(list.length, [stance].concat(following.map((s) => s.frame)).filter(Boolean));
 
-    let n = 'Every cell asks the same sprite in a different selectable palette, the way the select screen would draw it. ';
-    if (following.length) n += 'The pair art shown under the stance shares the body palette, so it is recolored with every pick: where a slot turns it to noise, that is what the match shows on that color (GRAIL 4.5). ';
-    if (fixed.length) n += 'Pair art at action ' + fixed.map((s) => s.action).join(', ') + ' is on its own palette: no pick changes it, so it is not repeated here. ';
-    n += 'Preview only: nothing here is written to the roster or carried into an export.';
-    note.textContent = n;
+    // sentence by sentence
+    const n = [I18n.t('Every cell asks the same sprite in a different selectable palette, the way the select screen would draw it.')];
+    if (following.length) n.push(I18n.t('The pair art shown under the stance shares the body palette, so it is recolored with every pick: where a slot turns it to noise, that is what the match shows on that color (GRAIL 4.5).'));
+    if (fixed.length) n.push(I18n.t('Pair art at action {list} is on its own palette: no pick changes it, so it is not repeated here.', { list: fixed.map((s) => s.action).join(', ') }));
+    n.push(I18n.t('Preview only: nothing here is written to the roster or carried into an export.'));
+    note.textContent = n.join(' ');
     layout();
   })();
 </script>

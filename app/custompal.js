@@ -113,7 +113,7 @@ function defWithPalettes(defText, add) {
   const have = defSlots(text);
   const fresh = [];
   for (const a of add) {
-    if (have.has(a.slot)) { skipped.push({ slot: a.slot, why: 'the def already names a pal' + a.slot }); continue; }
+    if (have.has(a.slot)) { const key = 'pal' + a.slot; skipped.push({ slot: a.slot, why: 'the def already names a ' + key }); continue; }
     have.add(a.slot); fresh.push('pal' + a.slot + ' = ' + a.file); applied.push(a.slot);
   }
   if (!fresh.length) return { text, applied, skipped };

@@ -28,6 +28,24 @@
 (function (root) {
   'use strict';
 
+  // ---- the reader's language ------------------------------------------------
+  //
+  // This file also runs in the web game and in Node, where there is no
+  // i18n.js: there t() fills in the English itself, so the game and the
+  // server get exactly the words they always did. In a Studio window it is
+  // I18n.t, in the language the reader picked (a window opens in it and
+  // keeps it, so the names worked out once below stay right).
+  // serverText() is I18n.server, for text the server sent.
+  function t(en, vars) {
+    const I = root && root.I18n;
+    if (I && typeof I.t === 'function') return I.t(en, vars);
+    return String(en).replace(/\{([A-Za-z_$][\w$]*)\}/g, (m, k) => (vars && Object.prototype.hasOwnProperty.call(vars, k) && vars[k] != null ? String(vars[k]) : m));
+  }
+  function serverText(s) {
+    const I = root && root.I18n;
+    return I && typeof I.server === 'function' ? I.server(s) : s;
+  }
+
   // ---- the actions worth naming -------------------------------------------
   //
   // The numbers are wild in the wild - sakura declares action 74140108,
@@ -35,10 +53,13 @@
   // group ahead of the full list.
   const ANIM_COMMON = [0, 5, 6, 10, 11, 12, 20, 21, 40, 41, 42, 43, 44, 45, 46, 47,
     100, 105, 120, 130, 131, 132, 150, 151, 170, 175, 180, 181, 190, 191, 192, 195];
-  const ANIM_NAME = { 0: 'stand', 5: 'turn', 10: 'crouch', 12: 'stand up', 20: 'walk fwd',
-    21: 'walk back', 40: 'jump start', 41: 'jump up', 100: 'run', 105: 'hop back',
-    120: 'guard start', 131: 'guard', 150: 'guard hit', 170: 'KO', 175: 'down',
-    180: 'win', 181: 'winpose', 190: 'intro', 195: 'taunt' };
+  // Each one's head in the picker, number and name together ("#175 down"):
+  // one key apiece, so a name that is also a word elsewhere ("down" is a
+  // stick direction in the command glyphs) is said right in every language.
+  const ANIM_HEAD = { 0: t('#0 stand'), 5: t('#5 turn'), 10: t('#10 crouch'), 12: t('#12 stand up'), 20: t('#20 walk fwd'),
+    21: t('#21 walk back'), 40: t('#40 jump start'), 41: t('#41 jump up'), 100: t('#100 run'), 105: t('#105 hop back'),
+    120: t('#120 guard start'), 131: t('#131 guard'), 150: t('#150 guard hit'), 170: t('#170 KO'), 175: t('#175 down'),
+    180: t('#180 win'), 181: t('#181 winpose'), 190: t('#190 intro'), 195: t('#195 taunt') };
 
   // ---- the look, carried with the code ------------------------------------
   //
@@ -576,9 +597,9 @@
   // GIF as it always was (1x, transparent, normal speed, facing right).
   const GIF_OPTS_KEY = 'animview.gif';
   const GIF_SIZES = [[1, '1x'], [2, '2x'], [3, '3x'], [4, '4x']];
-  const GIF_BGS = [['', 'Transparent'], ['000000', 'Black'], ['ffffff', 'White'], ['00ff00', 'Green']];
-  const GIF_SPEEDS = [[1, 'Normal'], [2, 'Half'], [4, 'Quarter']];
-  const GIF_FACES = [[1, 'Right'], [-1, 'Left']];
+  const GIF_BGS = [['', t('Transparent')], ['000000', t('Black')], ['ffffff', t('White')], ['00ff00', t('Green')]];
+  const GIF_SPEEDS = [[1, t('Normal')], [2, t('Half')], [4, t('Quarter')]];
+  const GIF_FACES = [[1, t('Right')], [-1, t('Left')]];
   function gifOptsFrom(v) {
     const o = { scale: 1, bg: '', speed: 1, face: 1 };
     if (!v || typeof v !== 'object') return o;
@@ -705,10 +726,9 @@
       // file (a trigger atom, an expression): escaped, since it lands in
       // innerHTML.
       const escHtml = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-      const label = (x, loop) => (x.label ? escHtml(x.label) : '#' + x.action
-        + (ANIM_NAME[x.action] ? ' ' + ANIM_NAME[x.action] : ''))
-        + (loop ? ' · loop' : '')
-        + (x.frames ? ' · ' + (loop ? x.loopFrames : x.frames) + 'f' : '');
+      const label = (x, loop) => (x.label ? escHtml(x.label) : ANIM_HEAD[x.action] ? escHtml(ANIM_HEAD[x.action]) : '#' + x.action)
+        + (loop ? ' · ' + escHtml(t('loop')) : '')
+        + (x.frames ? ' · ' + escHtml(t('{n}f', { n: loop ? x.loopFrames : x.frames })) : '');
       const valueOf = (x, loop) => (preset ? 'p' + x._i : String(x.action)) + (loop ? ':loop' : '');
       const opt = (x, loop) => '<option value="' + valueOf(x, loop) + '">'
         + label(x, loop) + '</option>';
@@ -727,9 +747,11 @@
         + 'title="Drag to pan · scroll to zoom · right-click to reset'
         + '· click, then ← → to step frames"></div>'
         + '<div class="animside"><select class="avpick">'
-        + (common.length ? '<optgroup label="Common">' + optsOf(common) + '</optgroup>' : '')
-        + '<optgroup label="' + (preset ? escHtml(cfg.listLabel || 'scene')
-          : 'All (' + a.actions.length + (loopCount ? ', ' + loopCount + ' with a loop point' : '') + ')') + '">' + optsOf(a.actions)
+        // (an optgroup's label is not one of the attributes a page's
+        // language reaches, so its words go through t() here)
+        + (common.length ? '<optgroup label="' + escHtml(t('Common')) + '">' + optsOf(common) + '</optgroup>' : '')
+        + '<optgroup label="' + escHtml(preset ? cfg.listLabel || t('scene')
+          : loopCount ? t('All ({n}, {loops} with a loop point)', { n: a.actions.length, loops: loopCount }) : t('All ({n})', { n: a.actions.length })) + '">' + optsOf(a.actions)
         + '</optgroup></select><div class="animbtns">'
         // `<` and `>` WALK THE ACTION LIST, which is what the arrow keys already
         // do once the picker has focus - these are the same movement without
@@ -788,14 +810,16 @@
       // What the GIF key will write, in words, for its tooltip. "The size shown
       // here" only when the chosen size IS the view's scale, since the file
       // never follows the panel's fit or zoom.
+      // Each choice is its own phrase (the background named whole, never a
+      // button's label lowercased into the sentence).
       const describeGif = (o, z) => {
         const face = facingNow() * o.face;
-        const bg = (GIF_BGS.find(([v]) => v === o.bg) || GIF_BGS[0])[1].toLowerCase();
-        const speed = o.speed === 2 ? 'half speed' : o.speed === 4 ? 'quarter speed' : 'the game’s speed';
-        return 'Save this action as an animated GIF: ' + o.scale + 'x'
-          + (Math.abs(z - o.scale) < 1e-6 ? ' (the size shown here)' : '')
-          + ', ' + bg + ' background, ' + speed + ', facing ' + (face < 0 ? 'left' : 'right')
-          + '. The arrow beside it changes these, or saves one frame as a PNG.';
+        const bg = o.bg === '000000' ? t('black background') : o.bg === 'ffffff' ? t('white background')
+          : o.bg === '00ff00' ? t('green background') : t('transparent background');
+        const speed = o.speed === 2 ? t('half speed') : o.speed === 4 ? t('quarter speed') : t('the game’s speed');
+        const size = Math.abs(z - o.scale) < 1e-6 ? t('{n}x (the size shown here)', { n: o.scale }) : t('{n}x', { n: o.scale });
+        return t('Save this action as an animated GIF: {size}, {bg}, {speed}, {facing}. The arrow beside it changes these, or saves one frame as a PNG.',
+          { size, bg, speed, facing: face < 0 ? t('facing left') : t('facing right') });
       };
       // `tl` is the engine's timeline for `frames` (airTimeline) and `ri` the
       // run on screen; `fi` is that run's ELEMENT, kept for every reader that
@@ -1120,16 +1144,19 @@
         // THE TRUE ELEMENT NUMBER, out of every element: a hidden element still
         // holds its number (AnimElem counts it), so the frame after one reads
         // 3/8, not 2/7.
-        read.textContent = 'frame ' + (run.elem + 1 + elemOff) + '/' + (frames.length + elemOff)
-          + (s ? ' · spr ' + s.group + ',' + s.index : ' · nothing drawn') + ' · ' + f.time + 't'
-          // WHY THIS FRAME DID NOT CHANGE COLOR. Effects, projectiles and borrowed
-          // win-pose art carry their own palette and the engine leaves them alone;
-          // forcing the pick onto them is what corrupted them. Only worth saying
-          // while a palette is actually picked.
-          + (palOf(id) !== undefined && s && s.follows === false ? ' · own palette' : '')
-          // The EFFECTIVE scale, not the user's zoom factor: "21%" says this sprite
-          // is a fifth of its real size, which is the fact worth knowing.
-          + ' · ' + Math.round(z * 100) + '%';
+        // One phrase per fact, in the reader's language; the · between them is
+        // punctuation.
+        const facts = [t('frame {n}/{of}', { n: run.elem + 1 + elemOff, of: frames.length + elemOff }),
+          s ? t('spr {group},{index}', { group: s.group, index: s.index }) : t('nothing drawn'), t('{n}t', { n: f.time })];
+        // WHY THIS FRAME DID NOT CHANGE COLOR. Effects, projectiles and borrowed
+        // win-pose art carry their own palette and the engine leaves them alone;
+        // forcing the pick onto them is what corrupted them. Only worth saying
+        // while a palette is actually picked.
+        if (palOf(id) !== undefined && s && s.follows === false) facts.push(t('own palette'));
+        // The EFFECTIVE scale, not the user's zoom factor: "21%" says this sprite
+        // is a fifth of its real size, which is the fact worth knowing.
+        facts.push(Math.round(z * 100) + '%');
+        read.textContent = facts.join(' · ');
         // Only while it is on screen - a drag repaints on every mousemove.
         if (!axis.hidden) placeAxis();
         // The GIF key says what it will save, including whether that is the
@@ -1260,10 +1287,10 @@
           // the action is fetched for its numbering and totals): a loop of one
           // missing sprite is "1 frame", not the whole action's count.
           const count = w.loop && !r.looped ? new Set(tl.runs.map((x) => x.elem)).size : frames.length;
-          const n = count + ' frame' + (count === 1 ? '' : 's');
-          read.textContent = !drawn.length && tl.runs.length ? n + ', none ever displayed (time 0): draws nothing'
-            : zero ? n + ', drawn at scale 0: draws nothing'
-              : named ? n + ', none in the sprite file: vanishes' : n + ', all blank (-1): draws nothing';
+          const n = { frames: count === 1 ? t('1 frame') : t('{n} frames', { n: count }) };
+          read.textContent = !drawn.length && tl.runs.length ? t('{frames}, none ever displayed (time 0): draws nothing', n)
+            : zero ? t('{frames}, drawn at scale 0: draws nothing', n)
+              : named ? t('{frames}, none in the sprite file: vanishes', n) : t('{frames}, all blank (-1): draws nothing', n);
           return;
         }
         if (playing) tick(); else show();
@@ -1347,12 +1374,11 @@
         // another frame.
         const row = q('.animbtns');
         if (row) row.dataset.mode = playing ? 'action' : 'frame';
-        const what = playing ? 'action' : 'frame';
         for (const el of host.querySelectorAll('.avstep')) {
-          const dir = el.dataset.dir === '1' ? 'Next' : 'Previous';
-          el.title = dir + ' ' + what
-            + (playing ? '' : '  (← → on the picture too)');
-          el.setAttribute('aria-label', dir + ' ' + what);
+          const next = el.dataset.dir === '1';
+          const says = playing ? (next ? t('Next action') : t('Previous action')) : (next ? t('Next frame') : t('Previous frame'));
+          el.title = playing ? says : t('{label}  (← → on the picture too)', { label: says });
+          el.setAttribute('aria-label', says);
         }
       };
       const setPlaying = (on) => {
@@ -1514,11 +1540,14 @@
           // Revoked on a delay: revoking immediately races the download starting.
           setTimeout(() => URL.revokeObjectURL(href), 60000);
           const run = runOf();
-          const what = stillRun === undefined
-            ? 'Saved ' + n + ' frames · ' + (ms / 1000).toFixed(2) + 's'
-            : 'Saved frame ' + ((run ? run.elem : fi) + 1 + elemOff) + '/' + ((frames ? frames.length : 0) + elemOff) + ' as a PNG';
-          say(what + (k > 1 ? ' · ' + k + 'x' : '') + ' · ' + Math.round(blob.size / 1024) + ' KB'
-            + (notes.length ? ' · ' + notes.join('; ') : ''), notes.length ? 'warn' : undefined);
+          const said = [stillRun === undefined
+            ? t('Saved {n} frames · {s}s', { n, s: (ms / 1000).toFixed(2) })
+            : t('Saved frame {n}/{of} as a PNG', { n: (run ? run.elem : fi) + 1 + elemOff, of: (frames ? frames.length : 0) + elemOff })];
+          if (k > 1) said.push(t('{n}x', { n: k }));
+          said.push(t('{n} KB', { n: Math.round(blob.size / 1024) }));
+          // the server's notes on what the file could not draw the engine's way
+          if (notes.length) said.push(notes.map(serverText).join('; '));
+          say(said.join(' · '), notes.length ? 'warn' : undefined);
         } catch (e) {
           say(e.message, 'err');
         } finally {
@@ -1557,9 +1586,11 @@
           chk.checked = n !== null && boardArt.action === n;
           const lab = pop.querySelector('.avboard');
           if (lab) {
+            const at = { n: String(n), pal: boardArt.pal };
             lab.title = chk.checked
-              ? 'The leaderboard art uses action ' + n + (boardArt.pal !== null && boardArt.pal !== undefined ? ' in palette ' + boardArt.pal : ' in the default colors') + '. Uncheck to let the export pick the win pose again.'
-              : 'Use action ' + n + ' as this character’s pose on the leaderboard, in the palette picked now (or the default colors when none is). The next export that makes the leaderboard art draws it.';
+              ? (boardArt.pal !== null && boardArt.pal !== undefined ? t('The leaderboard art uses action {n} in palette {pal}. Uncheck to let the export pick the win pose again.', at)
+                : t('The leaderboard art uses action {n} in the default colors. Uncheck to let the export pick the win pose again.', at))
+              : t('Use action {n} as this character’s pose on the leaderboard, in the palette picked now (or the default colors when none is). The next export that makes the leaderboard art draws it.', at);
           }
         }
       };
@@ -1602,10 +1633,10 @@
           + choices.map(([v, t]) => '<label><input type="radio" name="avgif' + serial + k + '" data-k="' + k + '" value="' + v + '"><span>' + t + '</span></label>').join('')
           + '</div></fieldset>';
         // Only fixed words go through innerHTML here.
-        pop.innerHTML = group('scale', 'Size', 'Whole-number steps, pixel for pixel. The file never passes 2048 pixels a side.', GIF_SIZES)
-          + group('bg', 'Background', 'Transparent can only approximate a glow or a shadow (the engine blends them with what is behind); on a solid color they come out as in the game. Black is right for glows; green keys out in a video editor.', GIF_BGS)
-          + group('speed', 'Speed', 'Half and quarter slow every tick. A held last frame keeps its two-second beat.', GIF_SPEEDS)
-          + group('face', 'Face', 'Left mirrors the whole picture about the axis, collision boxes included: the way the character faces from the right side.', GIF_FACES)
+        pop.innerHTML = group('scale', t('Size'), 'Whole-number steps, pixel for pixel. The file never passes 2048 pixels a side.', GIF_SIZES)
+          + group('bg', t('Background'), 'Transparent can only approximate a glow or a shadow (the engine blends them with what is behind); on a solid color they come out as in the game. Black is right for glows; green keys out in a video editor.', GIF_BGS)
+          + group('speed', t('Speed'), 'Half and quarter slow every tick. A held last frame keeps its two-second beat.', GIF_SPEEDS)
+          + group('face', t('Face'), 'Left mirrors the whole picture about the axis, collision boxes included: the way the character faces from the right side.', GIF_FACES)
           + (canBoard ? '<label class="chk avboard"><input type="checkbox" class="avboardchk"> Leaderboard win pose</label>' : '')
           + '<button type="button" class="avstill" title="The frame on screen now, with these options, as a PNG. Pause and step with the arrows to choose it.">Save this frame (PNG)</button>';
         (host.closest && host.closest('dialog')) ? host.closest('dialog').appendChild(pop) : doc.body.appendChild(pop);
@@ -1645,8 +1676,9 @@
             try { j = await r.json(); } catch (e) { j = null; }
             if (!r.ok || !j || j.error) throw new Error((j && j.error) || 'could not save the leaderboard pose');
             boardArt = j.boardArt || { action: null, pal: null };
-            say(on ? 'Leaderboard win pose: action ' + n + (boardArt.pal !== null && boardArt.pal !== undefined ? ', palette ' + boardArt.pal : ', default colors') + '. The next export that makes the leaderboard art uses it.'
-              : 'Leaderboard win pose cleared: the next export picks the win pose itself.');
+            say(!on ? t('Leaderboard win pose cleared: the next export picks the win pose itself.')
+              : boardArt.pal !== null && boardArt.pal !== undefined ? t('Leaderboard win pose: action {n}, palette {pal}. The next export that makes the leaderboard art uses it.', { n, pal: boardArt.pal })
+                : t('Leaderboard win pose: action {n}, default colors. The next export that makes the leaderboard art uses it.', { n }));
           } catch (e) {
             say(e.message, 'err');
           } finally {
