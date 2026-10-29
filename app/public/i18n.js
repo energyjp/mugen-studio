@@ -7,7 +7,7 @@
 // ENGLISH IS THE KEY. A pack, public/lang/<code>.json, maps an exact English
 // string to its translation:
 //   { "lang": "es-419", "name": "Español", "english": "Spanish (Latin America)",
-//     "studio": "2.1", "strings": { "<English>": "<translation>", ... } }
+//     "studio": "2.2", "strings": { "<English>": "<translation>", ... } }
 // A string the pack lacks shows in English. tools/i18n-extract.js lists every
 // key the Studio has (public/lang/en-keys.json) and checks a pack against it;
 // public/lang/README.md is the translator's page.

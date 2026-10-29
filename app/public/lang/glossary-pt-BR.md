@@ -205,3 +205,27 @@ language since 2026-10-28. The terms above hold; these are the log's own.
 | the build | a build: "à build", "desta build", "a build usa" | As above. |
 | nothing to revert to | não há para onde reverter | As Revert's own sentence when no starting point was captured. |
 | unsaved changes (the note beside E-Select's toolbar) | não salvo | Shortened for room: 94px beside the toolbar at 1400, 66px at 1366; "alterações não salvas" needs 121. |
+
+## The Score Ranking board and the ranked rules
+
+The board's look (Board text, Rank icons; Page text for the plain standings) and the Ranked rules group under
+Players, in Settings › Online, since 2026-10-28. The terms above hold
+(leaderboard, rating, ranked); these are the new ones.
+
+| English | pt-BR | Notes |
+|---|---|---|
+| the board (the Score Ranking page) | o placar | As "Formato do placar"; the leaderboard itself stays "o ranking". |
+| rank (GRANDMASTER, GOLD... the band a rating falls in) | nível | The same word as "tier" in "Recordes, níveis e todo o resto"; the rank names themselves (and UNRANKED) are the board's data, kept as written. |
+| Ranked rules | Regras das ranqueadas | As ranked = ranqueada. |
+| start rating | pontuação inicial | |
+| K-factor | fator K | Elo kept. |
+| placement games | partidas de posicionamento | |
+| From rating (a rank's starting rating) | Pontuação mínima | The column head; "a partir de {rating}" beside a rank's name. |
+| pips (the dots on a rank's shield) | pontos | |
+| rank icon / shield / picture | ícone de nível / escudo / imagem | |
+| *stars* (marking accent words) | *asteriscos* | |
+| top / bottom color (the shield's) | cor de cima / cor de baixo | |
+| the plain standings (page) / Standings heading | a classificação simples / Título da classificação | As "Classificação simples" under Leaderboard page; Page text = Texto da página. |
+| {name}'s minimum rating (in a refused rule) | a pontuação mínima de {name} | The same sentences come from both leaderboard servers, so one key reads either. |
+| Puts back... (a Cancel or reset tip) | Restaura... | "Volta" is intransitive here; "volta as regras" reads wrong. |
+| markup from outside SVG; a plain or optimized SVG | marcação de fora do SVG; SVG simples ou otimizado | A rank picture refused for its namespaces. |

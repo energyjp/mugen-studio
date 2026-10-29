@@ -17,6 +17,15 @@
 //     2 and draws never advance seq (webrtc.js reportResult), so an honest set
 //     sends at most seq 3.
 //
+// RULES. The rating constants below are only the DEFAULTS. A host can change
+// the start rating, the K-factor, the placement games and the ranks (names +
+// floors) through PUT /admin/mugen/leaderboard/rules; they live in the `rules`
+// table and the reference server keeps the same object in rules.json. Ranks
+// are worked out at read time from the stored rating and games, so a rules
+// change moves every player to the new ranks at once without rewriting a row,
+// and a tier-up is only ever the before/after of ONE counted match under one
+// set of rules.
+//
 // ADAPTER. sql.exec(query, ...bindings) returns a cursor with toArray();
 // tx(fn) runs fn synchronously and atomically and returns its value (in the
 // Durable Object that is ctx.storage.transactionSync). Bindings are only
@@ -48,6 +57,30 @@ export const TIERS = [
   { name: 'BRONZE', min: 0 },
 ];
 
+// The rules a ladder has until its host saves others, and what GET .../rules
+// offers as `defaults`. Frozen: every caller gets a copy (copyRules).
+export const DEFAULT_RULES = Object.freeze({
+  startRating: START_RATING,
+  kFactor: K_FACTOR,
+  placementGames: PLACEMENT_GAMES,
+  ranks: Object.freeze(TIERS.map((t) => Object.freeze({ name: t.name, min: t.min }))),
+});
+
+// What a host may set. Wide enough for any ladder a community runs, narrow
+// enough that a stray keystroke (a K of 3200, a floor of 50000) is refused
+// instead of wrecking the board. Both servers use these exact ranges.
+export const RULE_LIMITS = Object.freeze({
+  startRating: Object.freeze([100, 3000]),
+  kFactor: Object.freeze([4, 100]),
+  placementGames: Object.freeze([0, 10]),
+  ranks: Object.freeze([1, 12]),
+  rankMin: Object.freeze([0, 5000]),
+});
+// After trim + uppercase. UNRANKED is refused separately: it is the name of
+// placement, and a rank called that would be indistinguishable from it.
+const RANK_NAME_RE = /^[A-Z0-9 ._-]{1,16}$/;
+const PLACEMENT_NAME = 'UNRANKED';
+
 // ------------------------------------------------------------- reporting --
 // A half-report older than this is abandoned (the opponent never reported).
 export const PENDING_TTL_MS = 10 * 60 * 1000;
@@ -68,7 +101,7 @@ export const PAIRING_TTL_MS = 2 * 60 * 60 * 1000;
 
 // ------------------------------------------------------------------ misc --
 export const LEADERBOARD_MAX = 200;
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const KIT_NAME = 'mugen-studio-hostkit';
 
 // Names: 3-12 characters from the in-game name entry's alphabet. Case is kept
@@ -133,20 +166,103 @@ function hashCode(code) {
   return sha256Hex(normalizeCode(code));
 }
 
-// ------------------------------------------------------ rating functions --
-export function tierOf(rating, games) {
-  if (games < PLACEMENT_GAMES) {
-    return { name: 'UNRANKED', min: 0, placement: PLACEMENT_GAMES - games };
+// ----------------------------------------------------------------- rules --
+export function copyRules(r) {
+  return {
+    startRating: r.startRating,
+    kFactor: r.kFactor,
+    placementGames: r.placementGames,
+    ranks: r.ranks.map((t) => ({ name: t.name, min: t.min })),
+  };
+}
+
+// A whole rules object from a host -> {ok:true, rules} with the names trimmed
+// and uppercased and the last floor set to 0, or {ok:false, reason:'badvalue',
+// field, why}. `field` is the key at fault, down to the rank ('ranks[2].name',
+// 'ranks[2].min', 'ranks[2]') so the Studio can mark that box; `why` is a
+// sentence the Studio can show as it is. Both are word for word the reference
+// server's (ranked.js validateRules), so one form reads either server the same
+// way. A host's own text is never echoed back unless it already passed the
+// name check. Unknown keys are ignored.
+export function validateRules(input) {
+  const bad = (field, why) => ({ ok: false, reason: 'badvalue', field, why });
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return bad('rules', 'The rules must be an object with startRating, kFactor, placementGames and ranks.');
   }
-  const t = TIERS.find((x) => rating >= x.min) || TIERS[TIERS.length - 1];
+  const L = RULE_LIMITS;
+  const whole = (v, range) => typeof v === 'number' && Number.isInteger(v) && v >= range[0] && v <= range[1];
+  if (!whole(input.startRating, L.startRating)) {
+    return bad('startRating', 'The starting rating must be a whole number from ' + L.startRating[0] + ' to ' + L.startRating[1] + '.');
+  }
+  if (!whole(input.kFactor, L.kFactor)) {
+    return bad('kFactor', 'The K-factor must be a whole number from ' + L.kFactor[0] + ' to ' + L.kFactor[1] + '.');
+  }
+  if (!whole(input.placementGames, L.placementGames)) {
+    return bad('placementGames', 'Placement games must be a whole number from ' + L.placementGames[0] + ' to ' + L.placementGames[1] + '.');
+  }
+  const list = input.ranks;
+  if (!Array.isArray(list) || list.length < L.ranks[0] || list.length > L.ranks[1]) {
+    return bad('ranks', 'There must be from ' + L.ranks[0] + ' to ' + L.ranks[1] + ' ranks.');
+  }
+  const ranks = [];
+  const seen = new Set();
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    const at = 'ranks[' + i + ']';
+    if (!e || typeof e !== 'object' || Array.isArray(e)) return bad(at, 'Rank ' + (i + 1) + ' needs a name and a minimum rating.');
+    const name = typeof e.name === 'string' ? e.name.trim().toUpperCase() : '';
+    if (!RANK_NAME_RE.test(name)) {
+      return bad(at + '.name', 'Rank ' + (i + 1) + ' needs a name of 1 to 16 letters, digits, spaces, dots, dashes or underscores.');
+    }
+    if (name === PLACEMENT_NAME) {
+      return bad(at + '.name', 'A rank cannot be called ' + PLACEMENT_NAME + ': that name is kept for players still playing their placement games.');
+    }
+    if (seen.has(name)) return bad(at + '.name', 'Two ranks are called ' + name + ': each rank needs its own name.');
+    seen.add(name);
+    if (!whole(e.min, L.rankMin)) {
+      return bad(at + '.min', name + "'s minimum rating must be a whole number from " + L.rankMin[0] + ' to ' + L.rankMin[1] + '.');
+    }
+    ranks.push({ name, min: e.min });
+  }
+  // The last rank is the floor: every rating below the rank above it lands
+  // there, so its own minimum is 0 whatever was sent. Floored before the order
+  // check, so what was sent for it can never be why a rule set is refused.
+  ranks[ranks.length - 1].min = 0;
+  for (let i = 1; i < ranks.length; i++) {
+    if (ranks[i].min < ranks[i - 1].min) continue;
+    if (i === ranks.length - 1) {
+      return bad('ranks[' + (i - 1) + '].min', ranks[i - 1].name + "'s minimum rating must be above 0: the lowest rank, " +
+        ranks[i].name + ', always starts at 0.');
+    }
+    return bad('ranks[' + i + '].min', ranks[i].name + "'s minimum rating must be lower than " + ranks[i - 1].name +
+      "'s: ranks are listed from the highest to the lowest.");
+  }
+  return {
+    ok: true,
+    rules: { startRating: input.startRating, kFactor: input.kFactor, placementGames: input.placementGames, ranks },
+  };
+}
+
+// ------------------------------------------------------ rating functions --
+// Each takes the rules in force; left out, the defaults (what the reference
+// server's own functions use, so the two compare one to one).
+export function tierOf(rating, games, rules = DEFAULT_RULES) {
+  const placement = rules.placementGames;
+  if (games < placement) {
+    return { name: PLACEMENT_NAME, min: 0, placement: placement - games };
+  }
+  const ranks = rules.ranks;
+  const t = ranks.find((x) => rating >= x.min) || ranks[ranks.length - 1];
   return { name: t.name, min: t.min, placement: 0 };
 }
 
 // Height of a tier, bigger is better (BRONZE 0 ... GRANDMASTER 6). UNRANKED is
-// -1 and never counts as a promotion: leaving placement is not a climb.
-export function tierRankOf(name) {
-  const i = TIERS.findIndex((t) => t.name === name);
-  return i < 0 ? -1 : TIERS.length - 1 - i;
+// -1 and never counts as a promotion: leaving placement is not a climb. So is
+// a name the rules do not have.
+export function tierRankOf(name, rules = DEFAULT_RULES) {
+  const ranks = rules.ranks;
+  const i = ranks.findIndex((t) => t.name === name);
+  return i < 0 ? -1 : ranks.length - 1 - i;
 }
 
 function expectedScore(mine, theirs) {
@@ -155,8 +271,8 @@ function expectedScore(mine, theirs) {
 
 // Both deltas are computed from the two PRE-match ratings, so the exchange is
 // symmetric.
-export function ratingDelta(myRating, oppRating, won) {
-  return Math.round(K_FACTOR * ((won ? 1 : 0) - expectedScore(myRating, oppRating)));
+export function ratingDelta(myRating, oppRating, won, rules = DEFAULT_RULES) {
+  return Math.round(rules.kFactor * ((won ? 1 : 0) - expectedScore(myRating, oppRating)));
 }
 
 // Lower bound of the Wilson score interval (95%): a record's pessimistic win
@@ -266,6 +382,18 @@ const MIGRATIONS = [
       'CREATE INDEX IF NOT EXISTS pairings_created ON pairings (created)',
     ],
   },
+  {
+    version: 2,
+    steps: [
+      // The host's rules, one row. No row means DEFAULT_RULES, so a ladder
+      // from kit 1.0.0 keeps ranking exactly as it did. ranks is JSON
+      // [{name, min}], highest first.
+      `CREATE TABLE IF NOT EXISTS rules (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        start_rating INTEGER NOT NULL, k_factor INTEGER NOT NULL, placement_games INTEGER NOT NULL,
+        ranks TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+    ],
+  },
 ];
 
 function rowToPlayer(r) {
@@ -321,6 +449,44 @@ export class LadderCore {
         for (const step of m.steps) this.q(step);
       }
       this.q('INSERT OR REPLACE INTO schema_version (id, version) VALUES (1, ?)', SCHEMA_VERSION);
+    });
+  }
+
+  // --------------------------------------------------------------- rules --
+  // The rules in force, read fresh on every call (one row; a request reads it
+  // once and passes it along). Only setRules writes the row, after
+  // validateRules passed, so a row that fails it now was damaged outside the
+  // kit: that throws (the request answers 500) rather than rank everyone by
+  // a guess.
+  rules() {
+    const r = this.q('SELECT * FROM rules WHERE id = 1')[0];
+    if (!r) return copyRules(DEFAULT_RULES);
+    let ranks = null;
+    try {
+      ranks = JSON.parse(r.ranks);
+    } catch {
+      ranks = null;
+    }
+    const v = validateRules({ startRating: r.start_rating, kFactor: r.k_factor, placementGames: r.placement_games, ranks });
+    if (!v.ok) throw new Error('stored ladder rules are damaged (' + v.field + '): ' + v.why);
+    return v.rules;
+  }
+
+  getRules() {
+    return { ok: true, rules: this.rules(), defaults: copyRules(DEFAULT_RULES) };
+  }
+
+  // A whole rules object -> {ok:true, rules} as stored, or the badvalue reply
+  // from validateRules with nothing written. No player row is touched: ranks
+  // are derived when read, and no tier event comes from a rules change.
+  setRules(input) {
+    const v = validateRules(input);
+    if (!v.ok) return v;
+    const r = v.rules;
+    return this.tx(() => {
+      this.q(`INSERT OR REPLACE INTO rules (id, start_rating, k_factor, placement_games, ranks, updated_at)
+        VALUES (1, ?, ?, ?, ?, ?)`, r.startRating, r.kFactor, r.placementGames, JSON.stringify(r.ranks), this.iso());
+      return { ok: true, rules: copyRules(r) };
     });
   }
 
@@ -443,9 +609,9 @@ export class LadderCore {
     return r ? rowToPlayer(r) : null;
   }
 
-  ensurePlayer(name) {
+  ensurePlayer(name, rules = this.rules()) {
     return this.getPlayer(name.toLowerCase()) || {
-      name, rating: START_RATING, peakRating: START_RATING, wins: 0, losses: 0, games: 0,
+      name, rating: rules.startRating, peakRating: rules.startRating, wins: 0, losses: 0, games: 0,
       streak: 0, bestStreak: 0, lastDelta: 0, chars: {}, recent: [], lastChar: '',
       lastOpponent: '', firstSeen: this.iso(), lastPlayed: null,
     };
@@ -501,13 +667,17 @@ export class LadderCore {
       if (other.won === mine.won) return { ok: false, state: 'conflict' };
 
       const when = this.iso();
-      const pMine = this.ensurePlayer(mine.name);
-      const pOther = this.ensurePlayer(other.name);
-      const rMine = pMine.rating ?? START_RATING;
-      const rOther = pOther.rating ?? START_RATING;
-      const tierBefore = tierOf(rMine, pMine.games);
-      const dMine = ratingDelta(rMine, rOther, mine.won);
-      const dOther = ratingDelta(rOther, rMine, other.won);
+      // Read once, inside this tx: the before and after tiers below are
+      // under the SAME rules, so a rules change between two matches can
+      // never show up as a tier-up.
+      const rules = this.rules();
+      const pMine = this.ensurePlayer(mine.name, rules);
+      const pOther = this.ensurePlayer(other.name, rules);
+      const rMine = pMine.rating ?? rules.startRating;
+      const rOther = pOther.rating ?? rules.startRating;
+      const tierBefore = tierOf(rMine, pMine.games, rules);
+      const dMine = ratingDelta(rMine, rOther, mine.won, rules);
+      const dOther = ratingDelta(rOther, rMine, other.won, rules);
       applyResult(pMine, other.name, mine.won, mine.character, dMine, when);
       applyResult(pOther, mine.name, other.won, other.character, dOther, when);
       this.putPlayer(pMine);
@@ -515,7 +685,8 @@ export class LadderCore {
       const n = (this.q('SELECT COALESCE(MAX(n), 0) AS m FROM done')[0].m || 0) + 1;
       this.q('INSERT INTO done (n, match_id) VALUES (?, ?)', n, id);
       this.q('DELETE FROM done WHERE n <= ?', n - this.maxDone);
-      const tierAfter = tierOf(pMine.rating, pMine.games);
+      const tierAfter = tierOf(pMine.rating, pMine.games, rules);
+      const heightBefore = tierRankOf(tierBefore.name, rules);
       // The numbers describe the REPORTER, never the opponent.
       return {
         ok: true,
@@ -525,7 +696,7 @@ export class LadderCore {
         delta: dMine,
         tier: tierAfter.name,
         prevTier: tierBefore.name,
-        tierUp: tierRankOf(tierBefore.name) >= 0 && tierRankOf(tierAfter.name) > tierRankOf(tierBefore.name),
+        tierUp: heightBefore >= 0 && tierRankOf(tierAfter.name, rules) > heightBefore,
         placement: tierAfter.placement,
         games: pMine.games,
         peakRating: pMine.peakRating,
@@ -535,15 +706,20 @@ export class LadderCore {
 
   // One player's own standing (the result screen polls this).
   me(name) {
+    const rules = this.rules();
     const p = this.getPlayer(String(name || '').toLowerCase());
     if (!p) {
+      // Where a first match would start them. With the default rules that is
+      // the reference's reply exactly (UNRANKED, 3 placement games to go);
+      // with placement off it is the rank the start rating sits in.
+      const t = tierOf(rules.startRating, 0, rules);
       return {
-        ok: true, found: false, rating: START_RATING, tier: 'UNRANKED', placement: PLACEMENT_GAMES,
-        games: 0, wins: 0, losses: 0, lastDelta: 0, peakRating: START_RATING, streak: 0,
+        ok: true, found: false, rating: rules.startRating, tier: t.name, placement: t.placement,
+        games: 0, wins: 0, losses: 0, lastDelta: 0, peakRating: rules.startRating, streak: 0,
       };
     }
-    const rating = p.rating ?? START_RATING;
-    const t = tierOf(rating, p.games || 0);
+    const rating = p.rating ?? rules.startRating;
+    const t = tierOf(rating, p.games || 0, rules);
     return {
       ok: true, found: true, name: p.name, rating, tier: t.name, placement: t.placement,
       games: p.games || 0, wins: p.wins || 0, losses: p.losses || 0, lastDelta: p.lastDelta || 0,
@@ -551,8 +727,11 @@ export class LadderCore {
     };
   }
 
-  // Sorted by rating, then games, then name; limit clamped to 1-200.
+  // Sorted by rating, then games, then name; limit clamped to 1-200. `ranks`
+  // is the rules' list, highest first, so a board can draw a rank name it
+  // has no built-in look for in its place among the others.
   leaderboard(limit = 50) {
+    const rules = this.rules();
     const n = Math.floor(Math.max(1, Math.min(LEADERBOARD_MAX, Number(limit) || 0)));
     // The index finds the n-th row; everything tied with it comes along, and
     // the name tie-break is done here exactly as the reference does it.
@@ -570,8 +749,8 @@ export class LadderCore {
         place: i + 1,
         name: p.name,
         rating: p.rating,
-        tier: tierOf(p.rating, p.games).name,
-        placement: tierOf(p.rating, p.games).placement,
+        tier: tierOf(p.rating, p.games, rules).name,
+        placement: tierOf(p.rating, p.games, rules).placement,
         lastDelta: p.lastDelta || 0,
         peakRating: p.peakRating || p.rating,
         score: p.score,
@@ -586,6 +765,7 @@ export class LadderCore {
         lastChar: p.lastChar || '',
         lastPlayed: p.lastPlayed,
       })),
+      ranks: rules.ranks.map((t) => ({ name: t.name, min: t.min })),
     };
   }
 
@@ -596,7 +776,8 @@ export class LadderCore {
   }
 
   // ------------------------------------------------------------ moderation --
-  // Clears the standings and the report buffers. Names and pairings stay.
+  // Clears the standings and the report buffers. Names, pairings and the
+  // host's rules stay: a new season keeps its ranks.
   resetAll() {
     return this.tx(() => {
       this.q('DELETE FROM players');
@@ -652,13 +833,13 @@ export class LadderCore {
         after.peakRating = p.rating;
       }
       if (changed) this.putPlayer(p);
-      return { ok: true, name: p.name, changed, before, after, tier: tierOf(p.rating, p.games).name };
+      return { ok: true, name: p.name, changed, before, after, tier: tierOf(p.rating, p.games, this.rules()).name };
     });
   }
 
   // A full backup of the standings (the reference export's shape: players by
-  // key, pending {open, done}) plus the claimed names' metadata. Never a code
-  // or a code hash.
+  // key, pending {open, done}) plus the rules in force and the claimed names'
+  // metadata. Never a code or a code hash.
   exportAll() {
     const players = {};
     for (const r of this.q('SELECT * FROM players ORDER BY key')) players[r.key] = rowToPlayer(r);
@@ -674,6 +855,7 @@ export class LadderCore {
       exported: this.iso(),
       kit: KIT_NAME,
       schema: this.schemaVersion(),
+      rules: this.rules(),
       players,
       pending: { open, done },
       names: this.adminList().names,

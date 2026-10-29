@@ -18,6 +18,9 @@
 //   POST /mugen/identity/claim      -> the Ladder, rate limited per IP
 //   POST /mugen/identity/recover    -> the Ladder, rate limited per IP
 //   GET  /mugen/leaderboard         -> the Ladder
+//   GET  /mugen/leaderboard/rules   -> the Ladder (the host's ranks and Elo
+//                                      settings; changed through the admin
+//                                      PUT of the same name)
 //   GET  /mugen/leaderboard/stats   -> the Ladder
 //   GET  /mugen/leaderboard/me      -> the Ladder, rate limited per IP + name
 //   POST /mugen/leaderboard/report  -> the Ladder, rate limited per IP + name
@@ -54,7 +57,7 @@ import { sameSecret, KIT_NAME } from './ladder-core.js';
 
 // ---------------------------------------------------------------- settings --
 // Read by hostkit/deploy.js (kitVersion in its result) and by GET /.
-export const KIT_VERSION = '1.0.0';
+export const KIT_VERSION = '1.1.0';
 export const KIT_PARTS = Object.freeze(['relay', 'queue', 'ladder']);
 
 // Largest request body accepted, in bytes. A report is well under 1 KiB; the
@@ -181,6 +184,7 @@ const LADDER_ROUTES = new Map([
   ['/mugen/identity/claim', { rule: 'claim', method: 'POST' }],
   ['/mugen/identity/recover', { rule: 'recover', method: 'POST' }],
   ['/mugen/leaderboard', null],
+  ['/mugen/leaderboard/rules', null],
   ['/mugen/leaderboard/stats', null],
   ['/mugen/leaderboard/me', { rule: 'me', method: 'GET' }],
   ['/mugen/leaderboard/report', { rule: 'report', method: 'POST' }],

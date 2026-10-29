@@ -5,9 +5,9 @@ characters, stages, music and a screenpack, lay them out, and export a website
 anyone can play in a browser, or a desktop folder that runs on
 [Ikemen GO](https://github.com/ikemen-engine/Ikemen-GO).
 
-**Just want to use it?** Download Mugen Studio 2.0 from
-[itch.io](https://energyjp.itch.io/energy-webmugen), extract the zip and
-double-click `MugenStudio.exe`. This repository is its source.
+**Just want to use it?** Download the latest Mugen Studio from
+[Releases](https://github.com/energyjp/mugen-studio/releases/latest), extract
+the zip and double-click `MugenStudio.exe`. This repository is its source.
 
 ## License
 
@@ -37,7 +37,7 @@ two `.exe` files. Take them from the release zip.
 
 Windows 10 or 11.
 
-1. Download Mugen Studio 2.0 from itch.io and extract it.
+1. Download the latest Mugen Studio from Releases and extract it.
 2. Copy its `app\Dependencies` folder into this repository's `app` folder.
 3. Then either:
    - copy `MugenStudio.exe` and `app\studio-server.exe` from the zip to the same

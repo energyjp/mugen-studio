@@ -43,6 +43,11 @@ const crypto = require('crypto');
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
 const KIT_TAG = 'mugen-studio-hostkit';          // marks OUR Worker on their account
+// A second tag names the Ladder's SQLite schema the upload carries
+// (mugen-studio-ladder-2). The Durable Object migration tag does not move when
+// only the Ladder's own tables change, so this tag is how a later update learns
+// that a newer Studio's kit has already moved the data on.
+const LADDER_TAG_PREFIX = 'mugen-studio-ladder-';
 const DEFAULT_SCRIPT = 'mugen-online';           // the Worker's name on the host's account
 const COMPATIBILITY_DATE = '2026-07-01';         // pinned; bump deliberately
 const MAIN_MODULE = 'worker.js';
@@ -312,9 +317,20 @@ async function listAccounts(ctx) {
 async function inspectScripts(ctx, accountId, scriptName) {
   const d = await ctx.call('GET', acctPath(accountId) + '/workers/scripts');
   const s = (Array.isArray(d.result) ? d.result : []).find((x) => x && x.id === scriptName);
-  if (!s) return { exists: false, ours: false, migrationTag: null };
+  if (!s) return { exists: false, ours: false, migrationTag: null, ladderSchema: null };
   const tags = Array.isArray(s.tags) ? s.tags.map(String) : [];
-  return { exists: true, ours: tags.includes(KIT_TAG), migrationTag: s.migration_tag || null };
+  return { exists: true, ours: tags.includes(KIT_TAG), migrationTag: s.migration_tag || null, ladderSchema: ladderSchemaOf(tags) };
+}
+
+// The highest Ladder schema a Worker's tags name, or null when they name none
+// (every install made before the tag existed, kit 1.0.0 and older).
+function ladderSchemaOf(tags) {
+  let n = null;
+  for (const t of tags) {
+    const rest = t.startsWith(LADDER_TAG_PREFIX) ? t.slice(LADDER_TAG_PREFIX.length) : '';
+    if (/^\d{1,6}$/.test(rest) && (n === null || Number(rest) > n)) n = Number(rest);
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +415,7 @@ function buildMetadata(kit, opts) {
     main_module: kit.mainModule,
     compatibility_date: kit.compatibilityDate,
     bindings,
-    tags: [KIT_TAG],
+    tags: kit.ladderSchema ? [KIT_TAG, LADDER_TAG_PREFIX + kit.ladderSchema] : [KIT_TAG],
   };
   const m = migrationsToSend(kit.migrations, o.fresh ? null : o.deployedTag);
   if (m) meta.migrations = m;
@@ -507,6 +523,12 @@ function loadKit(dir, deps) {
     const v = /\bKIT_VERSION\s*=\s*['"]([^'"\n]{1,40})['"]/.exec(m.content);
     if (v) { kitVersion = v[1]; break; }
   }
+  // ladder-core.js's SCHEMA_VERSION, sent as the Ladder tag on every upload.
+  let ladderSchema = null;
+  for (const m of modules) {
+    const v = /\bSCHEMA_VERSION\s*=\s*(\d{1,6})\b/.exec(m.content);
+    if (v) { ladderSchema = Number(v[1]); break; }
+  }
   return {
     mainModule: MAIN_MODULE,
     modules,
@@ -514,6 +536,7 @@ function loadKit(dir, deps) {
     durableObjects: DURABLE_OBJECTS.map((d) => ({ binding: d.binding, className: d.className })),
     migrations: MIGRATIONS.map((m) => Object.assign({}, m)),
     kitVersion,
+    ladderSchema,
   };
 }
 
@@ -713,6 +736,12 @@ async function setupServers(input, deps) {
     const fresh = !existing.exists;
     // Throws newerKit before anything is created or changed.
     migrationsToSend(kit.migrations, fresh ? null : existing.migrationTag);
+    // The same refusal for the Ladder's own tables. This kit's Ladder refuses
+    // to read a newer schema, so uploading it over one would leave every
+    // leaderboard request failing until a newer Studio updated it again.
+    if (!fresh && existing.ladderSchema > (kit.ladderSchema || 0)) {
+      throw new HostError('newerKit', 0, 'ladder ' + existing.ladderSchema);
+    }
 
     step = 'subdomain';
     note('checking your workers.dev name');
@@ -800,7 +829,7 @@ async function removeServers(input, deps) {
 
 module.exports = {
   // constants
-  CF_API, KIT_TAG, DEFAULT_SCRIPT, COMPATIBILITY_DATE, MAIN_MODULE, MODULE_TYPE,
+  CF_API, KIT_TAG, LADDER_TAG_PREFIX, DEFAULT_SCRIPT, COMPATIBILITY_DATE, MAIN_MODULE, MODULE_TYPE,
   DURABLE_OBJECTS, MIGRATIONS, ADMIN_SECRET, NOT_UPLOADED, TOKEN_PERMISSIONS, TOKEN_NAME,
   REMOVE_WARNING, PROBE_WINDOW_NEW_SUBDOMAIN_MS, PROBE_WINDOW_MS, PROBE_INTERVAL_MS,
   // the buttons

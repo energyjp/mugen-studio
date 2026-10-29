@@ -189,15 +189,15 @@ function seedStage(dir, L) {
   return { file: SEED_STAGE_FILES[0], name: SEED_STAGE_NAME, music: '' };
 }
 
-// THE BUNDLE'S ONLINE SETUP: the four Settings > Online values a bundle keeps
+// THE BUNDLE'S ONLINE SETUP: the five Settings > Online values a bundle keeps
 // in its own roster.json - the leaderboard address, the online-menu switch,
-// the match mode and the leaderboard page. The relay and TURN live in
-// local-config.json (this install), and so does a leaderboard's admin key
-// (per address), so those carry to every bundle on their own. A new bundle
-// takes these four from the open one when asked (create opts.online), and
+// the match mode, the leaderboard page and the board's look. The relay and
+// TURN live in local-config.json (this install), and so does a leaderboard's
+// admin key (per address), so those carry to every bundle on their own. A new
+// bundle takes these five from the open one when asked (create opts.online), and
 // Settings > Online copies them from any bundle that has them, so a small
 // test bundle does not mean typing the setup in again.
-const ONLINE_KEYS = ['identityUrl', 'onlineName', 'queueMode', 'leaderboardPage'];
+const ONLINE_KEYS = ['identityUrl', 'onlineName', 'queueMode', 'leaderboardPage', 'leaderboardLook'];
 function onlineOf(roster) {
   const out = {};
   for (const k of ONLINE_KEYS) {

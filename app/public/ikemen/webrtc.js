@@ -787,7 +787,9 @@
     } catch (e) { return null; }
   }
 
-  function rankedSetLine(st, cur) {
+  //
+  // null.
+  function rankedSetLine(st, cur, rules) {
     const id = rankedIdentity();
     if (!IDENTITY_URL || !id) { rankedStatusLine = 'st=off'; return; }
     // 'you' is which ENGINE SIDE this player is: host is always side 1. The
@@ -799,29 +801,76 @@
       const delta = (typeof base.rating === 'number')
         ? (cur.rating - base.rating)
         : (cur.delta || 0);
+      const ev = rankedTierEvents(base, cur, rules || null);
       parts.push('elo=' + cur.rating);
       parts.push('d=' + delta);
-      parts.push('tier=' + (cur.tier || '?'));
-      //
-      // reads as one promotion. Three DISTINCT events, which the first
-      // version conflated (field-hit 2026-08-16: a LOST set printed
-      //
-      //
-      //
-      //
-      var LADDER = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'MASTER', 'GRANDMASTER'];
-      if (base.tier && cur.tier && base.tier !== cur.tier) {
-        if (base.tier === 'UNRANKED') {
-          parts.push('placed=1');
-        } else if (LADDER.indexOf(cur.tier) > LADDER.indexOf(base.tier)) {
-          parts.push('ptier=' + base.tier);
-        } else if (LADDER.indexOf(cur.tier) >= 0) {
-          parts.push('dtier=' + base.tier);
-        }
-      }
-      if (cur.placement) parts.push('pl=' + cur.placement);
+      parts.push('tier=' + (ev.tier || '?'));
+      if (ev.placed) parts.push('placed=1');
+      if (ev.ptier) parts.push('ptier=' + ev.ptier);
+      if (ev.dtier) parts.push('dtier=' + ev.dtier);
+      if (ev.pl) parts.push('pl=' + ev.pl);
     }
     rankedStatusLine = parts.join(';');
+  }
+
+  // The set's rank change for the result page, from the standing at pairing
+  //
+  //
+  // promotion. Three DISTINCT events, which the first version conflated
+  //
+  //
+  //
+  //
+  //
+  // The host sets the ranks, so with the server's rules in hand both ends are
+  //
+  //
+  // nobody played for, and the host's own names are ordered by the host's own
+  // list. With no rules (a server from before them, or a failed read) it is
+  // the built-in ladder, and a name not on it never reads as a climb or a fall.
+  //
+  function rankedTierEvents(base, cur, rules) {
+    var LADDER = ['GRANDMASTER', 'MASTER', 'DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE'];
+    var names = LADDER, from = base.tier, to = cur.tier, pl = cur.placement || 0;
+    if (rules) {
+      names = rules.ranks.map(function (r) { return r.name; });
+      var cut = function (rating, games) {
+        if (games < rules.placementGames) return 'UNRANKED';
+        for (var i = 0; i < rules.ranks.length; i++) if (rating >= rules.ranks[i].min) return rules.ranks[i].name;
+        return rules.ranks[rules.ranks.length - 1].name;
+      };
+      if (typeof base.rating === 'number' && typeof base.games === 'number') from = cut(base.rating, base.games);
+      if (typeof cur.rating === 'number' && typeof cur.games === 'number') {
+        to = cut(cur.rating, cur.games);
+        pl = Math.max(0, rules.placementGames - cur.games);
+      }
+    }
+    var out = { tier: to, pl: pl };
+    if (from && to && from !== to) {
+      // names run high to low: a smaller index is the higher rank.
+      var a = names.indexOf(from), b = names.indexOf(to);
+      if (from === 'UNRANKED') out.placed = true;
+      else if (a >= 0 && b >= 0) {
+        if (b < a) out.ptier = from;
+        else out.dtier = from;
+      }
+    }
+    return out;
+  }
+
+  //
+  // min }] high to low }, or null. Public, no key. A server from before the
+  // rules has no such route (404), and a failed read is no reason to hold the
+  // result page, so both are null.
+  function rankedFetchRules() {
+    if (!IDENTITY_URL) return Promise.resolve(null);
+    return fetch(IDENTITY_URL + '/mugen/leaderboard/rules')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        const rules = r && r.ok ? r.rules : null;
+        return (rules && Array.isArray(rules.ranks) && rules.ranks.length && typeof rules.placementGames === 'number') ? rules : null;
+      })
+      .catch(function () { return null; });
   }
 
   function rankedFetchMe() {
@@ -900,7 +949,7 @@
   function rankedResolve(reply) {
     if (!IDENTITY_URL || !rankedIdentity()) return;
     if (reply && reply.state === 'counted' && typeof reply.rating === 'number') {
-      rankedSetLine('ok', reply);
+      rankedFetchRules().then(function (rules) { rankedSetLine('ok', reply, rules); });
         // The rating just moved; refresh the cached standing so YOUR RANK
         // shows the new number rather than the pre-match one.
         rankRefresh(true);
@@ -918,7 +967,7 @@
           setTimeout(poll, 1500);
           return;
         }
-        rankedSetLine('ok', r);
+        rankedFetchRules().then(function (rules) { rankedSetLine('ok', r, rules); });
       });
     };
     poll();

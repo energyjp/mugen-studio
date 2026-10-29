@@ -328,7 +328,23 @@ players to see the ranking - a plain standings table, or an arcade-style
 "Score Ranking" board - with a preview. The Website export puts it next to the
 game as `leaderboard.html`, already pointed at your server; link to it from
 your site. It reads `GET /mugen/leaderboard?limit=N` (section 5), and only while
-someone has it open, so it never keeps a sleeping server awake.
+someone has it open, so it never keeps a sleeping server awake. With the board
+chosen, you also pick its look: the **format** (the classic climbing board, a
+select screen, a podium, an arcade hi-score table or a TV-style broadcast), the
+**header** style, a **font** for its title, names, numbers and text (the system
+fonts, or any of 16 arcade fonts the Studio carries), and its **colors** (a
+preset, then any of six by hand). The preview shows each change. Fonts you pick
+are exported beside `leaderboard.html` in a `leaderboard-fonts` folder: upload
+it with the rest. **Board text** lets you reword every line the page shows
+(put `*stars*` around words to draw them in the accent color), and **Rank
+icons** gives each rank a shield in your colors or a picture of your own,
+exported in a `leaderboard-ranks` folder. **Background picture** (on either
+page) puts a picture, an animated GIF or WebP, or a short MP4 or WebM loop
+behind the whole page, darkened as much as you like so the names stay
+readable; it is exported in a `leaderboard-bg` folder. Upload each of these
+folders with `leaderboard.html`. The ratings, the K-factor, the
+placement games and the ranks themselves are set under **Ranked rules**, next
+to Players, with the same admin key.
 
 **The board's character art.** The Score Ranking board shows each player's
 character: a portrait on every row, and 1st place opens up with that
@@ -547,7 +563,8 @@ Things to get right:
 | `GET /mugen/identity/check?name=` | — | whether the name is taken (the Studio's **Test** calls this) |
 | `POST /mugen/identity/claim` | `{name}` | `{"ok":true, "name":…, "code":…}`: the recovery code, **once, forever**. Or `"reason":"taken"` |
 | `POST /mugen/identity/recover` | `{name, code}` | `{"ok":true, "name":…}`: re-attach on a new device |
-| `GET /mugen/leaderboard?limit=N` | — | the standings, `{"players":[...]}` |
+| `GET /mugen/leaderboard?limit=N` | — | the standings, `{"players":[...], "ranks":[{"name","min"}, …]}`: `ranks` is your current ranks, highest first (optional: without it the board colors ranks by name only) |
+| `GET /mugen/leaderboard/rules` | — | optional: `{"ok":true, "rules":{…}, "defaults":{…}}`, your ranked rules (below). Without it the Studio's Ranked rules group says your ranks are fixed |
 | `GET /mugen/leaderboard/me?name=` | — | one player's row; include `"ok":true`, `rating`, `tier` and `games` |
 | `POST /mugen/leaderboard/report` | see below | `{"state":"<short status>", ...}` |
 
@@ -611,6 +628,17 @@ group can manage your leaderboard (§4, *Managing players*).
 | `PATCH /admin/mugen/leaderboard/player/<name>` | any of `rating`, `peakRating`, `wins`, `losses`, `games`, `streak`, `bestStreak` | `{"ok":true, "name", "changed", "before":{…}, "after":{…}}`, or `"reason":"nosuchplayer"` / `"badvalue"` |
 | `POST /admin/mugen/leaderboard/reset` | — | `{"ok":true, "cleared":true}`. Clear the ratings and records, keep the names |
 | `GET /admin/mugen/leaderboard/export` | — | everything, as one JSON object with `players` keyed by lowercased name |
+| `PUT /admin/mugen/leaderboard/rules` | the whole rules object | `{"ok":true, "rules":{…}}`, or `400 {"ok":false, "reason":"badvalue", "field":"ranks[2].min", "why":"<one English sentence>"}` |
+
+**The ranked rules** (what the Studio's **Ranked rules** group edits):
+`{"startRating":1000, "kFactor":32, "placementGames":3, "ranks":[{"name":"GRANDMASTER","min":1200}, …, {"name":"BRONZE","min":0}]}`.
+A new player starts at `startRating`; one match moves a rating by at most
+`kFactor`; a player shows UNRANKED until `placementGames` counted games; the
+ranks run highest first, 1 to 12 of them, each name up to 16 of `A-Z 0-9 . _ -`
+(never UNRANKED), each `min` an integer below the one above it, and the last
+one's is 0. Work a player's rank out from their rating every time you answer,
+never store it: then a rules change shows on the whole board at once and never
+touches a rating or a record.
 
 - **The key.** A wrong or missing one is `403 {"error":"forbidden"}`. The
   Studio's own servers take it in an `x-admin-key` header; the Studio knows

@@ -43,7 +43,8 @@
 //      GET  /mugen/identity/check?name=      200 {taken}
 //      POST /mugen/identity/claim   {name}         200 {ok, name, code} | {ok:false, reason:'invalid'|'taken'}
 //      POST /mugen/identity/recover {name, code}   200 {ok, name} | {ok:false}
-//      GET  /mugen/leaderboard?limit=        200 {updated, players:[...]}   (limit clamped 1-200, default 50)
+//      GET  /mugen/leaderboard?limit=        200 {updated, players:[...], ranks:[{name, min}]}   (limit clamped 1-200, default 50)
+//      GET  /mugen/leaderboard/rules         200 {ok, rules, defaults}   (rules: {startRating, kFactor, placementGames, ranks})
 //      GET  /mugen/leaderboard/stats         200 {players, matches, pending}
 //      GET  /mugen/leaderboard/me?name=      200 {ok, found, ...} | 400 {ok:false, reason:'noname'}
 //      POST /mugen/leaderboard/report {name, code, opponent, won, character, startedAt, seq, buildId}
@@ -60,7 +61,9 @@
 //      POST   /admin/mugen/leaderboard/reset            {ok, cleared}
 //      DELETE /admin/mugen/leaderboard/player/:name     {ok}
 //      PATCH  /admin/mugen/leaderboard/player/:name {rating?, peakRating?, wins?, losses?, games?, streak?, bestStreak?}
-//      GET    /admin/mugen/leaderboard/export           full JSON backup
+//      PUT    /admin/mugen/leaderboard/rules {startRating, kFactor, placementGames, ranks:[{name, min}]}  (the whole object)
+//             200 {ok, rules} | 400 {ok:false, reason:'badvalue', field, why}
+//      GET    /admin/mugen/leaderboard/export           full JSON backup, the rules included
 //
 // Other replies: 400 {ok:false, reason:'badjson'}, 413 {ok:false,
 // reason:'toolarge'}, 404 {error:'notfound'}, 500 {ok:false, reason:'server'}.
@@ -117,16 +120,21 @@ class HttpError extends Error {
   }
 }
 
-async function readBody(request) {
+// The JSON body as an object ({} for anything else). With asSent, the value
+// as it was sent (undefined for no body): the rules route hands that to
+// validateRules, so an array or null is refused on 'rules' as the reference
+// server refuses it, not on its first field.
+async function readBody(request, asSent) {
   const text = await request.text();
   if (text.length > MAX_BODY) throw new HttpError(413, { ok: false, reason: 'toolarge' });
-  if (!text.trim()) return {};
+  if (!text.trim()) return asSent ? undefined : {};
   let v;
   try {
     v = JSON.parse(text);
   } catch {
     throw new HttpError(400, { ok: false, reason: 'badjson' });
   }
+  if (asSent) return v;
   return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 }
 
@@ -207,6 +215,9 @@ export class Ladder {
     if (path === '/mugen/leaderboard' && method === 'GET') {
       return json(core.leaderboard(Number(url.searchParams.get('limit')) || 50));
     }
+    if (path === '/mugen/leaderboard/rules' && method === 'GET') {
+      return json(core.getRules());
+    }
     if (path === '/mugen/leaderboard/stats' && method === 'GET') {
       return json(core.stats());
     }
@@ -244,6 +255,10 @@ export class Ladder {
     }
     if (path === '/admin/mugen/leaderboard/reset' && method === 'POST') return json(core.resetAll());
     if (path === '/admin/mugen/leaderboard/export' && method === 'GET') return json(core.exportAll());
+    if (path === '/admin/mugen/leaderboard/rules' && method === 'PUT') {
+      const r = core.setRules(await readBody(request, true));
+      return json(r, r.ok ? 200 : 400);
+    }
     if ((m = path.match(/^\/admin\/mugen\/leaderboard\/player\/([^/]+)$/))) {
       if (method === 'DELETE') return json(core.removePlayer(pathName(m[1])));
       if (method === 'PATCH') return json(core.setPlayer(pathName(m[1]), await readBody(request)));

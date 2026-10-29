@@ -242,8 +242,50 @@
   #settings .guidebtn { margin: -4px 2px 14px; }
   /* The leaderboard page's live preview, the size of a small browser window. */
   #settings .lbprev { padding: 2px 14px 12px; }
-  #settings .lbprev iframe { display: block; width: 100%; height: 340px; border: 1px solid var(--line); background: #05040a; }
+  /* The preview frame: 340 tall across the column by default, resizable by its
+     corner (and by the Preview size presets) so the board can be seen at any
+     shape inside the Studio. */
+  #settings .lbprev .lbframe { width: 100%; max-width: 100%; height: 340px; min-width: 220px; min-height: 160px;
+    resize: both; overflow: hidden; border: 1px solid var(--line); background: #05040a; }
+  #panel-settings #settings .lbprev .lbframe { border: 2px solid var(--ink); }
+  #panel-settings #settings .lbprev .lbframe iframe { display: block; width: 100%; height: 100%; border: 0; }
+  #settings .lbprev .dims { color: var(--ink2, #8a8a8a); font-variant-numeric: tabular-nums; }
   #settings .lbprev .bar { display: flex; gap: 12px; align-items: center; margin: 0 0 8px; font-size: 12.5px; }
+  /* the board's six hand-set colors, each a swatch with its name */
+  #settings .lbcolors { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 12.5px; }
+  #settings .lbcolors label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  #panel-settings #settings .lbcolors input[type="color"] { -webkit-appearance: none; appearance: none; width: 34px; min-width: 34px; height: 24px; padding: 2px; border: 1px solid var(--line); background: none; cursor: pointer; }
+  #panel-settings #settings .lbcolors input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  #panel-settings #settings .lbcolors input[type="color"]::-webkit-color-swatch { border: none; }
+  /* Board text (Page text for the plain standings) and Rank icons: folded
+     parts of the look, a step in from the group's own rows, so they read as
+     part of it. */
+  #settings .lbsub { border-top: 1px solid var(--line); }
+  #settings .lbsub > summary { padding: 7px 14px; cursor: pointer; font-size: 12.5px; font-weight: 600;
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap; list-style: none; }
+  #settings .lbsub > summary::-webkit-details-marker { display: none; }
+  #settings .lbsub > summary::before { content: '▸'; color: var(--dim); font-size: 11px; transition: transform .12s; }
+  #settings .lbsub[open] > summary::before { transform: rotate(90deg); }
+  #settings .lbsub[open] { padding-bottom: 4px; }
+  #settings .lbsub .row { padding-left: 28px; }
+  #settings .lbsub .fhint { margin-left: 238px; }
+  @media (max-width: 760px) { #settings .lbsub .fhint { margin-left: 28px; } }
+  /* a rank: its live icon beside its name, then the shield's colors and pips, then its picture */
+  #settings .lbrank .k { display: flex; align-items: center; gap: 8px; }
+  #settings .lbrank .rkpic { display: inline-flex; flex: 0 0 auto; width: 24px; height: 28px; }
+  #settings .lbrank .rkpic svg, #settings .lbrank .rkpic img { display: block; width: 24px; height: 28px; object-fit: contain; }
+  /* Ranked rules: the ranks as a short table of boxes, lined up with the fields */
+  #settings .rkwrap { margin: 0 14px 8px 224px; overflow-x: auto; }
+  @media (max-width: 760px) { #settings .rkwrap { margin-left: 14px; } }
+  #settings .rktable { border-collapse: collapse; font-size: 12.5px; }
+  #settings .rktable th { text-align: left; color: var(--dim); font-weight: 600; padding: 4px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  #settings .rktable td { padding: 4px 8px; vertical-align: middle; }
+  #settings .rktable th.n, #settings .rktable td.n { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+  #settings .rktable input[type=text] { width: 180px; text-transform: uppercase; }
+  #settings .rktable input[type=number] { width: 96px; }
+  /* the value a server refused, and its sentence */
+  #settings input.bad { border-color: var(--bad); }
+  #settings .fhint.bad { color: var(--bad); }
   /* "Your own servers": the step log in the Test-result colors, an address
      that selects whole, and the two panels that ask before anything is
      replaced or deleted. */
@@ -2866,14 +2908,14 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
           <img class="body" alt="" draggable="false">
           <img class="shade" alt="" draggable="false">
         </div>
-        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.1</span></h2>
+        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.2</span></h2>
         <div class="cv-foot"><span class="with">with</span><span class="ab-chip wb" translate="no">WB</span><span class="ab-chip ar" translate="no">DJ AR</span><span class="ab-chip sz" translate="no">SHiZUKA</span><span class="cv-pub" translate="no">energy.jp</span></div>
       </div>
       <div class="bk-fold" aria-hidden="true"></div>
       <div class="ab-staff">
         <div class="bk-secband">
           <h2 class="bk-secband-t"><span class="t">Staff</span><span class="k" lang="ja">スタッフ</span></h2>
-          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.1</span>
+          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.2</span>
             <button class="bk-btn sm" id="aboutNotices" type="button" title="Everything the Studio ships from others, with their terms">Credits &amp; licenses&hellip;</button></div>
         </div>
         <div class="pbody bk-pg r">
@@ -10150,6 +10192,8 @@ function hostSync(r) {
     if (r.identityUrl) state.roster.identityUrl = r.identityUrl; else delete state.roster.identityUrl;
     if (r.onlineName) state.roster.onlineName = true; else delete state.roster.onlineName;
     if (r.leaderboardPage === 'board') state.roster.leaderboardPage = 'board'; else delete state.roster.leaderboardPage;
+    if (r.leaderboardLookStored) state.roster.leaderboardLook = r.leaderboardLookStored;
+    else delete state.roster.leaderboardLook;
     if (r.queueMode && r.queueMode.mode !== 'single') state.roster.queueMode = { mode: r.queueMode.mode, size: r.queueMode.size };
     else delete state.roster.queueMode;
   }
@@ -10811,7 +10855,7 @@ const PLAYERS_UI = {
 async function playersCall(body) {
   // "The key works: N names" is about the moment it was tested; after a
   // change the row goes back to "saved".
-  if (body && body.op !== 'test' && body.op !== 'list' && PLAYERS_UI.keyMsg && /\bok\b/.test(PLAYERS_UI.keyMsg.cls)) PLAYERS_UI.keyMsg = null;
+  if (body && body.op !== 'test' && body.op !== 'list' && body.op !== 'rules' && PLAYERS_UI.keyMsg && /\bok\b/.test(PLAYERS_UI.keyMsg.cls)) PLAYERS_UI.keyMsg = null;
   const res = await fetch('/api/players', { method: 'POST', body: JSON.stringify(body || {}) });
   let d = null;
   try { d = await res.json(); } catch (e) { d = null; }
@@ -10872,6 +10916,7 @@ function renderPlayers(host, H, ui) {
 function playersPaint() {
   const U = PLAYERS_UI;
   const det = U.det;
+  rulesKeyHint();   // a key just tested or forgotten here is the one Ranked rules saves with
   if (!det || !det.isConnected) return;
   const ui = U.ui;
   const H = HOSTING || {};
@@ -11106,7 +11151,8 @@ function playersPaint() {
     const box = document.createElement('div');
     box.className = 'hostask danger';
     const p = document.createElement('div');
-    p.innerHTML = t('Resetting deletes <b>every rating and record on this leaderboard, for good</b>. Names stay claimed, and everyone starts again at 1000 with their next ranked match. First the Studio saves a copy of everything in the folder below, and it only resets once that copy is saved.');
+    // (The start rating is the server's, set under Ranked rules: 1000 unless the host changed it.)
+    p.innerHTML = t('Resetting deletes <b>every rating and record on this leaderboard, for good</b>. Names stay claimed, and everyone starts again at the start rating (under <b>Ranked rules</b>) with their next ranked match. First the Studio saves a copy of everything in the folder below, and it only resets once that copy is saved.');
     const where = document.createElement('div');
     where.style.marginTop = '6px';
     where.append(document.createTextNode('The copy will be saved in: '), codeEl(dir));
@@ -11214,7 +11260,7 @@ function playersAskRow(row, btn, wrap) {
   } else if (what === 'remove') {
     p.append(document.createTextNode('Take '), nb(),
       document.createTextNode(' ' + (row.claimed
-        ? t('off the leaderboard? Their rating and record are deleted. The name stays theirs, and a ranked match puts them back at 1000.')
+        ? t('off the leaderboard? Their rating and record are deleted. The name stays theirs, and a ranked match puts them back at the start rating.')
         : t('off the leaderboard? Their rating and record are deleted.') + ' ')));
     box.append(p, wrap(btn('Remove from leaderboard', 'danger', () => run({ op: 'remove' }, () => t('{name} is off the leaderboard', { name: row.name }))), cancel, out));
   } else {
@@ -11254,6 +11300,457 @@ function playersAskRow(row, btn, wrap) {
   return tr;
 }
 
+// ---- Settings > Online > Ranked rules, and the board's rank icons ----------
+//
+// The ranked rules live on the leaderboard server (players.js 'rules' and
+// 'setrules'): the rating a new player starts at, Elo's K, the counted games
+// before a rank shows, and the ranks by the rating each one starts at. The
+// server works every player's rank out from them each time it answers, so a
+// change shows on the whole leaderboard at once and no rating moves.
+//
+// Read once per address and kept here, because two parts of the tab draw
+// from them: the Ranked rules group under Players (redrawn on its own,
+// rulesPaint, so typing there never reloads the leaderboard preview) and the
+// Rank icons list in the board's look, which names each rank. Read only when
+// one of the two is opened: the rules need no key, but asking still wakes a
+// server that sleeps while nobody plays.
+const RULES_UI = {
+  addr: '',          // the leaderboard address all of this is about
+  rules: null,       // the server's set (players.js rulesOf)
+  defaults: null,    // the server's own defaults, when it sent them
+  loading: false,
+  reason: '',        // why the last read failed; 'norules' is a server from before them
+  why: '',
+  open: false,       // the Ranked rules group
+  draft: null,       // the form as typed (strings), kept across redraws until saved or cancelled
+  busy: false,
+  msg: null,         // { cls, text } beside Save
+  bad: null,         // { field, why }: the value the server refused
+  focus: null,       // { row, part }: the box to type in after the form is drawn again
+  det: null,
+  ui: null,
+  keyHint: null,     // the line that says the admin key is missing
+  paintIcons: null,  // the Rank icons list's own redraw, while it is on the page
+  syncPreview: null, // the preview's, so sample data spreads over the server's ranks
+};
+
+// How the board draws a rank's shield (public/ranking/board.html TIERS and
+// byPlace, kept the same by hand; tools/test-ranking-pages.js compares the
+// two): the seven ranks every server starts with,
+// and UNRANKED, in their own colors; any other name in the colors its place
+// in the server's list gives it, spread down the seven.
+const RANK_SHIELDS = {
+  UNRANKED: { c1: '#5a5570', c2: '#3a3550', pips: 0 },
+  BRONZE: { c1: '#d08b4a', c2: '#8a4f22', pips: 1 },
+  SILVER: { c1: '#dfe6f0', c2: '#9099a8', pips: 2 },
+  GOLD: { c1: '#ffe07a', c2: '#d79a17', pips: 3 },
+  PLATINUM: { c1: '#9df3e6', c2: '#3fa79a', pips: 4 },
+  DIAMOND: { c1: '#b3d4ff', c2: '#4a7fd4', pips: 5 },
+  MASTER: { c1: '#e0b0ff', c2: '#8a3fd4', pips: 6 },
+  GRANDMASTER: { c1: '#ffb3b3', c2: '#d43f3f', pips: 7 },
+};
+const RANK_LADDER = ['GRANDMASTER', 'MASTER', 'DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE'];
+// The rules every server starts with (and all a server from before them has).
+const DEFAULT_RULES = {
+  startRating: 1000, kFactor: 32, placementGames: 3,
+  ranks: [{ name: 'GRANDMASTER', min: 1200 }, { name: 'MASTER', min: 1150 }, { name: 'DIAMOND', min: 1100 },
+    { name: 'PLATINUM', min: 1050 }, { name: 'GOLD', min: 975 }, { name: 'SILVER', min: 925 }, { name: 'BRONZE', min: 0 }],
+};
+const RANKS_MAX = 12;
+
+// The rules kept for this address; another address starts over.
+function rulesFor(addr) {
+  const U = RULES_UI;
+  const a = String(addr || '');
+  if (U.addr !== a) {
+    Object.assign(U, { addr: a, rules: null, defaults: null, loading: false, reason: '', why: '', draft: null, busy: false, msg: null, bad: null, focus: null });
+  }
+  return U;
+}
+
+async function rulesLoad() {
+  const U = RULES_UI;
+  const addr = U.addr;
+  U.loading = true;
+  U.reason = '';
+  U.why = '';
+  rulesRepaint();
+  let r;
+  try { r = await playersCall({ op: 'rules' }); } catch (e) { r = { ok: false, reason: 'error', why: e.message }; }
+  if (addr !== U.addr) return;   // the bundle's address changed while it read
+  U.loading = false;
+  if (r.ok) { U.rules = r.rules; U.defaults = r.defaults || null; } else { U.reason = r.reason || 'error'; U.why = r.why || t('The leaderboard server did not answer.'); }
+  rulesRepaint();
+}
+
+// Everything drawn from the rules: the group, the icons list, the preview.
+function rulesRepaint() {
+  const U = RULES_UI;
+  rulesPaint();
+  if (U.paintIcons) U.paintIcons();
+  if (U.syncPreview) U.syncPreview();
+}
+
+// The ranks the board can show now: the server's, the original seven for a
+// server from before the rules, or null while they are not known.
+function rulesRanks() {
+  const U = RULES_UI;
+  return U.rules ? U.rules.ranks : U.reason === 'norules' ? DEFAULT_RULES.ranks : null;
+}
+
+// How the board draws one rank: { c1, c2, pips, image }, as board.html's
+// rankStyle works it out from the same three things.
+function rankShieldStyle(name, ranks, looks) {
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const mix = (a, b, f) => '#' + [16, 8, 0].map((s) => {
+    const u = (parseInt(a.slice(1), 16) >> s) & 255, v = (parseInt(b.slice(1), 16) >> s) & 255;
+    return Math.round(u + (v - u) * f).toString(16).padStart(2, '0');
+  }).join('');
+  let base = own(RANK_SHIELDS, name) ? RANK_SHIELDS[name] : null;
+  const i = base ? -1 : ranks.findIndex((r) => r.name === name);
+  if (i >= 0) {
+    const n = ranks.length;
+    const at = n > 1 ? i * (RANK_LADDER.length - 1) / (n - 1) : 0, lo = Math.floor(at), f = at - lo;
+    const a = RANK_SHIELDS[RANK_LADDER[lo]], b = RANK_SHIELDS[RANK_LADDER[Math.min(lo + 1, RANK_LADDER.length - 1)]];
+    base = { c1: mix(a.c1, b.c1, f), c2: mix(a.c2, b.c2, f), pips: Math.round(a.pips + (b.pips - a.pips) * f) };
+  }
+  base = base || RANK_SHIELDS.UNRANKED;
+  const o = own(looks, name) ? looks[name] : {};
+  return { c1: o.c1 || base.c1, c2: o.c2 || base.c2, pips: o.pips != null ? o.pips : base.pips, image: o.image || '' };
+}
+
+// The shield itself, drawn as the board draws it.
+let rankShieldN = 0;
+function rankShieldSvg(s) {
+  const mk = (tag, attrs) => {
+    const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const k of Object.keys(attrs)) e.setAttribute(k, attrs[k]);
+    return e;
+  };
+  const id = 'rkshield' + (++rankShieldN);
+  const svg = mk('svg', { viewBox: '0 0 24 28', 'aria-hidden': 'true' });
+  const grad = mk('linearGradient', { id, x1: '0', y1: '0', x2: '0', y2: '1' });
+  grad.append(mk('stop', { offset: '0', 'stop-color': s.c1 }), mk('stop', { offset: '1', 'stop-color': s.c2 }));
+  const defs = mk('defs', {});
+  defs.appendChild(grad);
+  svg.append(defs,
+    mk('path', { d: 'M12 1.2 L22.4 4.8 V14 c0 7.2 -5.6 11 -10.4 12.6 C7.2 25 1.6 21.2 1.6 14 V4.8 Z', fill: 'url(#' + id + ')', stroke: '#15121f', 'stroke-width': '1.4' }),
+    mk('path', { d: 'M12 3.6 L20.2 6.4 V14 c0 5.8 -4.4 9 -8.2 10.3 C8 23 3.8 19.8 3.8 14 V6.4 Z', fill: 'none', stroke: 'rgba(255,255,255,.32)', 'stroke-width': '.9' }));
+  for (let i = 0; i < s.pips; i++) {
+    const x = s.pips === 1 ? 12 : 12 + (i - (s.pips - 1) / 2) * (15 / (s.pips - 1));
+    svg.appendChild(mk('circle', { cx: x.toFixed(1), cy: '17.5', r: '1.5', fill: '#1a1226', opacity: '.75' }));
+  }
+  return svg;
+}
+
+// A set of rules as the form holds it: every number as typed text.
+function rulesDraft(r) {
+  return {
+    startRating: String(r.startRating), kFactor: String(r.kFactor), placementGames: String(r.placementGames),
+    ranks: r.ranks.map((x) => ({ name: x.name, min: String(x.min) })),
+  };
+}
+// ...and as it is sent. The last rank is the floor at 0, whatever its box
+// held before a rank under it was removed. players.js turns whole numbers
+// typed as text into numbers; the server checks every value.
+function rulesOfDraft(d) {
+  return {
+    startRating: d.startRating, kFactor: d.kFactor, placementGames: d.placementGames,
+    ranks: d.ranks.map((x, i, a) => ({ name: x.name, min: i === a.length - 1 ? '0' : x.min })),
+  };
+}
+// Whether two sets say the same, the way the server would keep them.
+function rulesSame(a, b) {
+  const k = (x) => JSON.stringify([x.startRating, x.kFactor, x.placementGames].map((v) => String(v).trim())
+    .concat(x.ranks.map((r, i, all) => String(r.name).trim().toUpperCase() + '=' + (i === all.length - 1 ? '0' : String(r.min).trim()))));
+  return k(a) === k(b);
+}
+// The first rule a draft breaks, or null: checked here before Save asks
+// anything, with the limits, the order and the field paths of both
+// leaderboard servers (hostkit/ladder-core.js and the reference ranked.js
+// validateRules), so the box is marked as a server's refusal would mark it.
+// Each sentence is a server's own English, so a refusal that does come back
+// from a server reads in the same words, translated by the same keys.
+// -> null or { field, why }.
+function rulesProblem(d) {
+  // As players.js rulesBody reads a typed number.
+  const whole = (s, lo, hi) => /^\s*-?\d{1,9}\s*$/.test(String(s)) && Number(s) >= lo && Number(s) <= hi;
+  const r = rulesOfDraft(d);
+  if (!whole(r.startRating, 100, 3000)) return { field: 'startRating', why: t('The starting rating must be a whole number from {lo} to {hi}.', { lo: 100, hi: 3000 }) };
+  if (!whole(r.kFactor, 4, 100)) return { field: 'kFactor', why: t('The K-factor must be a whole number from {lo} to {hi}.', { lo: 4, hi: 100 }) };
+  if (!whole(r.placementGames, 0, 10)) return { field: 'placementGames', why: t('Placement games must be a whole number from {lo} to {hi}.', { lo: 0, hi: 10 }) };
+  if (r.ranks.length < 1 || r.ranks.length > RANKS_MAX) return { field: 'ranks', why: t('There must be from {lo} to {hi} ranks.', { lo: 1, hi: RANKS_MAX }) };
+  const seen = new Set();
+  const names = [];
+  for (let i = 0; i < r.ranks.length; i++) {
+    const at = 'ranks[' + i + ']';
+    const name = String(r.ranks[i].name || '').trim().toUpperCase();
+    if (!/^[A-Z0-9 ._-]{1,16}$/.test(name)) return { field: at + '.name', why: t('Rank {n} needs a name of 1 to 16 letters, digits, spaces, dots, dashes or underscores.', { n: i + 1 }) };
+    if (name === 'UNRANKED') return { field: at + '.name', why: t('A rank cannot be called UNRANKED: that name is kept for players still playing their placement games.') };
+    if (seen.has(name)) return { field: at + '.name', why: t('Two ranks are called {name}: each rank needs its own name.', { name }) };
+    seen.add(name);
+    if (!whole(r.ranks[i].min, 0, 5000)) return { field: at + '.min', why: t('{name}\'s minimum rating must be a whole number from {lo} to {hi}.', { name, lo: 0, hi: 5000 }) };
+    names.push(name);
+  }
+  for (let i = 1; i < names.length; i++) {
+    if (Number(r.ranks[i].min) < Number(r.ranks[i - 1].min)) continue;
+    if (i === names.length - 1) {
+      return { field: 'ranks[' + (i - 1) + '].min', why: t('{name}\'s minimum rating must be above 0: the lowest rank, {floor}, always starts at 0.', { name: names[i - 1], floor: names[i] }) };
+    }
+    return { field: 'ranks[' + i + '].min', why: t('{name}\'s minimum rating must be lower than {above}\'s: ranks are listed from the highest to the lowest.', { name: names[i], above: names[i - 1] }) };
+  }
+  return null;
+}
+
+// The line under the form that says the admin key is missing. Also called by
+// playersPaint, so a key pasted under Players takes it away.
+function rulesKeyHint() {
+  const el = RULES_UI.keyHint;
+  if (!el || !el.isConnected) return;
+  const k = (HOSTING && HOSTING.playersKey) || {};
+  el.hidden = !!k.keySet;
+  el.innerHTML = k.keySet ? '' : t('Saving needs this leaderboard’s admin key: paste it under <b>Players</b> above and press <b>Test</b>. Reading the rules needs no key.');
+}
+
+function renderRules(host, H, ui) {
+  const U = rulesFor(H.identityUrl);
+  const det = ui.group(t('Ranked rules'), 'start rating, K-factor, placement games and ranks', false);
+  det.open = U.open;
+  det.addEventListener('toggle', () => {
+    U.open = det.open;
+    if (det.open && !U.rules && !U.loading && !U.reason) rulesLoad();
+  });
+  U.det = det;
+  U.ui = ui;
+  rulesPaint();
+  // Open already (the tab redrawn): read them now. After a failure it waits
+  // for Try again, as Players waits for Refresh.
+  if (det.open && !U.rules && !U.loading && !U.reason) rulesLoad();
+}
+
+// The group's body, from RULES_UI. The summary stays.
+function rulesPaint() {
+  const U = RULES_UI;
+  const det = U.det;
+  if (!det || !det.isConnected) return;
+  const ui = U.ui;
+  const sum = det.querySelector('summary');
+  det.replaceChildren(sum);
+  const badge = sum.querySelector('.only');
+  if (badge) {
+    const mine = !!(U.rules && !rulesSame(U.rules, U.defaults || DEFAULT_RULES));
+    badge.hidden = !U.rules;
+    badge.className = 'only' + (mine ? ' adv' : '');
+    badge.textContent = mine ? t('custom') : t('default');
+    badge.title = mine ? 'Your leaderboard ranks players by rules of its own.' : 'Your leaderboard ranks players by the rules every leaderboard server starts with.';
+  }
+  const btn = (label, cls, onclick, tip) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls || 'tiny';
+    b.textContent = label;
+    if (tip) b.title = tip;
+    b.onmousedown = (e) => e.preventDefault();
+    b.onclick = onclick;
+    return b;
+  };
+  const span = (cls, s) => { const x = document.createElement('span'); x.className = cls || 'tres'; x.textContent = s || ''; return x; };
+  const wrap = (...kids) => { const d = document.createElement('div'); d.className = 'hbtns'; d.append(...kids); return d; };
+
+  ui.note(det, 'How ratings move and where each rank begins, kept on your leaderboard server. A change reaches the whole leaderboard at once: '
+    + 'every player’s rank is worked out again from their rating, and no rating or record changes.');
+  if (U.loading) {
+    const n = document.createElement('div');
+    n.className = 'pnone';
+    n.textContent = 'Reading the ranked rules…';
+    det.appendChild(n);
+    return;
+  }
+  if (U.reason) {
+    const again = btn(t('Try again'), 'tiny', () => rulesLoad(), 'Asks the leaderboard server for its ranked rules again.');
+    const r = ui.row(det, t('Problem'), 'What the last request ran into.', wrap(again));
+    r.appendChild(span(U.reason === 'norules' ? 'tres warn' : 'tres bad', '✗ ' + I18n.server(U.why)));
+    return;
+  }
+  if (!U.rules) return;
+
+  // THE FORM. What is typed is kept in U.draft, never drawn again while it is
+  // typed (that would take the caret away); Save, Restore the defaults, Add
+  // and Remove draw it again.
+  const D = U.draft || rulesDraft(U.rules);
+  let out = null;
+  let save = null;
+  const edited = () => {
+    U.draft = D;
+    U.msg = null;
+    if (out) { out.className = 'tres'; out.textContent = ''; }
+    if (save) save.disabled = U.busy || rulesSame(rulesOfDraft(D), U.rules);
+  };
+  // The value refused (by rulesProblem here, or by the server), by its field:
+  // 'startRating', 'kFactor', 'placementGames', 'ranks' (how many there are)
+  // or one rank's 'ranks[i]', 'ranks[i].name' or 'ranks[i].min'. Both servers
+  // name the same fields.
+  const bad = U.bad || { field: '' };
+  const badRank = /^ranks\[(\d+)\](?:\.(name|min))?$/.exec(bad.field || '');
+  const refusal = () => span('tres bad', '✗ ' + I18n.server(bad.why || ''));
+  const number = (key, label, tip, lo, hi) => {
+    const i = document.createElement('input');
+    i.type = 'number';
+    i.min = String(lo);
+    i.max = String(hi);
+    i.step = '1';
+    i.value = D[key];
+    i.dataset.field = key;
+    if (bad.field === key) i.classList.add('bad');
+    i.oninput = () => { D[key] = i.value; edited(); };
+    const r = ui.row(det, label, tip, i);
+    if (bad.field === key) r.appendChild(refusal());
+  };
+  number('startRating', 'Start rating', 'The rating a new player starts at, from 100 to 3000. Their best rating starts there too.', 100, 3000);
+  number('kFactor', t('K-factor'), 'How far one match moves a rating (the K in Elo), from 4 to 100. Bigger moves faster; 32 is the usual.', 4, 100);
+  number('placementGames', 'Placement games', 'How many counted matches a new player plays before a rank shows, from 0 to 10. Until then the leaderboard shows them as UNRANKED.', 0, 10);
+
+  // THE RANKS, highest first: a name and the rating it starts at. The last
+  // one is the floor, so its rating is 0 and cannot be typed.
+  const table = document.createElement('table');
+  table.className = 'rktable';
+  const head = document.createElement('tr');
+  for (const [label, cls] of [['', 'n'], [t('Name'), ''], ['From rating', ''], ['', '']]) {
+    const th = document.createElement('th'); th.textContent = label; if (cls) th.className = cls; head.appendChild(th);
+  }
+  const thead = document.createElement('thead');
+  thead.appendChild(head);
+  const tbody = document.createElement('tbody');
+  table.append(thead, tbody);
+  let focusEl = null;
+  D.ranks.forEach((x, i) => {
+    const tr = document.createElement('tr');
+    const last = i === D.ranks.length - 1;
+    const tdn = document.createElement('td'); tdn.className = 'n'; tdn.textContent = String(i + 1);
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.maxLength = 16;
+    name.spellcheck = false;
+    name.autocomplete = 'off';
+    name.placeholder = 'rank name';
+    name.value = x.name;
+    name.dataset.field = 'ranks[' + i + '].name';
+    name.title = 'Up to 16 letters, digits, spaces, dots, underscores or dashes. Saved in capitals; UNRANKED is taken.';
+    name.oninput = () => { x.name = name.value; edited(); };
+    const min = document.createElement('input');
+    min.type = 'number';
+    min.min = '0';
+    min.max = '5000';
+    min.step = '1';
+    min.dataset.field = 'ranks[' + i + '].min';
+    if (last) {
+      min.value = '0';
+      min.disabled = true;
+      min.title = 'The last rank starts at 0: every player who is not in a rank above it is in this one.';
+    } else {
+      min.value = x.min;
+      min.title = 'The rating this rank starts at: a whole number from 0 to 5000, lower than the rank above it.';
+      min.oninput = () => { x.min = min.value; edited(); };
+    }
+    if (badRank && Number(badRank[1]) === i) (badRank[2] === 'min' ? min : name).classList.add('bad');
+    const tdName = document.createElement('td'); tdName.appendChild(name);
+    const tdMin = document.createElement('td'); tdMin.appendChild(min);
+    const tda = document.createElement('td');
+    const rm = btn(t('Remove'), 'tiny', () => { D.ranks.splice(i, 1); U.bad = null; edited(); rulesPaint(); }, 'Takes this rank out. Once the rules are saved, its players show under the rank their rating falls in.');
+    rm.disabled = U.busy || D.ranks.length < 2;
+    tda.appendChild(rm);
+    tr.append(tdn, tdName, tdMin, tda);
+    tbody.appendChild(tr);
+    if (U.focus && U.focus.row === i) focusEl = U.focus.part === 'min' && !last ? min : name;
+  });
+  const tw = document.createElement('div');
+  tw.className = 'rkwrap';
+  tw.appendChild(table);
+  ui.row(det, t('Ranks'), 'From the highest rank to the lowest, each with the rating it starts at.');
+  det.appendChild(tw);
+  if (bad.field === 'ranks' || badRank) {
+    const p = document.createElement('div');
+    p.className = 'fhint bad';
+    p.textContent = '✗ ' + I18n.server(bad.why || '');
+    det.appendChild(p);
+  }
+  // A new rank goes in above the floor, where most new ranks belong; the
+  // order is the one typed, and the server says when a rating is out of it.
+  const add = btn('Add a rank', 'tiny', () => {
+    const at = Math.max(0, D.ranks.length - 1);
+    D.ranks.splice(at, 0, { name: '', min: '' });
+    U.focus = { row: at, part: 'name' };
+    // A refusal is marked by its rank's place, and the ranks below the new
+    // one have moved down, so the mark goes (as Remove takes it away).
+    U.bad = null;
+    edited();
+    rulesPaint();
+  }, 'Adds a rank above the last one. Give it a name and the rating it starts at.');
+  add.disabled = U.busy || D.ranks.length >= RANKS_MAX;
+  const ar = ui.row(det, 'More ranks', t('Up to {n} ranks.', { n: RANKS_MAX }), wrap(add));
+  ar.appendChild(span('tres', D.ranks.length >= RANKS_MAX ? t('{n} ranks, the most there can be', { n: RANKS_MAX }) : ''));
+  ui.hint(det, t('A player shows the highest rank whose starting rating they have reached, once their placement games are played. The last rank starts at 0, so every player has one.'));
+
+  // SAVE: asks first, sends the whole set, and draws the tab again, so the
+  // preview and the rank icons follow the server's new ranks.
+  save = btn('Save rules', 'primary', async () => {
+    // A value the servers would refuse is marked here, in the viewer's
+    // language, before the question is asked.
+    const wrong = rulesProblem(D);
+    if (wrong) {
+      U.bad = wrong;
+      U.msg = { cls: 'tres bad', text: '✗ ' + t('Not saved: fix the value marked above.') };
+      rulesPaint();
+      return;
+    }
+    if (!confirm(t('Save these ranked rules? Every player’s rank is worked out again at once, from their rating and the new ranks, on the whole leaderboard. Ratings and records stay as they are: a new K-factor counts from the next ranked match, and a new start rating for players who have not played yet.'))) return;
+    U.busy = true; U.bad = null;
+    U.msg = { cls: 'tres', text: t('saving…') };
+    rulesPaint();
+    let r;
+    try { r = await playersCall({ op: 'setrules', rules: rulesOfDraft(D) }); } catch (e) { r = { ok: false, reason: 'error', why: e.message }; }
+    U.busy = false;
+    if (r.ok) {
+      U.rules = r.rules;
+      U.draft = null;
+      U.msg = { cls: 'tres ok', text: '✓ ' + t('Saved. The leaderboard ranks every player by these rules now.') };
+      renderSettings();
+      return;
+    }
+    if (r.reason === 'norules') { U.reason = 'norules'; U.why = r.why; }
+    if (r.reason === 'badvalue' && /^(startRating|kFactor|placementGames|ranks(\[\d+\](\.(name|min))?)?)$/.test(r.field || '')) {
+      U.bad = { field: r.field, why: r.why };
+      U.msg = { cls: 'tres bad', text: '✗ ' + t('Not saved: the server refused the value marked above.') };
+    } else {
+      U.msg = { cls: 'tres bad', text: '✗ ' + I18n.server(r.why || t('The leaderboard server did not answer.')) };
+    }
+    rulesPaint();
+  }, 'Sends these rules to your leaderboard server. It asks first.');
+  save.disabled = U.busy || rulesSame(rulesOfDraft(D), U.rules);
+  const restore = btn('Restore the defaults', 'tiny', () => {
+    const d = U.defaults || DEFAULT_RULES;
+    U.draft = rulesSame(d, U.rules) ? null : rulesDraft(d);
+    U.bad = null;
+    U.msg = { cls: 'tres', text: U.draft ? t('The defaults are in the form. Press Save rules to use them.') : t('Your leaderboard uses the defaults already.') };
+    rulesPaint();
+  }, 'Fills the form with the rules every leaderboard server starts with. Nothing changes until you press Save rules.');
+  const kids = [save, restore];
+  if (U.draft) {
+    kids.push(btn(t('Cancel'), 'tiny', () => { U.draft = null; U.bad = null; U.msg = null; rulesPaint(); },
+      'Puts back the rules the server has now.'));
+  }
+  for (const b of kids.slice(1)) b.disabled = U.busy;
+  out = span(U.msg ? U.msg.cls : 'tres', U.msg ? U.msg.text : '');
+  const sr = ui.row(det, 'Your changes', 'Nothing reaches the server until you press Save rules.', wrap(...kids));
+  sr.appendChild(out);
+  const kh = document.createElement('div');
+  kh.className = 'fhint';
+  det.appendChild(kh);
+  U.keyHint = kh;
+  rulesKeyHint();
+  if (focusEl) { U.focus = null; focusEl.focus(); }
+}
+
 async function renderHosting(host) {
   const gen = (renderHosting.gen = (renderHosting.gen || 0) + 1);
   if (!HOSTING) {
@@ -11282,6 +11779,8 @@ async function renderHosting(host) {
         if (r.identityUrl) state.roster.identityUrl = r.identityUrl; else delete state.roster.identityUrl;
         if (r.onlineName) state.roster.onlineName = true; else delete state.roster.onlineName;
         if (r.leaderboardPage === 'board') state.roster.leaderboardPage = 'board'; else delete state.roster.leaderboardPage;
+        if (r.leaderboardLookStored) state.roster.leaderboardLook = r.leaderboardLookStored;
+        else delete state.roster.leaderboardLook;
         if (r.queueMode && r.queueMode.mode !== 'single') state.roster.queueMode = { mode: r.queueMode.mode, size: r.queueMode.size };
         else delete state.roster.queueMode;
       }
@@ -11494,7 +11993,7 @@ async function renderHosting(host) {
   if (H.identityAvailable) {
     const det = group('Leaderboard', 'names, ratings, a ranking', !!H.identityUrl);
     // COPY FROM BUNDLE: another bundle's online setup (its leaderboard address,
-    // online menu, match mode and leaderboard page) in one click, so a small
+    // online menu, match mode, leaderboard page and board look) in one click, so a small
     // test bundle needs nothing typed again. Shown only when one exists.
     if (!READ_ONLY) {
       const cp = document.createElement('div');
@@ -11513,7 +12012,7 @@ async function renderHosting(host) {
         const go = document.createElement('button');
         go.className = 'tiny';
         go.textContent = 'Copy';
-        go.title = 'Put that bundle\u2019s leaderboard address, online menu, match mode and leaderboard page into this bundle, replacing what this one has. The relay and TURN are this install\u2019s already.';
+        go.title = 'Put that bundle\u2019s leaderboard address, online menu, match mode, leaderboard page and board look into this bundle, replacing what this one has. The relay and TURN are this install\u2019s already.';
         go.onclick = () => commit({ from: pick.value }, '/api/online-setup/copy');
         const box = document.createElement('span');
         box.append(pick, ' ', go);
@@ -11592,7 +12091,7 @@ async function renderHosting(host) {
       pick.onchange = () => commit({ leaderboardPage: pick.value });
       row(det, 'Leaderboard page', 'The page your Website export puts next to the game as leaderboard.html.', pick);
       hint(det, pick.value === 'board'
-        ? t('An arcade-style attract loop of the top 8: the places slide in, the board climbs, 1st place opens up.')
+        ? t('An arcade-style attract loop of the top 8, in the format, header, fonts and colors you choose below.')
           // THE CHARACTER ART (tools/extract-charart.js): made from this
           // bundle's own characters into its own leaderboard-art/ folder, by
           // every Website export of a bundle with a leaderboard and by the
@@ -11600,6 +12099,502 @@ async function renderHosting(host) {
           // draws the board without it, and only there is this said.
           + (H.boardArtTool || H.boardArt ? '' : ' ' + t('This copy makes no character art for it, so each row shows the place, tier, name, record and rating with no portrait, and 1st place opens without a win pose.'))
         : 'A simple table of the top 100: place, name, tier, rating, wins and losses.');
+      // THE BOARD'S LOOK (leaderboardlook.js): its format, header, fonts and
+      // colors. Each change is one save of the whole look; the export writes
+      // it into the page's RANKING block and the preview below passes it as
+      // ?look=. The plain standings take only its words and rank colors.
+      const look = H.leaderboardLook || { header: 'banner', format: 'classic', fonts: {}, colors: { preset: 'classic' } };
+      const LT = H.lookTables || { fonts: {}, presets: {}, customKeys: [] };
+      const saveLook = (part) => commit({ leaderboardLook: Object.assign({}, look, part) });
+      const options = (sel, list) => {
+        for (const [v, label, raw] of list) {
+          const o = document.createElement('option'); o.value = v; o.textContent = label;
+          if (raw) o.translate = false;   // a font's or a Studio look's own name
+          sel.appendChild(o);
+        }
+      };
+      // Folded parts of the look, closed until opened (the page's own words
+      // and shields need nothing set) and kept open across the redraw each
+      // save causes.
+      const fold = (label, count, flag) => {
+        const d = document.createElement('details');
+        d.className = 'lbsub';
+        d.open = !!renderHosting[flag];
+        d.addEventListener('toggle', () => { renderHosting[flag] = d.open; });
+        const s = document.createElement('summary');
+        const nm = document.createElement('span'); nm.textContent = label;
+        const ct = document.createElement('span'); ct.className = 'gcount'; ct.textContent = count;
+        s.append(nm, ct);
+        d.appendChild(s);
+        det.appendChild(d);
+        return d;
+      };
+
+      // THE PAGE'S WORDS (look.text): each line the chosen page draws, a blank
+      // box for its own. Both pages read the same keys; the plain standings
+      // show five of them (its heading and the two messages). The boxes are
+      // translate="no": a box's placeholder is the page's own English, which
+      // it draws whatever language the Studio is in.
+      const TK = LT.textKeys || {};
+      const WORDS = {
+        title: ['Board title', 'Over the top 8, in every format.'],
+        champTitle: ['Champion scene title', 'The classic board’s title while 1st place is shown big.'],
+        champion: ['Champion tag', 'Over 1st place’s name in the classic board’s champion scene and on the broadcast’s card.'],
+        challengers: ['Challengers heading', 'Over 4th to 8th beside the podium.'],
+        vacant: ['Empty place', 'The name shown in a place nobody has reached yet.'],
+        waiting: ['Empty place, second line', 'Under an empty place on the classic board.'],
+        logoMain: ['Logo card, big line', 'The logo card’s biggest words. Blank: your site’s credit, or its title.'],
+        logoSub: ['Logo card, small line', 'The spaced-out line under the big one, shown as you type it. Blank: your site’s title.'],
+        logoFoot: ['Logo card line', 'Under the big line of the logo card.'],
+        enterName: ['Hi-score table foot', 'Under the hi-score table, before its blinking cursor.'],
+        standingsTitle: ['Standings heading', 'Over the plain standings table.'],
+        emptyTitle: ['No matches yet', 'Shown while nobody has played a ranked match.'],
+        emptySub: ['No matches yet, second line', 'The smaller line under No matches yet.'],
+        offlineTitle: ['Server not answering', 'Shown when the page cannot reach your leaderboard server.'],
+        offlineSub: ['Server not answering, second line', 'The smaller line under Server not answering.'],
+      };
+      const STANDINGS_WORDS = ['standingsTitle', 'emptyTitle', 'emptySub', 'offlineTitle', 'offlineSub'];
+      const wordsFold = (keys, label) => {
+        const own = look.text || {};
+        const nWords = keys.filter((k) => own[k]).length;
+        const words = fold(label, nWords === 1 ? t('1 line of your own') : nWords ? t('{n} lines of your own', { n: nWords }) : '', 'wordsOpen');
+        hint(words, t('Each box shows the page’s own words: leave it blank to keep them. Put *stars* around words to draw them in the accent color, as in {example}. Up to {max} characters a line.',
+          { example: '<code translate="no">PLAY A *RANKED MATCH* TO ENTER</code>', max: LT.textMax || 80 }));
+        // The logo card's two big lines have no English of their own: their
+        // boxes show this bundle's site credit and title, which they stand
+        // in for when left blank.
+        const siteWords = {
+          logoMain: H.siteCredit || H.siteTitle || 'WebMUGEN',
+          logoSub: (H.siteTitle || 'WebMUGEN').toUpperCase().split('').join(' '),
+        };
+        for (const key of keys) {
+          if (!WORDS[key] || !(key in TK)) continue;
+          const box = text(own[key] || '', TK[key] || siteWords[key] || '', true);
+          box.maxLength = LT.textMax || 80;
+          box.translate = false;   // its placeholder is the page's own English
+          box.onfocus = () => { renderHosting.wordAt = key; };
+          box.onblur = () => { if (renderHosting.wordAt === key) renderHosting.wordAt = ''; };
+          box.onchange = () => {
+            const next = Object.assign({}, own);
+            const v = box.value.replace(/[<>]/g, '').trim();
+            if (v && v !== TK[key]) next[key] = v; else delete next[key];
+            saveLook({ text: next });
+          };
+          // (The row's tooltip goes on the box's holder: inside translate="no"
+          // it would stay English.)
+          const cell = document.createElement('span');
+          cell.appendChild(box);
+          row(words, WORDS[key][0], WORDS[key][1], cell);
+          // Tabbing from one box to the next saves the first, and the redraw
+          // that follows would drop the caret: it goes back where it was.
+          if (renderHosting.wordAt === key && words.open) box.focus();
+        }
+      };
+
+      // THE PAGE'S BACKGROUND (look.background): a picture, an animated one or
+      // a short video behind either page, sent to the Studio as the file itself
+      // (it checks it and keeps it in the bundle's leaderboard-bg folder), then
+      // how it fills the window and how much of the page's color lies over it.
+      const backgroundRow = () => {
+        const tinyBtn = (label, tip, onclick) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'tiny'; b.textContent = label; b.title = tip;
+          b.onclick = onclick;
+          return b;
+        };
+        const cur = look.background || null;
+        const cell = document.createElement('span');
+        cell.className = 'lbcolors';
+        const out = document.createElement('span');
+        out.className = 'tres';
+        const file = document.createElement('input');
+        file.type = 'file';
+        file.accept = (LT.bgTypes || ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm']).join(',');
+        file.hidden = true;
+        const use = tinyBtn(cur ? 'Another file…' : 'Use a picture or video…',
+          'A PNG, JPEG, WebP or GIF picture (animated ones play), or an MP4 or WebM video, which plays muted and loops.', () => file.click());
+        file.onchange = async () => {
+          const f = file.files && file.files[0];
+          file.value = '';
+          if (!f) return;
+          use.disabled = true;
+          out.className = 'tres';
+          out.textContent = t('saving…');
+          try {
+            const res = await api('/api/leaderboard-background', f, { 'Content-Type': f.type || 'application/octet-stream' });
+            saveLook({ background: { file: res.file, fit: cur ? cur.fit : 'cover', dim: cur ? cur.dim : (LT.bgDimDefault != null ? LT.bgDimDefault : 40) } });
+          } catch (e) {
+            out.className = 'tres bad';
+            out.textContent = '✗ ' + I18n.server(e.message);
+            use.disabled = false;
+          }
+        };
+        cell.append(use, file);
+        if (cur) {
+          const fit = document.createElement('select');
+          options(fit, [['cover', t('Fill the page')], ['contain', t('Show all of it')], ['tile', t('Tile it')]]);
+          fit.value = cur.fit;
+          fit.onchange = () => saveLook({ background: Object.assign({}, cur, { fit: fit.value }) });
+          const dim = document.createElement('input');
+          dim.type = 'range'; dim.min = '0'; dim.max = String(LT.bgDimMax || 90); dim.step = '5';
+          dim.value = String(cur.dim);
+          const shown = document.createElement('span');
+          shown.className = 'dims';
+          const say = () => { shown.textContent = t('{n}% darker', { n: dim.value }); };
+          say();
+          dim.oninput = say;
+          dim.onchange = () => saveLook({ background: Object.assign({}, cur, { dim: Number(dim.value) }) });
+          const dl = document.createElement('label');
+          dl.append(dim, ' ', shown);
+          const name = document.createElement('code');
+          name.translate = false;   // the file's name, as the Studio kept it
+          name.textContent = cur.file;
+          cell.append(fit, dl, tinyBtn('Remove', 'Back to the page’s own backdrop. The file stays in the bundle’s leaderboard-bg folder.', () => saveLook({ background: null })), name);
+        }
+        cell.appendChild(out);
+        row(det, 'Background picture', 'A picture, an animated GIF or WebP, or a short video behind the whole page.', cell);
+        hint(det, cur
+          ? t('Fill the page crops it to cover the window; Show all of it keeps it whole with the page’s color around it. Darker lays more of the page’s color over it, so names stay readable.')
+          : t('A picture, an animated GIF or WebP, or a short MP4 or WebM loop (it plays muted). Up to 10 MB for a picture and 20 MB for a video: a long animation is far smaller as a video. Your Website export puts it beside leaderboard.html in a leaderboard-bg folder - upload it with the rest.'));
+      };
+
+      if (pick.value !== 'board') { backgroundRow(); wordsFold(STANDINGS_WORDS, t('Page text')); }
+      if (pick.value === 'board') {
+        const fmt = document.createElement('select');
+        options(fmt, [['classic', t('Classic board')], ['select', t('Select screen')], ['podium', t('Podium')], ['hiscore', t('Hi-score table')], ['broadcast', t('Broadcast')]]);
+        fmt.value = look.format;
+        fmt.onchange = () => saveLook({ format: fmt.value });
+        row(det, 'Board format', 'How the board lays out its top 8.', fmt);
+        hint(det, {
+          classic: t('The places slide in, the board climbs and 1st place opens up with its win pose.'),
+          select: t('A character-select screen: the cursor walks the top 8, and whoever it is on stands big beside the grid.'),
+          podium: t('The top three do their win poses on stepped blocks; 4th to 8th are listed beside them.'),
+          hiscore: t('The arcade high-score table: type only, each place in its own color.'),
+          broadcast: t('A TV-style overlay: the champion on a slanted card, a ladder for 2nd to 8th and a ticker of records.'),
+        }[fmt.value]);
+
+        const hdr = document.createElement('select');
+        options(hdr, [['banner', t('Banner')], ['ruled', t('Ruled')], ['flat', t('Flat glow')], ['bar', t('Underline bar')]]);
+        hdr.value = look.header;
+        hdr.onchange = () => saveLook({ header: hdr.value });
+        row(det, 'Header style', 'How the board’s title and its logo card are drawn.', hdr);
+        hint(det, {
+          banner: t('Letters on a slanted strip of the accent color that fades out at both ends.'),
+          ruled: t('Light letters between two accent-colored lines that fade out to the sides.'),
+          flat: t('Letters in the accent color with a soft glow.'),
+          bar: t('Light letters over a short bar in the accent color.'),
+        }[hdr.value]);
+
+        // FONTS, one per role; Default is the system font each part has always had.
+        const fontList = [['', t('Default')]].concat(Object.keys(LT.fonts).map((id) => [id, LT.fonts[id], true]));
+        for (const [role, label, tip] of [
+          ['title', 'Title font', 'The title, the logo card and the champion’s tag.'],
+          ['names', 'Name font', 'Player names.'],
+          ['numbers', 'Number font', 'Places and ratings.'],
+          ['text', 'Text font', 'Records, tiers and everything else.'],
+        ]) {
+          const fs = document.createElement('select');
+          options(fs, fontList);
+          fs.value = (look.fonts || {})[role] || '';
+          fs.onchange = () => {
+            const fonts = Object.assign({}, look.fonts);
+            if (fs.value) fonts[role] = fs.value; else delete fonts[role];
+            saveLook({ fonts });
+          };
+          row(det, label, tip, fs);
+        }
+        hint(det, t('Default keeps each part in the system font the board has always used. The fonts you pick go beside leaderboard.html in a leaderboard-fonts folder - upload it with the rest.'));
+
+        // COLORS: a preset, then any of six by hand. Picking a preset starts
+        // over from its colors.
+        const colors = look.colors || { preset: 'classic' };
+        const pre = document.createElement('select');
+        options(pre, [['classic', t('Classic')], ['energy', 'Energy', true], ['wb', 'WB', true], ['djar', 'DJ-AR', true], ['shizuka', 'SHiZUKA', true], ['contrast', t('High contrast')]]);
+        pre.value = colors.preset;
+        pre.onchange = () => saveLook({ colors: { preset: pre.value } });
+        row(det, 'Colors', 'A set of colors to start from: the classic board’s own, or one of the Studio’s looks.', pre);
+        const base = LT.presets[colors.preset] || {};
+        const sw = document.createElement('span');
+        sw.className = 'lbcolors';
+        const COLOR_LABEL = { bg: t('Background'), haze: t('Glow'), accent: t('Accent'), name: t('Names'), score: t('Ratings'), rank: t('Places') };
+        for (const key of LT.customKeys) {
+          const lab = document.createElement('label');
+          const inp = document.createElement('input');
+          inp.type = 'color';
+          inp.value = colors[key] || base[key] || '#000000';
+          inp.onchange = () => saveLook({ colors: Object.assign({}, colors, { [key]: inp.value }) });
+          lab.append(inp, document.createTextNode(' ' + COLOR_LABEL[key]));
+          sw.appendChild(lab);
+        }
+        const customized = LT.customKeys.some((k) => colors[k]);
+        if (customized) {
+          const reset = document.createElement('button');
+          reset.type = 'button'; reset.className = 'tiny'; reset.textContent = t('Reset');
+          reset.title = 'Put the preset’s own colors back.';
+          reset.onclick = () => saveLook({ colors: { preset: colors.preset } });
+          sw.appendChild(reset);
+        }
+        row(det, 'Custom colors', 'Change any of these six; the rest come from the preset.', sw);
+        backgroundRow();
+
+        // The board's words: every line but the plain standings' heading.
+        wordsFold(Object.keys(TK).filter((k) => k !== 'standingsTitle'), t('Board text'));
+
+        // THE RANKS' ICONS (look.ranks): per rank, the shield's two colors and
+        // pips, or a picture of the host's own in its place. The ranks are the
+        // server's (RULES_UI, read when this is opened), and UNRANKED for
+        // players still in their placement games.
+        const R = rulesFor(H.identityUrl);
+        const looks = look.ranks || {};
+        const nIcons = Object.keys(looks).length;
+        const icons = fold(t('Rank icons'), nIcons === 1 ? t('1 rank of your own') : nIcons ? t('{n} ranks of your own', { n: nIcons }) : '', 'iconsOpen');
+        const iconsBody = document.createElement('div');
+        icons.appendChild(iconsBody);
+        const saveRank = (name, patch) => {
+          const all = Object.assign({}, looks);
+          const cur = Object.assign({}, all[name], patch);
+          for (const k of Object.keys(cur)) if (cur[k] === undefined) delete cur[k];
+          if (Object.keys(cur).length) all[name] = cur; else delete all[name];
+          // The look keeps a set number of them, and one past it would be
+          // dropped without a word.
+          const most = LT.rankLooksMax || 24;
+          if (Object.keys(all).length > most) {
+            toast(t('Only {n} ranks can have icons of their own. Reset one that is not a rank any more first.', { n: most }), 'warn');
+            return;
+          }
+          saveLook({ ranks: all });
+        };
+        const tinyBtn = (label, tip, onclick) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'tiny'; b.textContent = label; b.title = tip;
+          b.onclick = onclick;
+          return b;
+        };
+        const rankRow = (name, ranks, gone) => {
+          const lk = looks[name] || {};
+          const st = rankShieldStyle(name, ranks, looks);
+          const r = document.createElement('div');
+          r.className = 'row lbrank';
+          const k = document.createElement('div');
+          k.className = 'k';
+          const pic = document.createElement('span');
+          pic.className = 'rkpic';
+          // The live icon: the picture when there is one (the shield again if
+          // it will not load, as on the board), else the shield.
+          const draw = (s) => {
+            if (!s.image) { pic.replaceChildren(rankShieldSvg(s)); return; }
+            const im = document.createElement('img');
+            im.alt = '';
+            im.onerror = () => pic.replaceChildren(rankShieldSvg(s));
+            im.src = '/ranking/leaderboard-ranks/' + encodeURIComponent(s.image);
+            pic.replaceChildren(im);
+          };
+          draw(st);
+          const b = document.createElement('b');
+          b.textContent = name;
+          b.translate = false;   // the rank's own name, as the board shows it
+          const at = ranks.find((x) => x.name === name);
+          const sec = document.createElement('span');
+          sec.className = 'sec';
+          sec.textContent = ' · ' + (gone ? t('not a rank any more') : at ? t('from {rating}', { rating: at.min }) : t('in placement games'));
+          k.append(pic, b, sec);
+          r.appendChild(k);
+          // The shield's colors and pips: drawn here as they are picked, saved
+          // when the picker closes.
+          const live = Object.assign({}, st);
+          const sw = document.createElement('span');
+          sw.className = 'lbcolors';
+          for (const [key, label] of [['c1', t('Top color')], ['c2', t('Bottom color')]]) {
+            const lab = document.createElement('label');
+            const inp = document.createElement('input');
+            inp.type = 'color';
+            inp.value = st[key];
+            inp.oninput = () => { live[key] = inp.value; if (!live.image) draw(live); };
+            inp.onchange = () => saveRank(name, { [key]: inp.value });
+            lab.append(inp, document.createTextNode(' ' + label));
+            sw.appendChild(lab);
+          }
+          const pips = document.createElement('select');
+          for (let p = 0; p <= (LT.pipsMax || 7); p++) {
+            const o = document.createElement('option'); o.value = String(p); o.textContent = String(p); pips.appendChild(o);
+          }
+          pips.value = String(st.pips);
+          pips.title = 'The dots across the shield.';
+          pips.onchange = () => saveRank(name, { pips: Number(pips.value) });
+          const pl = document.createElement('label');
+          pl.append(pips, document.createTextNode(' ' + t('Pips')));
+          sw.appendChild(pl);
+          r.appendChild(sw);
+          // A PICTURE OF THE HOST'S OWN: sent to the Studio, which checks it and
+          // keeps it in the bundle's leaderboard-ranks folder; the look then
+          // names the file it was kept as.
+          const out = document.createElement('span');
+          out.className = 'tres';
+          const file = document.createElement('input');
+          file.type = 'file';
+          file.accept = (LT.rankImageTypes || ['image/png', 'image/webp', 'image/svg+xml']).join(',');
+          file.hidden = true;
+          const use = tinyBtn(st.image ? 'Another picture…' : 'Use a picture…',
+            'A PNG, WebP or SVG drawn in place of the shield, at its size. An SVG with a script in it, or a link to another file, is refused.', () => file.click());
+          file.onchange = async () => {
+            const f = file.files && file.files[0];
+            file.value = '';
+            if (!f) return;
+            const max = LT.rankImageMaxBytes || 262144;
+            if (f.size > max) {
+              out.className = 'tres bad';
+              out.textContent = '✗ ' + t('{file} is {size} KB, and a rank picture can be {max} KB at most.', { file: f.name, size: Math.ceil(f.size / 1024), max: Math.round(max / 1024) });
+              return;
+            }
+            use.disabled = true;
+            out.className = 'tres';
+            out.textContent = t('saving…');
+            try {
+              const data = await new Promise((ok, no) => {
+                const rd = new FileReader();
+                rd.onload = () => ok(String(rd.result));
+                rd.onerror = () => no(rd.error || new Error(t('Could not read {file}.', { file: f.name })));
+                rd.readAsDataURL(f);
+              });
+              const res = await api('/api/leaderboard-rank-image', JSON.stringify({ rank: name, type: f.type, data }));
+              saveRank(name, { image: res.file });
+            } catch (e) {
+              out.className = 'tres bad';
+              out.textContent = '✗ ' + I18n.server(e.message);
+              use.disabled = false;
+            }
+          };
+          const kids = [use, file];
+          if (lk.image) {
+            kids.push(tinyBtn('Remove picture', 'Draws the shield again. The picture stays in the bundle’s leaderboard-ranks folder.',
+              () => saveRank(name, { image: undefined })));
+          }
+          if (lk.c1 || lk.c2 || lk.pips != null) {
+            kids.push(tinyBtn(t('Reset'), 'Puts back this rank’s own colors and pips.', () => saveRank(name, { c1: undefined, c2: undefined, pips: undefined })));
+          }
+          const w = document.createElement('span');
+          w.className = 'hbtns';
+          w.append(...kids);
+          r.append(w, out);
+          return r;
+        };
+        const paintIcons = () => {
+          if (!iconsBody.isConnected) return;
+          iconsBody.replaceChildren();
+          const ranks = rulesRanks();
+          if (!ranks) {
+            if (R.loading) {
+              const n = document.createElement('div');
+              n.className = 'pnone';
+              n.textContent = 'Reading your server’s ranks…';
+              iconsBody.appendChild(n);
+            } else if (R.reason) {
+              const r = row(iconsBody, t('Problem'), 'What the last request ran into.', tinyBtn(t('Try again'), 'Asks the leaderboard server for its ranks again.', () => rulesLoad()));
+              const s = document.createElement('span');
+              s.className = 'tres bad';
+              s.textContent = '✗ ' + I18n.server(R.why);
+              r.appendChild(s);
+            }
+            return;
+          }
+          hint(iconsBody, R.reason === 'norules'
+            ? t('This leaderboard server is an older version: it has the seven ranks every server starts with, and they cannot be changed. Update it to name your own under <b>Ranked rules</b>.')
+            : t('Your server’s ranks, set under <b>Ranked rules</b>, and {unranked} for players still in their placement games. Give a shield two colors and up to 7 pips, or put a picture of your own in its place: a PNG, WebP or SVG of {max} KB at most. Your Website export puts the pictures beside leaderboard.html in a leaderboard-ranks folder - upload it with the rest.',
+              { unranked: '<b translate="no">UNRANKED</b>', max: Math.round((LT.rankImageMaxBytes || 262144) / 1024) }));
+          const names = ['UNRANKED'].concat(ranks.map((x) => x.name));
+          // An icon set for a name the server has no more: listed last, so it
+          // can be reset (the look keeps only so many).
+          const gone = Object.keys(looks).filter((n) => !names.includes(n));
+          for (const name of names) iconsBody.appendChild(rankRow(name, ranks, false));
+          for (const name of gone) iconsBody.appendChild(rankRow(name, ranks, true));
+        };
+        R.paintIcons = paintIcons;
+        icons.addEventListener('toggle', () => { if (icons.open && !R.rules && !R.loading && !R.reason) rulesLoad(); });
+        paintIcons();
+        if (icons.open && !R.rules && !R.loading && !R.reason) rulesLoad();
+      }
+      const box = document.createElement('div');
+      box.className = 'lbprev';
+      const bar = document.createElement('div'); bar.className = 'bar';
+      const lab = document.createElement('label'); lab.className = 'chk';
+      const sample = document.createElement('input'); sample.type = 'checkbox';
+      sample.checked = !!renderHosting.sample;
+      lab.append(sample, document.createTextNode('Sample data (preview only)'));
+      const open = document.createElement('button'); open.type = 'button'; open.className = 'tiny'; open.textContent = 'Open in its own window';
+      bar.append(lab, open);
+      const frame = document.createElement('iframe');
+      frame.title = 'Leaderboard page preview';
+      // Sample data spreads its players over the server's ranks once they are
+      // read (Rank icons or Ranked rules opened), so the host's own ranks and
+      // their icons show in it; a live board always uses the server's.
+      const sampleRanks = () => {
+        const R = rulesFor(H.identityUrl);
+        return sample.checked && pick.value === 'board' && R.rules ? R.rules.ranks : null;
+      };
+      const url = () => '/ranking/' + (pick.value === 'board' ? 'board' : 'standings') + '.html?server=' + encodeURIComponent(H.identityUrl)
+        + '&title=' + encodeURIComponent(H.siteTitle || 'WebMUGEN') + (H.siteCredit ? '&credit=' + encodeURIComponent(H.siteCredit) : '')
+        // The plain standings read only the words, the rank colors and the background.
+        + '&look=' + encodeURIComponent(JSON.stringify(pick.value === 'board' ? look : { text: look.text, ranks: look.ranks, background: look.background }))
+        + (sample.checked ? '&demo=1' : '')
+        + (sampleRanks() ? '&ranks=' + encodeURIComponent(JSON.stringify(sampleRanks())) : '');
+      let shown = url();
+      frame.src = shown;
+      const reload = () => { shown = url(); frame.src = shown; };
+      sample.onchange = () => { renderHosting.sample = sample.checked; reload(); };
+      RULES_UI.syncPreview = () => { if (frame.isConnected && url() !== shown) reload(); };
+      open.onclick = () => openToolWindow(url(), 'leaderboard-page', 'width=1000,height=640', 'The leaderboard window was blocked.');
+      // THE PREVIEW'S SIZE. The page fits whatever frame it is in, and how it
+      // looks depends on that frame's shape, so the frame can be any shape: a
+      // preset, or dragged by its corner. Kept across redraws
+      // (renderHosting.frameSize).
+      const holder = document.createElement('div');
+      holder.className = 'lbframe';
+      holder.appendChild(frame);
+      const bar2 = document.createElement('div'); bar2.className = 'bar';
+      const sizeSel = document.createElement('select');
+      for (const [v, label] of [['fit', t('Fit the page width')], ['wide', t('16:9 window')], ['classic', t('4:3 window')],
+        ['square', t('Square')], ['phone', t('Phone')], ['custom', t('Your own size')]]) {
+        const o = document.createElement('option'); o.value = v; o.textContent = label; sizeSel.appendChild(o);
+      }
+      const dims = document.createElement('span'); dims.className = 'dims';
+      const howTo = document.createElement('span'); howTo.className = 'dims'; howTo.textContent = 'Drag its corner for any other size.';
+      const sizeLab = document.createElement('label');
+      sizeLab.append(document.createTextNode('Preview size '), sizeSel);
+      bar2.append(sizeLab, dims, howTo);
+      // [width, height, widest] for each preset; each fits the column.
+      const SHAPES = { wide: [16, 9, 960], classic: [4, 3, 720], square: [1, 1, 560], phone: [9, 16, 380] };
+      let applied = '';
+      const applySize = (v, wh) => {
+        if (v === 'fit') { holder.style.width = ''; holder.style.height = ''; }
+        else if (v === 'custom' && wh) { holder.style.width = wh[0] + 'px'; holder.style.height = wh[1] + 'px'; }
+        else if (SHAPES[v]) {
+          const [a, b, widest] = SHAPES[v];
+          const w = Math.min(widest, box.clientWidth || widest);
+          holder.style.width = w + 'px'; holder.style.height = Math.round(w * b / a) + 'px';
+        }
+        applied = holder.style.width + 'x' + holder.style.height;
+        renderHosting.frameSize = { v, wh: v === 'custom' ? wh : null };
+      };
+      sizeSel.onchange = () => applySize(sizeSel.value, [holder.offsetWidth, holder.offsetHeight]);
+      // A drag of the corner sets the frame's own size: that is "Your own size".
+      // The readout is what the page inside sees; what is kept is the frame's
+      // outer size, the one its style sets.
+      new ResizeObserver(() => {
+        dims.textContent = Math.round(holder.clientWidth) + ' × ' + Math.round(holder.clientHeight);
+        const now = holder.style.width + 'x' + holder.style.height;
+        if (holder.style.height && now !== applied) {
+          applied = now; sizeSel.value = 'custom'; renderHosting.frameSize = { v: 'custom', wh: [holder.offsetWidth, holder.offsetHeight] };
+        }
+      }).observe(holder);
+      // The size above the frame; Sample data and the own window under it.
+      box.append(bar2, holder, bar);
+      det.appendChild(box);
+      const was = renderHosting.frameSize || { v: 'fit' };
+      sizeSel.value = was.v;
+      applySize(was.v, was.wh);
+      note(det, 'The preview reads your live leaderboard; tick Sample data to see it full. '
+        + 'Players open it at your site\u2019s address followed by /leaderboard.html.');
+      // Below the preview: the board's character art, made from this bundle.
       if (pick.value === 'board' && H.boardArtTool) {
         const make = document.createElement('button');
         make.type = 'button';
@@ -11638,32 +12633,14 @@ async function renderHosting(host) {
         note(det, 'The board’s portraits and win poses, made from the characters in this build. Your Website export makes them again each time '
           + 'and puts them beside leaderboard.html in a leaderboard-art folder - upload that folder with the rest.');
       }
-      const box = document.createElement('div');
-      box.className = 'lbprev';
-      const bar = document.createElement('div'); bar.className = 'bar';
-      const lab = document.createElement('label'); lab.className = 'chk';
-      const sample = document.createElement('input'); sample.type = 'checkbox';
-      sample.checked = !!renderHosting.sample;
-      lab.append(sample, document.createTextNode('Sample data (preview only)'));
-      const open = document.createElement('button'); open.type = 'button'; open.className = 'tiny'; open.textContent = 'Open in its own window';
-      bar.append(lab, open);
-      const frame = document.createElement('iframe');
-      frame.title = 'Leaderboard page preview';
-      const url = () => '/ranking/' + (pick.value === 'board' ? 'board' : 'standings') + '.html?server=' + encodeURIComponent(H.identityUrl)
-        + '&title=' + encodeURIComponent(H.siteTitle || 'WebMUGEN') + (H.siteCredit ? '&credit=' + encodeURIComponent(H.siteCredit) : '')
-        + (sample.checked ? '&demo=1' : '');
-      frame.src = url();
-      sample.onchange = () => { renderHosting.sample = sample.checked; frame.src = url(); };
-      open.onclick = () => openToolWindow(url(), 'leaderboard-page', 'width=1000,height=640', 'The leaderboard window was blocked.');
-      box.append(bar, frame);
-      det.appendChild(box);
-      note(det, 'The preview reads your live leaderboard; tick Sample data to see it full. '
-        + 'Players open it at your site\u2019s address followed by /leaderboard.html.');
     }
   }
 
-  // ---- players: the names and records on that leaderboard ----
-  if (H.identityAvailable && H.identityUrl) renderPlayers(host, H, { group, row, note, hint, text });
+  // ---- players: the names and records on that leaderboard, then its ranked rules ----
+  if (H.identityAvailable && H.identityUrl) {
+    renderPlayers(host, H, { group, row, note, hint, text });
+    renderRules(host, H, { group, row, note, hint, text });
+  }
 }
 
 function settingRow(d) {
@@ -16211,7 +17188,7 @@ window.renderLifebar = async function renderLifebar(host) {
       <div class="xcolophon">
         <div class="xcolophon-row">
           <span class="bk-imprint" aria-hidden="true" translate="no">energy.jp</span>
-          <span class="xline2"><b translate="no">Mugen Studio 2.1</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
+          <span class="xline2"><b translate="no">Mugen Studio 2.2</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
         </div>
       </div>
     </section>

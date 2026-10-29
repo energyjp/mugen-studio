@@ -328,7 +328,7 @@ const READ_ONLY_ALLOWED = new Set([
 const READ_ONLY_REFUSED = new Map(Object.entries({
   'changing the roster': ['/api/roster', '/api/build-order', '/api/max-matches', '/api/char-props', '/api/settings',
     '/api/keys', '/api/button-style', '/api/local-config', '/api/board-art', '/api/host-setup', '/api/host-use', '/api/host-remove',
-    '/api/online-setup/copy'],
+    '/api/online-setup/copy', '/api/leaderboard-rank-image', '/api/leaderboard-background'],
   'editing a character': ['/api/char-rename', '/api/char-variant', '/api/char-move-edit', '/api/char-move-add',
     '/api/char-edit-revert', '/api/char-air-edit', '/api/char-hit', '/api/char-scale', '/api/char-consts',
     '/api/char-stats', '/api/char-consts-reset', '/api/add-dependency', '/api/fix-pal-applier', '/api/movelist'],
@@ -465,6 +465,22 @@ function hostingState() {
     // The page the Website export writes beside the game when there is a
     // leaderboard, and the names it carries (public/ranking/).
     leaderboardPage: roster.leaderboardPage === 'board' ? 'board' : 'plain',
+    // The Score Ranking board's look (leaderboardlook.js): header, format,
+    // fonts, colors, the board's words and the ranks' icons, and the tables
+    // the tab offers them from (textKeys: each word's key and the board's own
+    // English; the limits a rank picture is held to).
+    leaderboardLook: require('./leaderboardlook').normalize(roster.leaderboardLook),
+    // ...and exactly what roster.json keeps for it (null: no key), which the
+    // page copies into its own roster snapshot.
+    leaderboardLookStored: require('./leaderboardlook').toRoster(roster.leaderboardLook),
+    lookTables: (() => {
+      const L = require('./leaderboardlook');
+      return { formats: L.FORMATS, headers: L.HEADERS, roles: L.ROLES, fonts: L.FONTS, presets: L.PRESETS, customKeys: L.CUSTOM_KEYS,
+        textKeys: L.TEXT_KEYS, textMax: L.TEXT_MAX, rankLooksMax: L.RANK_LOOKS_MAX, pipsMax: L.PIPS_MAX,
+        rankImageTypes: Object.keys(L.RANK_IMAGE_TYPES), rankImageMaxBytes: L.RANK_IMAGE_MAX_BYTES,
+        bgTypes: Object.keys(L.BG_TYPES), bgImageMaxBytes: L.BG_IMAGE_MAX_BYTES, bgVideoMaxBytes: L.BG_VIDEO_MAX_BYTES,
+        bgFits: L.BG_FITS, bgDimDefault: L.BG_DIM_DEFAULT, bgDimMax: L.BG_DIM_MAX };
+    })(),
     // The board draws portraits and win poses from leaderboard-art/: the
     // ACTIVE bundle's own folder (layout.LEADERBOARD_ART; for the checkout's
     // Main, the private site's folder beside the program). The Website export
@@ -1108,7 +1124,7 @@ async function handleApi(req, res, pathname) {
     }
     // THE ONLINE SETUP OF EVERY BUNDLE (bundles.onlineSetups): which bundles
     // hold one, for the New-bundle checkbox and Settings > Online's Copy from
-    // bundle. POST /api/online-setup/copy { from } puts that bundle's four
+    // bundle. POST /api/online-setup/copy { from } puts that bundle's five
     // values into the open one, replacing its own (a value the source has not
     // set is cleared), and answers like /api/local-config.
     if (pathname === '/api/online-setups' && req.method === 'GET') {
@@ -3086,7 +3102,8 @@ async function handleApi(req, res, pathname) {
       }
       if (Object.keys(patch).length) localConfig.save(patch);
       if (typeof body.identityUrl === 'string' || typeof body.onlineName === 'boolean'
-          || typeof body.leaderboardPage === 'string' || (body.queueMode && typeof body.queueMode === 'object')) {
+          || typeof body.leaderboardPage === 'string' || (body.queueMode && typeof body.queueMode === 'object')
+          || (body.leaderboardLook && typeof body.leaderboardLook === 'object')) {
         // Read-modify-write on disk, like /api/settings - never the page's
         // snapshot, which /api/roster warns about.
         const roster = vfslib.readRoster();
@@ -3108,6 +3125,11 @@ async function handleApi(req, res, pathname) {
           const q = require('./queuemode').toRoster(body.queueMode);
           if (q) roster.queueMode = q; else delete roster.queueMode;
         }
+        // The board's look: the banner header is the default, stored as no key.
+        if (body.leaderboardLook && typeof body.leaderboardLook === 'object') {
+          const l = require('./leaderboardlook').toRoster(body.leaderboardLook);
+          if (l) roster.leaderboardLook = l; else delete roster.leaderboardLook;
+        }
         vfslib.writeRoster(roster);
         invalidateVfs();   // onlineName and queueMode are build-time inputs to vfslib
       }
@@ -3125,6 +3147,71 @@ async function handleApi(req, res, pathname) {
       const r = makeBoardArt();
       const skipped = (r.rows || []).filter((x) => x.skipped).map((x) => ({ name: x.name, why: x.skipped }));
       return json(res, 200, Object.assign(hostingState(), { made: { chars: r.chars, skipped } }));
+    }
+
+    // A RANK'S OWN ICON, in place of its shield: one PNG, WebP or SVG the
+    // host picked, kept in the active bundle's rank-picture folder
+    // (layout.LEADERBOARD_RANKS) under a name made from the rank and the
+    // picture's own hash, so the same picture twice is one file. Checked
+    // whole first (leaderboardlook.rankImageFile: the type, 256 KB, the bytes,
+    // an SVG's contents). This only keeps the file; the look names it when
+    // the page saves the look (/api/local-config), as with every other part
+    // of it.
+    if (pathname === '/api/leaderboard-rank-image' && req.method === 'POST') {
+      const raw = await readBody(req);
+      // 256 KB in base64 inside a little JSON, with room to spare.
+      if (raw.length > 400 * 1024) return json(res, 400, { error: 'That picture is over 256 KB. A rank icon is drawn small: save it smaller and try again.' });
+      const body = JSON.parse(raw.toString('utf8') || '{}');
+      let pic;
+      try { pic = require('./leaderboardlook').rankImageFile(body); } catch (e) { return json(res, 400, { error: e.message }); }
+      const dir = layout.LEADERBOARD_RANKS;
+      const file = path.join(dir, pic.name);
+      fs.mkdirSync(dir, { recursive: true });
+      if (!fs.existsSync(file)) {
+        // Written beside it and moved into place, so a picture cut off halfway
+        // never sits under the name its hash promises.
+        const part = file + '.part-' + process.pid;
+        fs.writeFileSync(part, pic.buf);
+        fs.renameSync(part, file);
+      }
+      return json(res, 200, { ok: true, file: pic.name });
+    }
+
+    // THE PAGE'S BACKGROUND: one picture, animated picture or short video,
+    // sent as the file itself (its type in Content-Type), not as base64 in
+    // JSON: a 20 MB video would be a 27 MB request held whole. Read only up
+    // to the larger cap and refused past it, then checked like a rank picture
+    // (leaderboardlook.backgroundFile: the type, the size for its kind, the
+    // bytes) and kept in the bundle's background folder
+    // (layout.LEADERBOARD_BG) under its hash. The look names it when the page
+    // saves the look.
+    if (pathname === '/api/leaderboard-background' && req.method === 'POST') {
+      const L = require('./leaderboardlook');
+      const cap = Math.max(L.BG_IMAGE_MAX_BYTES, L.BG_VIDEO_MAX_BYTES);
+      const chunks = [];
+      let got = 0, over = false;
+      await new Promise((resolve, reject) => {
+        req.on('data', (c) => {
+          if (over) return;
+          got += c.length;
+          if (got > cap) { over = true; chunks.length = 0; return; }
+          chunks.push(c);
+        });
+        req.on('end', resolve);
+        req.on('error', reject);
+      });
+      if (over) return json(res, 400, { error: 'That file is over 20 MB. Make the loop shorter or smaller and try again.' });
+      let bg;
+      try { bg = L.backgroundFile(req.headers['content-type'], Buffer.concat(chunks)); } catch (e) { return json(res, 400, { error: e.message }); }
+      const dir = layout.LEADERBOARD_BG;
+      const file = path.join(dir, bg.name);
+      fs.mkdirSync(dir, { recursive: true });
+      if (!fs.existsSync(file)) {
+        const part = file + '.part-' + process.pid;
+        fs.writeFileSync(part, bg.buf);
+        fs.renameSync(part, file);
+      }
+      return json(res, 200, { ok: true, file: bg.name });
     }
 
     if (pathname === '/api/local-config/test' && req.method === 'POST') {
@@ -3615,10 +3702,17 @@ const EXT_TYPES = {
   // subresource that gets refused on a strict content-type, and it costs a line.
   '.png': 'image/png',
   '.webp': 'image/webp',
+  // a leaderboard's background (public/ranking, leaderboardlook.js BG_TYPES)
+  '.jpg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
-  // the booklet's bundled faces (public/fonts, booklet.css)
+  // the booklet's bundled faces (public/fonts, booklet.css), and the Score
+  // Ranking board's (public/ranking/leaderboard-fonts)
   '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
   '.ogg': 'audio/ogg',
   '.wav': 'audio/wav',
   '.mp3': 'audio/mpeg',
@@ -3943,6 +4037,50 @@ function routeRequest(req, res) {
     try { file = path.resolve(ART, decodeURIComponent(pathname.slice('/ranking/leaderboard-art/'.length))); } catch (e) { /* bad escape */ }
     if (file && file.startsWith(ART + path.sep) && /\.(png|json)$/i.test(file)) serveFile(req, res, file);
     else { res.writeHead(404); res.end(); }
+    return;
+  }
+
+  // ...and leaderboard-ranks/ the same way: the rank icons the host gave
+  // (layout.LEADERBOARD_RANKS). Only a name the look can hold - one file
+  // directly in the folder, a PNG, a WebP or an SVG - and only while it is
+  // really in there, not a link out of it. An SVG goes out under the same
+  // policy as a language pack's flag: nothing in it runs or loads.
+  if (pathname.startsWith('/ranking/leaderboard-ranks/')) {
+    const L = require('./leaderboardlook');
+    let name = '';
+    try { name = decodeURIComponent(pathname.slice('/ranking/leaderboard-ranks/'.length)); } catch (e) { /* bad escape */ }
+    const dir = path.resolve(layout.LEADERBOARD_RANKS);
+    let inside = false;
+    if (L.RANK_IMAGE_RE.test(name)) {
+      try {
+        const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+        inside = path.dirname(fold(fs.realpathSync.native(path.join(dir, name)))) === fold(fs.realpathSync.native(dir));
+      } catch (e) { inside = false; }
+    }
+    if (!inside) { res.writeHead(404); res.end(); return; }
+    serveFile(req, res, path.join(dir, name), /\.svg$/.test(name)
+      ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'X-Content-Type-Options': 'nosniff' }
+      : { 'X-Content-Type-Options': 'nosniff' });
+    return;
+  }
+
+  // ...and leaderboard-bg/: the page's background (layout.LEADERBOARD_BG),
+  // by the same rules - a name the look can hold, really in the folder.
+  // serveFile answers byte ranges, which a video needs to loop and seek.
+  if (pathname.startsWith('/ranking/leaderboard-bg/')) {
+    const L = require('./leaderboardlook');
+    let name = '';
+    try { name = decodeURIComponent(pathname.slice('/ranking/leaderboard-bg/'.length)); } catch (e) { /* bad escape */ }
+    const dir = path.resolve(layout.LEADERBOARD_BG);
+    let inside = false;
+    if (L.BG_FILE_RE.test(name)) {
+      try {
+        const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+        inside = path.dirname(fold(fs.realpathSync.native(path.join(dir, name)))) === fold(fs.realpathSync.native(dir));
+      } catch (e) { inside = false; }
+    }
+    if (!inside) { res.writeHead(404); res.end(); return; }
+    serveFile(req, res, path.join(dir, name), { 'X-Content-Type-Options': 'nosniff' });
     return;
   }
 

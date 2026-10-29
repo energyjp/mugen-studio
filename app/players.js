@@ -21,7 +21,21 @@
 //                                                  | {ok:false, reason:'nosuchplayer'|'badvalue', field}
 //   POST   /admin/mugen/leaderboard/reset          {ok, cleared}    (the names stay claimed)
 //   GET    /admin/mugen/leaderboard/export         {exported, players:{key: row}, pending:{open, done}, ok}
+//   PUT    /admin/mugen/leaderboard/rules          {ok, rules}
+//                                                  | 400 {ok:false, reason:'badvalue', field, why}
 //   a wrong or missing key                         403 {error:'forbidden'}
+//
+// and one public route, asked with no key at all:
+//
+//   GET    /mugen/leaderboard/rules                {ok, rules, defaults}
+//
+// THE RANKED RULES. rules = { startRating, kFactor, placementGames, ranks:
+// [{name, min}] high to low }: what a new player starts at, the Elo K, the
+// counted games before a rank shows, and the ranks by the rating each starts
+// at. Each server checks a whole set before it keeps it and derives every
+// player's rank from it when it answers, so a change shows on the whole board
+// at once and no stored rating moves. 'rules' reads them, 'setrules' sends a
+// whole set back; a server from before them has neither route ('norules').
 //
 // What differs lives in ADAPTERS and the few lines that name a kind:
 //   - THE KEY. The kit reads it ONLY from the x-admin-key header (router.js,
@@ -89,7 +103,8 @@ const NAME_RE = /^[A-Za-z0-9_.-]{3,12}$/;
 const ROW_RE = /^[^\/\\\x00-\x1f\x7f]{1,40}$/;
 // The numbers both servers let an admin correct (their PATCHABLE list).
 const EDITABLE = ['rating', 'peakRating', 'wins', 'losses', 'games', 'streak', 'bestStreak'];
-const OPS = new Set(['state', 'test', 'forget', 'list', 'newcode', 'release', 'remove', 'edit', 'reset', 'export']);
+const OPS = new Set(['state', 'test', 'forget', 'list', 'newcode', 'release', 'remove', 'edit', 'reset', 'export', 'rules', 'setrules']);
+const RULES_PATH = '/mugen/leaderboard/rules';
 
 // address -> 'kit' | 'other', learned once per run of the Studio.
 const kinds = new Map();
@@ -164,9 +179,12 @@ async function kindOf(c) {
 }
 
 // One admin call. Resolves to the reply's JSON object; every failure becomes a
-// PlayersError with a sentence for the page.
-async function remote(c, method, p, body, timeoutMs) {
-  const t = timeoutMs || c.timeoutMs;
+// PlayersError with a sentence for the page. opts.refusals: a 400 that is the
+// server's own refusal ({ok:false, reason}) is handed back like a 200, for
+// the routes that answer a bad value that way (the rules).
+async function remote(c, method, p, body, opts) {
+  const o = opts || {};
+  const t = o.timeoutMs || c.timeoutMs;
   const a = ADAPTERS[c.kind](c.dial, p, c.key);
   const init = { method, headers: Object.assign({}, a.headers), redirect: 'manual', signal: AbortSignal.timeout(t) };
   // A body only where there is one: a JSON content type with no body is a 400
@@ -199,11 +217,67 @@ async function remote(c, method, p, body, timeoutMs) {
   if (st >= 500) throw new PlayersError('server', 'The leaderboard server had an error (' + st + '). Try again in a minute.');
   let j = null;
   try { j = JSON.parse(text); } catch (e) { j = null; }
-  if (st < 200 || st >= 300) throw new PlayersError('server', 'The leaderboard server answered ' + st + '.');
+  const refusal = st === 400 && o.refusals && j && typeof j === 'object' && !Array.isArray(j) && j.ok === false && typeof j.reason === 'string';
+  if ((st < 200 || st >= 300) && !refusal) throw new PlayersError('server', 'The leaderboard server answered ' + st + '.');
   if (!j || typeof j !== 'object' || Array.isArray(j)) {
     throw new PlayersError('garbled', 'The leaderboard server answered, but not with anything the Studio can read.');
   }
   return j;
+}
+
+// The public read of the rules: no key, so no kind to know and no https rule.
+// Resolves to the reply's JSON object, or null when the server has no such
+// route (a 404 or 405, or a page that is not JSON: an older server, or a
+// site that answers every address with its own page).
+async function publicGet(c, p) {
+  let res;
+  try { res = await c.fetch(c.dial + p, { redirect: 'manual', signal: AbortSignal.timeout(c.timeoutMs) }); } catch (e) { throw downError(e, c.timeoutMs); }
+  let text = '';
+  try { text = await res.text(); } catch (e) { text = ''; }
+  const st = res.status;
+  if (st >= 300 && st < 400) {
+    throw new PlayersError('redirect', 'The leaderboard server answered with a move to another address. Put its final address in Leaderboard address above.');
+  }
+  if (st === 404 || st === 405) return null;
+  if (st === 429) throw new PlayersError('busy', 'The leaderboard server says it is too busy. Try again in a minute.');
+  if (st >= 500) throw new PlayersError('server', 'The leaderboard server had an error (' + st + '). Try again in a minute.');
+  if (st < 200 || st >= 300) throw new PlayersError('server', 'The leaderboard server answered ' + st + '.');
+  let j = null;
+  try { j = JSON.parse(text); } catch (e) { j = null; }
+  return j && typeof j === 'object' && !Array.isArray(j) ? j : null;
+}
+
+// A set of rules as a server sent it, in exactly the shape the page draws
+// (whole numbers, and each rank's name and starting rating), or null when it
+// is not one.
+function rulesOf(x) {
+  if (!x || typeof x !== 'object' || Array.isArray(x) || !Array.isArray(x.ranks) || !x.ranks.length || x.ranks.length > 64) return null;
+  const out = {};
+  for (const k of ['startRating', 'kFactor', 'placementGames']) {
+    if (!Number.isInteger(x[k])) return null;
+    out[k] = x[k];
+  }
+  out.ranks = [];
+  for (const r of x.ranks) {
+    if (!r || typeof r !== 'object' || typeof r.name !== 'string' || !r.name || r.name.length > 40 || !Number.isInteger(r.min)) return null;
+    out.ranks.push({ name: r.name, min: r.min });
+  }
+  return out;
+}
+
+// What 'setrules' sends: the four parts of the page's set and nothing else.
+// The server checks every value; a whole number typed into a field and sent
+// as text goes as the number.
+function rulesBody(x) {
+  const num = (v) => (typeof v === 'string' && /^\s*-?\d{1,9}\s*$/.test(v) ? Number(v) : v);
+  return {
+    startRating: num(x.startRating),
+    kFactor: num(x.kFactor),
+    placementGames: num(x.placementGames),
+    ranks: Array.isArray(x.ranks)
+      ? x.ranks.map((r) => (r && typeof r === 'object' && !Array.isArray(r) ? { name: r.name, min: num(r.min) } : r))
+      : x.ranks,
+  };
 }
 
 const seg = (name) => encodeURIComponent(String(name));
@@ -309,7 +383,7 @@ function cleanFields(fields) {
   return { fields: out };
 }
 
-// input: the request body { op, name?, fields?, confirm?, key?, alsoRemove? }.
+// input: the request body { op, name?, fields?, confirm?, key?, alsoRemove?, rules? }.
 // env:   { identityUrl, fetch, dial(u), backupDir, now(), timeoutMs } - the
 //        active bundle's leaderboard address and how to reach it.
 // Resolves to { status, body }: 400 { error, code } for a request the page
@@ -339,6 +413,22 @@ async function run(input, env) {
     kinds.delete(address);
     return done({ forgot: true });
   }
+  const dial = (typeof e.dial === 'function' ? e.dial(address) : address).replace(/\/+$/, '');
+  const norules = () => failed('norules', 'This leaderboard server has no ranked settings: it is an older version. If this Studio set it up,'
+    + ' press Update under Your own servers; any other server has to be updated where it runs.');
+
+  // The rules are public: read with no key, so over plain http too.
+  if (op === 'rules') {
+    const pc = { dial, fetch: e.fetch || globalThis.fetch, timeoutMs: e.timeoutMs || TIMEOUT_MS };
+    let r;
+    try { r = await publicGet(pc, RULES_PATH); } catch (err) {
+      if (err instanceof PlayersError) return failed(err.reason, err.why);
+      throw err;
+    }
+    const rules = r && rulesOf(r.rules);
+    if (!rules) return norules();
+    return done({ rules, defaults: rulesOf(r.defaults) });
+  }
 
   // Asked before anything goes out.
   const name = typeof b.name === 'string' ? b.name.trim() : '';
@@ -356,6 +446,9 @@ async function run(input, env) {
   }
   if (op === 'reset' && String(b.confirm || '').trim().toLowerCase() !== CONFIRM_WORD) {
     return bad('type ' + CONFIRM_WORD + ' to confirm', 'confirm');
+  }
+  if (op === 'setrules' && (!b.rules || typeof b.rules !== 'object' || Array.isArray(b.rules))) {
+    return bad('rules must be the whole set: startRating, kFactor, placementGames and ranks', 'rules');
   }
   if (!safeTransport(address)) {
     return failed('insecure', 'This leaderboard address starts with http://, so the admin key would cross the internet unprotected.'
@@ -380,7 +473,7 @@ async function run(input, env) {
 
   const c = {
     address, key, from, ours: ours(),
-    dial: (typeof e.dial === 'function' ? e.dial(address) : address).replace(/\/+$/, ''),
+    dial,
     fetch: e.fetch || globalThis.fetch,
     timeoutMs: e.timeoutMs || TIMEOUT_MS,
     now: typeof e.now === 'function' ? e.now : () => Date.now(),
@@ -483,6 +576,31 @@ async function run(input, env) {
       return done({ backup });
     }
 
+    if (op === 'setrules') {
+      let r;
+      try { r = await remote(c, 'PUT', '/admin/mugen/leaderboard/rules', rulesBody(b.rules), { refusals: true }); }
+      catch (err) {
+        // No such route: a server from before the rules.
+        if (err instanceof PlayersError && err.reason === 'noadmin') return norules();
+        throw err;
+      }
+      const rules = r.ok === true ? rulesOf(r.rules) : null;
+      if (rules) return done({ rules });
+      if (r.reason === 'badvalue') {
+        const field = typeof r.field === 'string' && /^[A-Za-z0-9_.[\]]{1,40}$/.test(r.field) ? r.field : '';
+        // The server's own sentence, which names the rule the value broke. It
+        // is written from the rule, but it is still another program's text:
+        // one line, short, and never with the key in it.
+        const why = typeof r.why === 'string' ? r.why.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 300) : '';
+        if (!why || why.includes(key)) {
+          return failed('badvalue', field ? 'The leaderboard server refused the value for ' + field + '.'
+            : 'The leaderboard server refused one of the ranked settings.', { field });
+        }
+        return failed('badvalue', why, { field });
+      }
+      throw new PlayersError('garbled', 'The leaderboard server did not say whether the ranked settings were saved.');
+    }
+
     if (op === 'reset') {
       // The copy first; saveBackup throws, and nothing is reset, unless the
       // file is on the disk and reads back whole.
@@ -510,7 +628,7 @@ async function run(input, env) {
 }
 
 module.exports = {
-  run, rowsOf, safeTransport, ADAPTERS, KIT_NAME, CONFIRM_WORD, EDITABLE, TIMEOUT_MS,
+  run, rowsOf, rulesOf, safeTransport, ADAPTERS, KIT_NAME, CONFIRM_WORD, EDITABLE, TIMEOUT_MS, RULES_PATH,
   // For the tests: forget what was learned about each address.
   _forgetKinds: () => kinds.clear(),
 };

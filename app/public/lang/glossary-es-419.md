@@ -280,3 +280,27 @@ language since 2026-10-28. The terms above hold; these are the log's own.
 | excluded from the grid / back on the grid | se excluyó de la cuadrícula / volvió a la cuadrícula | as Excluir de la cuadrícula |
 | nothing to revert to | no hay nada a lo cual revertir | as Revert's own sentence when no starting point was captured |
 | unsaved changes (the note beside E-Select's toolbar) | sin guardar | shortened for room: 94px beside the toolbar at 1400, 65px at 1366; "cambios sin guardar" needs 113 |
+
+## The Score Ranking board and the ranked rules
+
+The board's look (Board text, Rank icons; Page text for the plain standings) and the Ranked rules group under
+Players, in Settings › Online, since 2026-10-28. The terms above hold
+(leaderboard, rating, ranked); these are the new ones.
+
+| English | es-419 | note |
+|---|---|---|
+| the board (the Score Ranking page) | el tablero | as "Formato del tablero"; the leaderboard itself stays "la tabla de clasificación" |
+| rank (GRANDMASTER, GOLD... the band a rating falls in) | nivel | the same word as "tier" in "Récords, niveles y todo lo demás"; the rank names themselves (and UNRANKED) are the board's data, kept as written |
+| Ranked rules | Reglas de ranked | "ranked" kept, as above |
+| start rating | puntuación inicial | |
+| K-factor | factor K | Elo kept |
+| placement games | partidas de posicionamiento | never "de clasificación", which is the leaderboard |
+| From rating (a rank's starting rating) | Puntuación mínima | the column head; "desde {rating}" beside a rank's name |
+| pips (the dots on a rank's shield) | puntos | |
+| rank icon / shield / picture | ícono de nivel / escudo / imagen | |
+| *stars* (marking accent words) | *asteriscos* | |
+| top / bottom color (the shield's) | color de arriba / color de abajo | |
+| the plain standings (page) / Standings heading | la clasificación simple / Título de la clasificación | as "Clasificación simple" under Leaderboard page; Page text = Texto de la página |
+| {name}'s minimum rating (in a refused rule) | la puntuación mínima de {name} | the same sentences come from both leaderboard servers, so one key reads either |
+| Restore the defaults / Puts back... | Restaurar los valores predeterminados / Vuelve a poner... | "los predeterminados" alone drops the noun |
+| markup from outside SVG; a plain or optimized SVG | marcado que no es SVG; SVG simple u optimizado | a rank picture refused for its namespaces |

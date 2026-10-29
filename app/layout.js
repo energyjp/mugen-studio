@@ -375,6 +375,20 @@ const MAIN_CHECKOUT_ART = path.resolve(APP, '..', 'leaderboard-art');
 const LEADERBOARD_ART = ACTIVE_BUNDLE.main && ACTIVE_BUNDLE.mode === 'checkout'
   ? MAIN_CHECKOUT_ART : path.join(CONTENT, 'leaderboard-art');
 
+// THE BOARD'S RANK PICTURES: the icons a host gives a rank in place of its
+// shield (Settings > Online, leaderboardlook.js ranks). Part of the bundle's
+// board like the art, so they live beside it by the same rule: in
+// <bundle>/leaderboard-ranks/, and for the checkout's Main beside the program
+// folder next to the site's art (outside the repository, so nothing there is
+// ever committed; a bundle's is under Content/, which is ignored). The
+// Website export copies the ones the look names beside leaderboard.html.
+const LEADERBOARD_RANKS = ACTIVE_BUNDLE.main && ACTIVE_BUNDLE.mode === 'checkout'
+  ? path.resolve(APP, '..', 'leaderboard-ranks') : path.join(CONTENT, 'leaderboard-ranks');
+// ...and the page's background picture or video (leaderboardlook.js
+// background), by the same rule and for the same reasons.
+const LEADERBOARD_BG = ACTIVE_BUNDLE.main && ACTIVE_BUNDLE.mode === 'checkout'
+  ? path.resolve(APP, '..', 'leaderboard-bg') : path.join(CONTENT, 'leaderboard-bg');
+
 // Whether `dir` is SOME OTHER bundle's leaderboard art: the checkout Main's
 // folder beside the program, or leaderboard-art/ inside any bundle folder that
 // is not the active one. The extractor refuses those, because it rebuilds the
@@ -530,6 +544,8 @@ const WHERE = {
 function dir(name) {
   if (name === 'ikemen-go-src') return IKEMEN_SRC;
   if (name === 'leaderboard-art') return LEADERBOARD_ART;
+  if (name === 'leaderboard-ranks') return LEADERBOARD_RANKS;
+  if (name === 'leaderboard-bg') return LEADERBOARD_BG;
   if (EXTERNAL_ROOT && EXTERNAL_FOLDERS[name]) return path.join(EXTERNAL_ROOT, EXTERNAL.folders[name]);
   const base = WHERE[name];
   if (!base) throw new Error('layout.dir: unknown location "' + name + '"');
@@ -599,7 +615,7 @@ function writeLayoutKeys(patch) {
 module.exports = {
   APP, CONTENT_ROOT, BUNDLE, CONTENT, DEPS, DESKTOP_EXPORT, WEBSITE_EXPORT, IKEMEN_SRC,
   LAYOUT_FILE, ACTIVE_BUNDLE, EXPORT_SUFFIX, bundleSlug, readLayoutFile, writeLayoutKeys,
-  LEADERBOARD_ART, isOtherBundleArt,
+  LEADERBOARD_ART, isOtherBundleArt, LEADERBOARD_RANKS, LEADERBOARD_BG,
   // The user's own files (see the top): '' / beside the program without a
   // "settings" key, in Settings/ with one.
   SETTINGS_DIR, USER_FILE, USER_KEYS, LOCAL_CONFIG_FILE, LOGS_DIR, LANGUAGES_DIR, STARTER_DIR, STARTUP_NOTES,

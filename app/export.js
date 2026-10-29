@@ -406,11 +406,54 @@ function exportSite({ pack = false, v2 = false, public: isPublic = false, dest }
     const src = path.join(ROOT, 'public', 'ranking', page);
     if (fs.existsSync(src)) {
       const cfg = { server: roster.identityUrl, title: roster.siteTitle || 'WebMUGEN', credit: roster.siteCredit || roster.siteTitle || '' };
+      //
+      // colors, and the words and rank icons the host changed. The fonts it
+      //
+      //
+      //
+      const L = require('./leaderboardlook');
+      const own = L.normalize(roster.leaderboardLook);
+      const look = page === 'board.html' ? own : null;
+      if (look) Object.assign(cfg, { header: look.header, format: look.format, fonts: look.fonts, colors: look.colors });
+      // Both pages print the host's words; each reads the lines it has.
+      if (own.text) cfg.text = own.text;
+      // The rank pictures come from the bundle's own folder
+      //
+      //
+      // left out keeps its shield on the board, never a broken picture.
+      const ship = look ? L.shippableRanks(look, layout.LEADERBOARD_RANKS) : null;
+      if (ship && ship.ranks) cfg.ranks = ship.ranks;
+      // The plain standings color each rank's chip with its shield's top
+      // color and draw no shield or picture, so that page gets c1 alone.
+      if (!look && own.ranks) {
+        const ranks = {};
+        for (const [name, r] of Object.entries(own.ranks)) if (r.c1) ranks[name] = { c1: r.c1 };
+        if (Object.keys(ranks).length) cfg.ranks = ranks;
+      }
+      for (const x of ship ? ship.left : []) {
+        console.warn('export: rank picture ' + x.file + (x.why === 'missing' ? ' is not in ' + layout.LEADERBOARD_RANKS
+          : ' was left out: it is an SVG that could run or load something') + ' - the board draws that rank\'s shield');
+      }
+      //
+      //
+      // is not there is left out, and the page keeps its own backdrop.
+      const bg = L.shippableBackground(own, layout.LEADERBOARD_BG);
+      if (bg) cfg.background = bg;
+      else if (own.background) console.warn('export: the background ' + own.background.file + ' is not in ' + layout.LEADERBOARD_BG + ' - the page keeps its own backdrop');
       const html = fs.readFileSync(src, 'utf8');
       const marker = 'window.RANKING = window.RANKING || {};';
       if (!html.includes(marker)) throw new Error('export: ' + page + ' has no RANKING block to fill');
       fs.writeFileSync(path.join(DIST, 'leaderboard.html'),
         html.replace(marker, () => 'window.RANKING = ' + JSON.stringify(cfg).replace(/</g, '\\u003c') + ';'));
+      if (look) {
+        for (const f of L.fontFiles(look)) {
+          copy(path.join(ROOT, 'public', 'ranking', L.FONT_DIR, f), path.join(DIST, L.FONT_DIR, f));
+        }
+        // The fonts' own note (free fan fonts, no license terms) goes with them.
+        if (L.fontFiles(look).length) copy(path.join(ROOT, 'public', 'ranking', L.FONT_DIR, 'FONTS.txt'), path.join(DIST, L.FONT_DIR, 'FONTS.txt'));
+        for (const f of ship ? ship.files : []) copy(path.join(layout.LEADERBOARD_RANKS, f), path.join(DIST, L.RANK_DIR, f));
+      }
+      if (bg) copy(path.join(layout.LEADERBOARD_BG, bg.file), path.join(DIST, L.BG_DIR, bg.file));
     }
   }
   if (isPublic) {

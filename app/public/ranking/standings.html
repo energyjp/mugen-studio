@@ -12,8 +12,13 @@
 
     One fetch: <server>/mugen/leaderboard?limit=N. No libraries, system fonts.
 
+    Its heading and messages are the Score Ranking board's words (the look's
+    text: standingsTitle, emptyTitle/Sub, offlineTitle/Sub), its rank colors
+    the board's (the look's ranks: a rank's c1 colors its chip). RANKING may
+    carry both as text and ranks, the same shapes as the board's.
+
     URL flags (they override RANKING, for previews): ?server=<url>,
-    ?title=<name>, ?demo=1 (sample data).
+    ?title=<name>, ?look=<json> ({ text, ranks }), ?demo=1 (sample data).
 -->
 <script>window.RANKING = window.RANKING || {};</script>
 <style>
@@ -52,15 +57,28 @@
     letter-spacing: .1em; border: 1px solid; }
   .rating { color: var(--score); font-weight: 700; font-size: 16px; }
   .note { color: var(--dim); text-align: center; padding: 40px 16px; line-height: 1.8; }
+  .note > span { font: 600 15px/1.8 "Bahnschrift", "Segoe UI", sans-serif; letter-spacing: .08em; color: var(--ink); }
+  .note small { font-size: 13px; letter-spacing: .04em; }
   .note b { color: var(--accent); font-weight: 600; }
+  h1 b { color: var(--accent); font-weight: inherit; }
   @media (max-width: 560px) { .opt { display: none; } h1 { font-size: 22px; } .meta { margin-left: 0; width: 100%; } }
+  /* The host's background (look.background): the picture or video over the
+     whole window, a layer of the page's color at --bg-dim over it. The table
+     keeps its own panel, so it stays readable whatever is behind it. */
+  #bgmedia, #bgdim { position: fixed; inset: 0; pointer-events: none; }
+  #bgmedia { z-index: -2; background-position: center; background-size: cover; background-repeat: no-repeat; }
+  [data-bg="contain"] #bgmedia { background-size: contain; }
+  [data-bg="tile"] #bgmedia { background-size: auto; background-repeat: repeat; }
+  video#bgmedia { width: 100%; height: 100%; object-fit: cover; }
+  [data-bg="contain"] video#bgmedia { object-fit: contain; }
+  #bgdim { z-index: -1; background: var(--bg); opacity: var(--bg-dim, .4); }
 </style>
 </head>
 <body>
 <main>
   <header>
     <span class="site" id="site"></span>
-    <h1>Rankings</h1>
+    <h1 id="heading">Rankings</h1>
     <span class="meta"><span id="when"></span><button type="button" id="again">Refresh</button></span>
   </header>
   <div class="wrap"><div id="out" class="note">Loading&hellip;</div></div>
@@ -74,12 +92,137 @@
   var TITLE = String(QS.get('title') || CFG.title || '');
   var DEMO = QS.has('demo');
   var LIMIT = 100;
-  document.getElementById('site').textContent = TITLE;
-  document.title = (TITLE ? TITLE + ' - ' : '') + 'Rankings';
+  // The look's text and ranks (the board's): from ?look= (a preview) or RANKING.
+  var LOOK = null;
+  try { LOOK = JSON.parse(QS.get('look') || 'null'); } catch (e) { LOOK = null; }
+  LOOK = LOOK && typeof LOOK === 'object' ? LOOK : {};
+  function pick(k) { return LOOK[k] !== undefined ? LOOK[k] : CFG[k]; }
 
-  // The same tiers and colors as the in-game YOUR RANK and the Score Ranking board.
+  // ---- the page's words -----------------------------------------------------
+  // The Score Ranking board's (leaderboardlook.js TEXT_KEYS), the ones this
+  // page shows: those the host set (trimmed, at most 80 characters, no angle
+  // brackets), the board's English for the rest. A pair of '*' marks words in
+  // the accent color; put up as text, never markup.
+  var TEXT_KEYS = {
+    standingsTitle: 'RANKINGS',
+    emptyTitle: 'NO RANKED MATCHES YET', emptySub: 'PLAY A *RANKED MATCH* ONLINE TO PUT YOUR NAME HERE',
+    offlineTitle: 'COULD NOT REACH THE RANKING SERVER', offlineSub: 'IT MAY BE WAKING UP - TRY AGAIN IN A MOMENT'
+  };
+  var given = pick('text');
+  given = given && typeof given === 'object' && !Array.isArray(given) ? given : {};
+  var TEXT = {}, OWN = {};
+  Object.keys(TEXT_KEYS).forEach(function (key) {
+    var s = typeof given[key] === 'string' ? given[key].replace(/[<>]/g, '').trim().slice(0, 80).trim() : '';
+    TEXT[key] = s || TEXT_KEYS[key];
+    if (s && s !== TEXT_KEYS[key]) OWN[key] = s;
+  });
+  // ---- the background ---------------------------------------------------------
+  // The host's picture, animated picture or short video behind the page
+  // (look.background), as on the board: a name checked to be one file in
+  // leaderboard-bg/, under a layer of the page's own color (dim, in percent).
+  // A video is muted and loops, and stays on its first frame for anyone who
+  // asked for less motion.
+  (function () {
+    var b = pick('background');
+    if (!b || typeof b !== 'object' || typeof b.file !== 'string' || !/^bg-[0-9a-f]{12}\.(png|jpg|webp|gif|mp4|webm)$/.test(b.file)) return;
+    var fit = ['cover', 'contain', 'tile'].indexOf(b.fit) >= 0 ? b.fit : 'cover';
+    var dim = typeof b.dim === 'string' && b.dim.trim() !== '' ? Number(b.dim) : b.dim;
+    if (!(dim === Math.floor(dim) && dim >= 0 && dim <= 90)) dim = 40;
+    var root = document.documentElement;
+    root.setAttribute('data-bg', fit);
+    root.style.setProperty('--bg-dim', String(dim / 100));
+    var url = 'leaderboard-bg/' + b.file;
+    var video = /\.(mp4|webm)$/.test(b.file);
+    var media = document.createElement(video ? 'video' : 'div');
+    media.id = 'bgmedia';
+    if (video) {
+      media.muted = true; media.loop = true; media.playsInline = true; media.preload = 'auto';
+      media.setAttribute('muted', ''); media.setAttribute('playsinline', '');
+      if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) media.autoplay = true;
+      media.src = url;
+    } else {
+      media.style.backgroundImage = 'url("' + url + '")';
+    }
+    var shade = document.createElement('div');
+    shade.id = 'bgdim';
+    document.body.insertBefore(shade, document.body.firstChild);
+    document.body.insertBefore(media, document.body.firstChild);
+    if (video && media.autoplay) { var playing = media.play(); if (playing && playing.catch) playing.catch(function () {}); }
+  })();
+
+  function accentText(node, s) {
+    node.textContent = '';
+    var parts = String(s == null ? '' : s).split('*');
+    // A '*' without its pair is just a star.
+    if (parts.length % 2 === 0) parts.splice(-2, 2, parts[parts.length - 2] + '*' + parts[parts.length - 1]);
+    parts.forEach(function (part, i) {
+      // A run of spaces keeps its width, as on the board.
+      part = part.replace(/ {2,}/g, function (m) { return m.replace(/ /g, '\u00a0'); });
+      if (!part) return;
+      if (i % 2) { var b = document.createElement('b'); b.textContent = part; node.appendChild(b); }
+      else node.appendChild(document.createTextNode(part));
+    });
+    return node;
+  }
+
+  // ---- ranks ----------------------------------------------------------------
+  // The same colors as the in-game YOUR RANK and the Score Ranking board: the
+  // original seven ranks and UNRANKED their own, any other name the color its
+  // place in the server's list gives it (spread down the seven, top red to
+  // bottom bronze, as the board does), and over either the color the look
+  // gives the rank (its shield's top, c1).
   var TIER = { UNRANKED: '#8b84a8', BRONZE: '#d08b4a', SILVER: '#dfe6f0', GOLD: '#ffe07a', PLATINUM: '#9df3e6',
     DIAMOND: '#b3d4ff', MASTER: '#e0b0ff', GRANDMASTER: '#ffb3b3' };
+  var LADDER = ['GRANDMASTER', 'MASTER', 'DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE'];
+  var RANKS = [];                  // the reply's list, high to low (load)
+  var RANK_LOOK = {};
+  (function () {
+    var rk = pick('ranks');
+    rk = rk && typeof rk === 'object' && !Array.isArray(rk) ? rk : {};
+    // As the board reads them: a name spelled another way is the same rank,
+    // the first one wins.
+    Object.keys(rk).forEach(function (key) {
+      var name = key.trim().toUpperCase(), o = rk[key];
+      if (!/^[A-Z0-9 ._-]{1,16}$/.test(name) || has(RANK_LOOK, name) || !o || typeof o !== 'object') return;
+      if (typeof o.c1 === 'string' && /^#[0-9a-f]{6}$/i.test(o.c1)) RANK_LOOK[name] = o.c1.toLowerCase();
+    });
+  })();
+  function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  // The server's list, or none when it sends none (an older server, which
+  // has only the original seven) or something else.
+  function rankList(v) {
+    if (!Array.isArray(v) || !v.length || v.length > 12) return [];
+    var out = [];
+    for (var i = 0; i < v.length; i++) {
+      var r = v[i] || {};
+      if (typeof r.name !== 'string' || !/^[A-Z0-9 ._-]{1,16}$/.test(r.name) || typeof r.min !== 'number' || !isFinite(r.min)) return [];
+      out.push({ name: r.name, min: r.min });
+    }
+    return out.sort(function (a, b) { return b.min - a.min; });
+  }
+  function mixHex(a, b, t) {
+    var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16), out = 0;
+    [16, 8, 0].forEach(function (s) {
+      var u = (x >> s) & 255, v = (y >> s) & 255;
+      out |= Math.round(u + (v - u) * t) << s;
+    });
+    return '#' + ('00000' + out.toString(16)).slice(-6);
+  }
+  function tierColor(name) {
+    if (has(RANK_LOOK, name)) return RANK_LOOK[name];
+    if (has(TIER, name)) return TIER[name];
+    for (var i = 0; i < RANKS.length; i++) {
+      if (RANKS[i].name !== name) continue;
+      var n = RANKS.length, f = n > 1 ? i * (LADDER.length - 1) / (n - 1) : 0, lo = Math.floor(f);
+      return mixHex(TIER[LADDER[lo]], TIER[LADDER[Math.min(lo + 1, LADDER.length - 1)]], f - lo);
+    }
+    return TIER.UNRANKED;
+  }
+
+  // ---- the table ------------------------------------------------------------
+  document.getElementById('site').textContent = TITLE;
+  accentText(document.getElementById('heading'), TEXT.standingsTitle);
+  document.title = (TITLE ? TITLE + ' - ' : '') + (OWN.standingsTitle ? OWN.standingsTitle.replace(/\*/g, '') : 'Rankings');
   var SAMPLE = [
     { name: 'champion', rating: 1299, tier: 'GRANDMASTER', wins: 110, losses: 17, winRate: 86.6, streak: 6, main: 'kfm' },
     { name: 'rival', rating: 1141, tier: 'DIAMOND', wins: 88, losses: 47, winRate: 65.2, streak: 2, main: 'ryu' },
@@ -91,10 +234,17 @@
   ];
   var out = document.getElementById('out');
 
-  function note(html) { out.className = 'note'; out.innerHTML = html; }
+  // A message in place of the table: a line and a smaller one under it.
+  function note(title, sub) {
+    out.className = 'note';
+    out.textContent = '';
+    out.appendChild(accentText(document.createElement('span'), title));
+    out.appendChild(document.createElement('br'));
+    out.appendChild(accentText(document.createElement('small'), sub));
+  }
   function cell(tr, text, cls) { var td = document.createElement('td'); if (cls) td.className = cls; td.textContent = text; tr.appendChild(td); return td; }
   function render(players) {
-    if (!players.length) { note('No ranked matches yet.<br>Play a <b>RANKED MATCH</b> online to put your name here.'); return; }
+    if (!players.length) { note(TEXT.emptyTitle, TEXT.emptySub); return; }
     out.className = '';
     out.innerHTML = '<table><thead><tr><th>#</th><th>Player</th><th>Tier</th><th class="num">Rating</th>'
       + '<th class="num">W&ndash;L</th><th class="num opt">Win %</th><th class="num opt">Streak</th></tr></thead><tbody></tbody></table>';
@@ -109,7 +259,7 @@
       if (ch) { var s = document.createElement('small'); s.textContent = (p.main ? 'main ' : 'last ') + ch; nm.appendChild(s); }
       var tierName = p.placement > 0 ? 'UNRANKED' : String(p.tier || 'UNRANKED').toUpperCase();
       var t = document.createElement('span'); t.className = 'tier';
-      t.style.color = t.style.borderColor = TIER[tierName] || TIER.UNRANKED;
+      t.style.color = t.style.borderColor = tierColor(tierName);
       t.textContent = tierName; var td = document.createElement('td'); td.appendChild(t); tr.appendChild(td);
       cell(tr, String(p.rating == null ? '' : p.rating), 'num rating');
       cell(tr, (p.wins || 0) + '–' + (p.losses || 0), 'num');
@@ -123,14 +273,15 @@
     lastRefresh = Date.now();
     document.getElementById('when').textContent = '';
     if (DEMO) { render(SAMPLE); document.getElementById('when').textContent = 'sample data'; return; }
-    if (!SERVER) { note('No leaderboard address is set.<br>Set one in the Studio: Settings &gt; Online &gt; Leaderboard.'); return; }
+    if (!SERVER) { note('No leaderboard address is set.', 'Set one in the Studio: Settings > Online > Leaderboard.'); return; }
     fetch(SERVER + '/mugen/leaderboard?limit=' + LIMIT, { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (b) {
+        RANKS = rankList(b && b.ranks);
         render((b && b.players) || []);
         document.getElementById('when').textContent = 'updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       })
-      .catch(function () { note('Could not reach the ranking server.<br>It may be waking up - try again in a moment.'); });
+      .catch(function () { note(TEXT.offlineTitle, TEXT.offlineSub); });
   }
   document.getElementById('again').onclick = load;
   load();

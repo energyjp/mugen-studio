@@ -1,67 +1,290 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-header="banner" data-format="classic">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Score Ranking</title>
 <!--
     THE SCORE RANKING BOARD: an arcade-style attract loop of a leaderboard
-    server's top 8 - the places slide in, the board climbs, 1st place opens up.
-    One of the two leaderboard pages the Studio offers (Settings > Online); the
-    other is the plain standings page beside it. The Website export writes the
-    chosen one next to the game as leaderboard.html and fills in RANKING below.
+    server's top 8. One of the two leaderboard pages the Studio offers
+    (Settings > Online); the other is the plain standings page beside it. The
+    Website export writes the chosen one next to the game as leaderboard.html
+    and fills in RANKING below.
+
+    Five formats on the same data, art and colors:
+      classic     the places slide in, the board climbs, 1st place opens up
+      select      a character-select screen: the cursor walks the grid and
+                  whoever it is on stands big beside it
+      podium      the top three do their win poses on stepped blocks
+      hiscore     the arcade attract table, type only
+      broadcast   a TV overlay: the champion's card, a ladder, a ticker
+    Each fills its frame, whatever its shape: classic scales a 480-unit stage
+    over a full-window background, the others size everything in --u (the
+    smaller of the window's width and height) and rearrange when it is tall.
 
     Two fetches on load:
       leaderboard-art/manifest.json   character portraits and win-pose frames,
-                                      optional - without them the rows simply
-                                      have no picture
-      <server>/mugen/leaderboard      live standings
+                                      optional - without them there is simply
+                                      no picture
+      <server>/mugen/leaderboard      live standings, and the server's ranks
+    Fonts, when chosen, load from leaderboard-fonts/ beside the page, a host's
+    own rank images from leaderboard-ranks/. Nothing else: no libraries, no
+    build step.
 
-    Everything else is local: no libraries, no build step, system fonts.
+    RANKING (the export fills it): server, title, credit, header, format,
+    fonts { title, names, numbers, text }, colors { preset, ...custom },
+    text { <key>: words } and ranks { <RANK>: { c1, c2, pips, image } }.
 
     URL flags (they override RANKING, for previews):
       ?server=<url>          the leaderboard server
       ?title=<name>          the site's name, shown on the logo card
       ?credit=<text>         the big logo line (defaults to the title)
+      ?look=<json>           { header, format, fonts, colors, text, ranks } at
+                             once (the Studio's preview)
+      ?ranks=<json>          the server's ranks, [{ name, min }] high to low,
+                             for the sample data: it then spreads over them, so
+                             a preview shows the host's own (a live reply's
+                             list always wins)
+      ?format=<format>       one of the five above
+      ?header=<look>         banner (default), ruled, flat or bar: how the title and
+                             the logo card are drawn
+      ?colors=<preset>       classic (default), energy, wb, djar, shizuka, contrast
       ?demo=1                sample data
       ?scenes=board,logo     override the attract rotation (see SCENES below;
                              'champ' is built and available but not in the
-                             default rotation)
+                             default rotation, classic only)
       ?scene=board|champ|logo   hold one scene, no rotation
-      ?still=1               freeze the board before 1st place expands
+      ?still=1               freeze the board (classic: before 1st place expands;
+                             select: on 1st place)
 -->
 <script>window.RANKING = window.RANKING || {};</script>
+<script>
+    // THE LOOK, applied before the page paints: the header and format as
+    // attributes on <html>, the colors as custom properties, the fonts as
+    // @font-face rules for the roles that name one. Unknown values fall back
+    // to the defaults (banner, classic, the classic colors, each element's
+    // own system font). The tables here match the Studio's leaderboardlook.js.
+    (function () {
+        var R = window.RANKING || {};
+        var QS = new URLSearchParams(location.search);
+        var look = null;
+        try { look = JSON.parse(QS.get('look') || 'null'); } catch (e) { look = null; }
+        look = look && typeof look === 'object' ? look : {};
+        function pick(k) { return look[k] !== undefined ? look[k] : R[k]; }
+
+        var HEADERS = ['banner', 'ruled', 'flat', 'bar'];
+        var FORMATS = ['classic', 'select', 'podium', 'hiscore', 'broadcast'];
+        var FONTS = {
+            'alpha-1': 'Alpha 1', 'arcade-configuration': 'Arcade Configuration', 'arcade-service-2': 'Arcade Service 2',
+            'arcade-service-3': 'Arcade Service 3', 'bizarre-future': 'Bizarre Future', 'cota': 'COTA',
+            'hyper-combo': 'Hyper Combo', 'inkz-monster-savior': 'INKZ Monster Savior', 'kof-2003': 'KOF 2003',
+            'msh-name': 'MSH Name', 'mvc': 'MVC', 'mvc-heros-name': 'MvC Hero\'s Name', 'second-impact': 'Second Impact',
+            'sf3-new-generation': 'SF3 New Generation', 'street-fighter-alpha': 'Street Fighter Alpha', 'tournament': 'Tournament'
+        };
+        // Each role's fallback is the font that element has with nothing chosen.
+        var ROLES = { title: '\'Arial Black\', \'Bahnschrift\', sans-serif', names: '\'Bahnschrift\', \'Arial Black\', sans-serif',
+                      numbers: '\'Arial Black\', \'Bahnschrift\', sans-serif', text: '\'Bahnschrift\', \'Arial Black\', \'Segoe UI\', sans-serif' };
+        var COLOR_KEYS = ['bg', 'haze', 'accent', 'onaccent', 'name', 'score', 'rank', 'ink', 'dim', 'stat'];
+        var PRESETS = {
+            classic:  { bg: '#05040a', haze: '#241a3a', accent: '#ff8800', onaccent: '#ffffff', name: '#ff5533', score: '#46e07a', rank: '#b98cff', ink: '#d0d0e0', dim: '#6a6a86', stat: '#9fd8ff' },
+            energy:   { bg: '#060607', haze: '#2a1210', accent: '#d8391f', onaccent: '#ffffff', name: '#eff0ec', score: '#ff8800', rank: '#c9cac6', ink: '#eff0ec', dim: '#7c7d82', stat: '#ffb27a' },
+            wb:       { bg: '#040e26', haze: '#10285e', accent: '#2a62f0', onaccent: '#ffffff', name: '#85bfff', score: '#ff8800', rank: '#aec3ec', ink: '#edf3ff', dim: '#5b7bc4', stat: '#ffd0a0' },
+            djar:     { bg: '#14040a', haze: '#45101a', accent: '#d0142f', onaccent: '#ffffff', name: '#ff8800', score: '#fff5f2', rank: '#f7cdc4', ink: '#fff5f2', dim: '#b0505a', stat: '#ffc3a8' },
+            shizuka:  { bg: '#050806', haze: '#221c3a', accent: '#e8b92c', onaccent: '#1a1200', name: '#cc99ff', score: '#e8b92c', rank: '#d2c6ef', ink: '#f3efe3', dim: '#7d7896', stat: '#d2c6ef' },
+            contrast: { bg: '#000000', haze: '#1a1a1a', accent: '#ffa31a', onaccent: '#000000', name: '#ffffff', score: '#ffa31a', rank: '#f2f2f2', ink: '#ffffff', dim: '#a6a6a6', stat: '#ffffff' }
+        };
+        var HEX = /^#[0-9a-f]{6}$/i;
+        var root = document.documentElement;
+
+        var header = QS.get('header') || pick('header');
+        if (HEADERS.indexOf(header) < 0) header = 'banner';
+        var format = QS.get('format') || pick('format');
+        if (FORMATS.indexOf(format) < 0) format = 'classic';
+        root.setAttribute('data-header', header);
+        root.setAttribute('data-format', format);
+
+        var colors = pick('colors');
+        colors = colors && typeof colors === 'object' ? colors : {};
+        var preset = QS.get('colors') || colors.preset;
+        if (!PRESETS[preset]) preset = 'classic';
+        var pal = {};
+        for (var k in PRESETS[preset]) pal[k] = PRESETS[preset][k];
+        COLOR_KEYS.forEach(function (key) { if (HEX.test(colors[key] || '')) pal[key] = colors[key]; });
+        // A custom accent with no custom text color for it: black or white,
+        // whichever reads on it.
+        if (HEX.test(colors.accent || '') && !HEX.test(colors.onaccent || '')) {
+            var c = parseInt(colors.accent.slice(1), 16);
+            var lum = (0.299 * (c >> 16) + 0.587 * ((c >> 8) & 255) + 0.114 * (c & 255)) / 255;
+            pal.onaccent = lum > 0.6 ? '#141414' : '#ffffff';
+        }
+        COLOR_KEYS.forEach(function (key) { root.style.setProperty('--' + key, pal[key]); });
+
+        // A role names a font from the table, or - in RANKING only, never from
+        // the address bar - a site's own { family, url }.
+        var fonts = pick('fonts');
+        fonts = fonts && typeof fonts === 'object' ? fonts : {};
+        var faces = [];
+        Object.keys(ROLES).forEach(function (role) {
+            var f = fonts[role], fam = null;
+            if (typeof f === 'string' && FONTS[f]) {
+                fam = 'LB ' + f;
+                faces.push('@font-face { font-family: \'' + fam + '\'; src: url(\'leaderboard-fonts/' + f + '.otf\'); font-display: swap; }');
+            } else if (f && typeof f === 'object' && R.fonts && R.fonts[role] === f
+                       && /^[A-Za-z0-9 _-]{1,40}$/.test(f.family || '') && /^[A-Za-z0-9 ._\/-]{1,120}$/.test(f.url || '')) {
+                fam = f.family;
+                faces.push('@font-face { font-family: \'' + fam + '\'; src: url(\'' + f.url + '\'); font-display: swap; }');
+            }
+            if (fam) root.style.setProperty('--f-' + role, '\'' + fam + '\', ' + ROLES[role]);
+        });
+        if (faces.length) {
+            var st = document.createElement('style');
+            st.textContent = faces.join('\n');
+            document.head.appendChild(st);
+        }
+
+        // The board's words: those the host set (trimmed, at most 80
+        // characters, no angle brackets), the board's own English for the
+        // rest. A pair of '*' marks words drawn in the accent color; the page
+        // puts them up with the DOM, never as markup. The logo card's two big
+        // lines have no English of their own: unset, they are the site's
+        // credit and title.
+        var TEXT_KEYS = {
+            title: 'SCORE RANKING', champTitle: 'RANK 1', champion: 'CHAMPION', challengers: 'CHALLENGERS',
+            vacant: 'OPEN', waiting: 'WAITING FOR A CHALLENGER',
+            logoMain: '', logoSub: '',
+            logoFoot: 'ONLINE RANKINGS  //  PLAY A *RANKED MATCH* TO ENTER',
+            enterName: 'PLAY A *RANKED MATCH* TO ENTER YOUR NAME',
+            emptyTitle: 'NO RANKED MATCHES YET', emptySub: 'PLAY A *RANKED MATCH* ONLINE TO PUT YOUR NAME HERE',
+            offlineTitle: 'COULD NOT REACH THE RANKING SERVER', offlineSub: 'IT MAY BE WAKING UP - TRY AGAIN IN A MOMENT',
+            standingsTitle: 'RANKINGS'
+        };
+        var given = pick('text');
+        given = given && typeof given === 'object' && !Array.isArray(given) ? given : {};
+        var text = {}, own = {};
+        Object.keys(TEXT_KEYS).forEach(function (key) {
+            var s = typeof given[key] === 'string' ? given[key].replace(/[<>]/g, '').trim().slice(0, 80).trim() : '';
+            text[key] = s || TEXT_KEYS[key];
+            if (s && s !== TEXT_KEYS[key]) own[key] = s;
+        });
+
+        // Each rank's badge, keyed by the rank's name as the server reports
+        // it: the built-in shield in the host's colors (top, bottom) and pips,
+        // or an image of theirs from leaderboard-ranks/ beside the page. Read
+        // the way leaderboardlook.js keeps it: a name spelled another way
+        // (' gold') is the same rank, the first one wins, 24 at most.
+        var RANK_NAME = /^[A-Z0-9 ._-]{1,16}$/;
+        var RANK_IMAGE = /^[a-z0-9._-]{1,80}\.(png|webp|svg)$/;
+        var rk = pick('ranks');
+        rk = rk && typeof rk === 'object' && !Array.isArray(rk) ? rk : {};
+        var ranks = {};
+        Object.keys(rk).forEach(function (key) {
+            var name = key.trim().toUpperCase(), o = rk[key], r = {};
+            if (Object.keys(ranks).length >= 24 || !RANK_NAME.test(name) || ranks[name] || !o || typeof o !== 'object') return;
+            ['c1', 'c2'].forEach(function (c) { if (typeof o[c] === 'string' && HEX.test(o[c])) r[c] = o[c].toLowerCase(); });
+            var pips = typeof o.pips === 'string' && o.pips.trim() !== '' ? Number(o.pips) : o.pips;
+            if (pips === Math.floor(pips) && pips >= 0 && pips <= 7) r.pips = pips;
+            if (typeof o.image === 'string' && RANK_IMAGE.test(o.image)) r.image = o.image;
+            if (Object.keys(r).length) ranks[name] = r;
+        });
+        // The host's background (look.background): a picture, an animated
+        // one or a short video behind the whole page, under a layer of the
+        // page's own color (dim, in percent) so the names stay readable. Its
+        // file is in leaderboard-bg/ beside the page; the name is checked, so
+        // it can only ever be one file there. The same rules as
+        // leaderboardlook.js (BG_FILE_RE, BG_FITS, BG_DIM_MAX).
+        var BG_FILE = /^bg-[0-9a-f]{12}\.(png|jpg|webp|gif|mp4|webm)$/;
+        var BG_FITS = ['cover', 'contain', 'tile'];
+        var bgIn = pick('background'), background = null;
+        if (bgIn && typeof bgIn === 'object' && typeof bgIn.file === 'string' && BG_FILE.test(bgIn.file)) {
+            var dim = typeof bgIn.dim === 'string' && bgIn.dim.trim() !== '' ? Number(bgIn.dim) : bgIn.dim;
+            background = {
+                file: bgIn.file,
+                fit: BG_FITS.indexOf(bgIn.fit) >= 0 ? bgIn.fit : 'cover',
+                dim: dim === Math.floor(dim) && dim >= 0 && dim <= 90 ? dim : 40
+            };
+            root.setAttribute('data-bg', background.fit);
+            root.style.setProperty('--bg-dim', String(background.dim / 100));
+            document.addEventListener('DOMContentLoaded', function () { putBackground(background); });
+        }
+        // A picture is a layer drawn with CSS; a video is a muted, looping
+        // <video> that stays on its first frame for anyone who asked for less
+        // motion. The darkening layer goes over either one.
+        function putBackground(b) {
+            var url = 'leaderboard-bg/' + b.file;
+            var video = /\.(mp4|webm)$/.test(b.file);
+            var media = document.createElement(video ? 'video' : 'div');
+            media.id = 'bgmedia';
+            if (video) {
+                media.muted = true; media.loop = true; media.playsInline = true; media.preload = 'auto';
+                media.setAttribute('muted', ''); media.setAttribute('playsinline', '');
+                if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) media.autoplay = true;
+                media.src = url;
+            } else {
+                media.style.backgroundImage = 'url("' + url + '")';
+            }
+            var shade = document.createElement('div');
+            shade.id = 'bgdim';
+            document.body.insertBefore(shade, document.body.firstChild);
+            document.body.insertBefore(media, document.body.firstChild);
+            if (video && media.autoplay) { var playing = media.play(); if (playing && playing.catch) playing.catch(function () {}); }
+        }
+        window.BOARD_LOOK = { header: header, format: format, preset: preset, text: text, own: own, ranks: ranks, background: background };
+    })();
+</script>
 <style>
+    /* The colors come from the look above; these are the classic ones, for a
+       page whose script has not run. Everything else is mixed from them. */
     :root {
-        --ink:    #d0d0e0;
-        --accent: #ff8800;
-        --bg:     #05040a;
-        --rank:   #b98cff;
-        --name:   #ff5533;
-        --score:  #46e07a;
-        --dim:    #6a6a86;
+        --bg: #05040a; --haze: #241a3a; --accent: #ff8800; --onaccent: #ffffff;
+        --name: #ff5533; --score: #46e07a; --rank: #b98cff;
+        --ink: #d0d0e0; --dim: #6a6a86; --stat: #9fd8ff;
+        --gold: #ffd447; --silver: #e6edf8; --bronze: #ef9f52;
+        --line: color-mix(in srgb, var(--rank) 26%, var(--bg));
+        --faint: color-mix(in srgb, var(--dim) 55%, var(--bg));
+        --panel: color-mix(in srgb, var(--rank) 7%, var(--bg));
+        --name-shade: color-mix(in srgb, var(--name) 16%, black);
+        --score-shade: color-mix(in srgb, var(--score) 16%, black);
+        --rank-shade: color-mix(in srgb, var(--rank) 16%, black);
+        --accent-a: color-mix(in srgb, var(--accent) 90%, transparent);
+        --accent-deep: color-mix(in srgb, var(--accent) 86%, black);
     }
 
     * { box-sizing: border-box; }
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
-        background: var(--bg); color: var(--ink);
-        font-family: 'Bahnschrift', 'Arial Black', 'Segoe UI', sans-serif;
+        color: var(--ink);
+        font-family: var(--f-text, 'Bahnschrift', 'Arial Black', 'Segoe UI', sans-serif);
         overflow: hidden;
         image-rendering: pixelated;   /* the art is pixel art; never smooth it */
     }
+    /* The background fills the whole window, so a frame of any shape shows
+       the board's own backdrop around the board, never bars. */
+    body {
+        background: radial-gradient(ellipse at 50% 44%, var(--haze) 0%, color-mix(in srgb, var(--haze) 22%, var(--bg)) 64%, var(--bg) 100%) var(--bg);
+    }
 
-    /* The board is laid out in a design space 480 units tall whose WIDTH
-       follows the container's aspect (clamped), then scaled to fit. A fixed
-       640x480 stage letterboxed badly in both embeds - a squarish window and
-       a very wide page section - so adapting the width lets the board fill
-       its frame. Content is then capped and centered so a very wide frame
-       doesn't stretch each row into a void. */
+    /* THE HOST'S BACKGROUND (look.background, put up by the head script):
+       the picture or video over the whole window, then a layer of the page's
+       own color at --bg-dim, then the board. With one, the glow steps aside. */
+    [data-bg] body { background: var(--bg); }
+    #bgmedia, #bgdim { position: fixed; inset: 0; pointer-events: none; }
+    #bgmedia { z-index: -2; background-position: center; background-size: cover; background-repeat: no-repeat; }
+    [data-bg="contain"] #bgmedia { background-size: contain; }
+    [data-bg="tile"] #bgmedia { background-size: auto; background-repeat: repeat; }
+    video#bgmedia { width: 100%; height: 100%; object-fit: cover; }
+    [data-bg="contain"] video#bgmedia { object-fit: contain; }
+    #bgdim { z-index: -1; background: var(--bg); opacity: var(--bg-dim, .4); }
+
+    /* CLASSIC: laid out in a design space 480 units tall whose WIDTH follows
+       the window's aspect (at least 600), then scaled to fit. A fixed 640x480
+       stage letterboxed badly in both embeds - a squarish window and a very
+       wide page section - so adapting the width lets the board fill its
+       frame. Content is then capped and centered so a very wide frame doesn't
+       stretch each row into a void. */
     #stage {
         position: absolute; left: 0; top: 0;
         height: 480px;
         transform-origin: 0 0;
-        background: radial-gradient(ellipse at 50% 44%, #241a3a 0%, #0a0714 64%, #05040a 100%);
         overflow: hidden;
     }
 
@@ -79,20 +302,60 @@
         filter: grayscale(0.55) contrast(1.05);
         pointer-events: none;
     }
+    :root:not([data-format="classic"]) #ghost { display: none; }
 
+    /* ---------- the header ----------
+       The board's title (SCORE RANKING, RANK 1) and the logo card's big line
+       share one of four flat looks, picked by data-header on <html>. Flat on
+       purpose: the old gradient fill, outline and drop shadow only suited the
+       font they were drawn for, and any font can sit here. The plate and txt
+       spans carry the banner's strip and the bar; the other looks ignore them. */
     .title {
         position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
         width: min(100%, 880px);
-        text-align: center;
+        text-align: center; white-space: nowrap;
         font-size: 38px; letter-spacing: 6px; line-height: 1;
-        font-family: 'Arial Black', 'Bahnschrift', sans-serif;
-        background: linear-gradient(#ffe9a8 0%, #ffb02e 42%, #ff6a00 62%, #d23a00 100%);
-        -webkit-background-clip: text; background-clip: text;
-        color: transparent;
-        -webkit-text-stroke: 2px #2a0f00;
-        paint-order: stroke fill;
-        text-shadow: 0 4px 0 rgba(0,0,0,0.55);
+        font-family: var(--f-title, 'Arial Black', 'Bahnschrift', sans-serif);
     }
+    .title .plate, .title .txt, .lmain .plate, .lmain .txt { display: inline-block; }
+    /* letter-spacing also trails the last letter: take it back, so the words
+       sit in the middle of the strip and over the bar */
+    .title .txt { margin-right: -6px; }
+    .lmain .txt { margin-right: -4px; }
+
+    /* Banner (the default): letters on a slanted strip of the accent color
+       that fades out at both ends. */
+    [data-header="banner"] .title { top: 14px; }
+    [data-header="banner"] .title, [data-header="banner"] .lmain { color: var(--onaccent); }
+    [data-header="banner"] .plate {
+        padding: .16em 1.2em .18em; transform: skewX(-14deg);
+        background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent-deep) 90%, transparent) 16%, var(--accent-a) 50%, color-mix(in srgb, var(--accent-deep) 90%, transparent) 84%, transparent 100%);
+    }
+    [data-header="banner"] .txt { transform: skewX(14deg); }
+
+    /* Ruled: light letters between two accent lines that fade out to the
+       sides; the title's lines take whatever width the words leave. */
+    [data-header="ruled"] .title, [data-header="ruled"] .lmain { color: color-mix(in srgb, var(--ink) 30%, white); text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 25%, transparent); }
+    [data-header="ruled"] .title { display: flex; align-items: center; gap: 22px; padding: 0 24px; }
+    [data-header="ruled"] .lmain { display: flex; align-items: center; justify-content: center; gap: 26px; }
+    [data-header="ruled"] .title::before, [data-header="ruled"] .title::after { content: ''; flex: 1; height: 2px; }
+    [data-header="ruled"] .lmain::before, [data-header="ruled"] .lmain::after { content: ''; flex: 0 0 110px; height: 3px; }
+    [data-header="ruled"] .title::before, [data-header="ruled"] .lmain::before { background: linear-gradient(to left, var(--accent), transparent); }
+    [data-header="ruled"] .title::after, [data-header="ruled"] .lmain::after { background: linear-gradient(to right, var(--accent), transparent); }
+
+    /* Flat glow: the accent, solid, with a soft glow. */
+    [data-header="flat"] .title, [data-header="flat"] .lmain { color: color-mix(in srgb, var(--accent) 80%, white); text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+    /* Underline bar: light letters over a short accent bar. */
+    [data-header="bar"] .title { top: 16px; }
+    [data-header="bar"] .title, [data-header="bar"] .lmain { color: color-mix(in srgb, var(--ink) 30%, white); }
+    [data-header="bar"] .plate::after {
+        content: ''; display: block; width: 1.9em; height: .1em; margin: .24em auto 0;
+        background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 50%, transparent);
+    }
+    /* The banner's strip is the accent already: a host's accent words are cut
+       out of it in the backdrop's color instead of vanishing into it. */
+    [data-header="banner"] .plate b.acc { color: var(--bg); }
 
     /* ---------- the standings board ---------- */
     #listwrap {
@@ -123,12 +386,12 @@
     /* Place numbers. The podium three get medal colors and their own weight,
        1st biggest and gold - chunky gradient-and-outline lettering, the way an
        old arcade board or a clip-art trophy graphic would do it. Everyone else
-       keeps the quiet purple. */
+       keeps the quiet rank color. */
     .row .place {
         flex: 0 0 auto; width: 62px;
-        font-family: 'Arial Black', 'Bahnschrift', sans-serif; line-height: 1;
+        font-family: var(--f-numbers, 'Arial Black', 'Bahnschrift', sans-serif); line-height: 1;
         color: var(--rank);
-        text-shadow: 2px 2px 0 #1a0a2e, 0 0 12px rgba(150,90,255,.45);
+        text-shadow: 2px 2px 0 var(--rank-shade), 0 0 12px color-mix(in srgb, var(--rank) 45%, transparent);
         white-space: nowrap;
     }
     .place .num { font-size: 19px; }
@@ -159,13 +422,14 @@
     .row .who { flex: 1 1 auto; min-width: 0; }
     .pname {
         color: var(--name); font-size: 21px; line-height: 1.05; letter-spacing: 2px;
-        text-shadow: 2px 2px 0 #2a0000;
+        font-family: var(--f-names, inherit);
+        text-shadow: 2px 2px 0 var(--name-shade);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
     /* --- the champion's name ---
        A gold numeral alone didn't read as "1st". The name itself is larger
-       and breathes between its normal red and the medal's gold, so the top
+       and breathes between its normal color and the medal's gold, so the top
        row is alive on a board that is otherwise static. A smooth cycle, not
        a hard on/off blink: at this size a strobe is unpleasant to sit under
        (this loops forever on a page someone may leave open), and it would
@@ -183,7 +447,7 @@
         animation: champCrown 1.9s ease-in-out infinite;
     }
     @keyframes champName {
-        0%, 100% { color: var(--name); text-shadow: 2px 2px 0 #2a0000; }
+        0%, 100% { color: var(--name); text-shadow: 2px 2px 0 var(--name-shade); }
         50%      { color: #ffd447;    text-shadow: 2px 2px 0 #3a2400, 0 0 20px rgba(255,200,70,.75); }
     }
     @keyframes champCrown {
@@ -200,27 +464,28 @@
         color: var(--dim); font-size: 11px; line-height: 1.1; letter-spacing: 1px;
         margin-top: 4px; white-space: nowrap; overflow: hidden;
     }
-    .pstats b { color: #9fd8ff; font-weight: normal; }
-    .pstats .sep { color: #3a3550; margin: 0 6px; }
+    .pstats b { color: var(--stat); font-weight: normal; }
+    .pstats .sep { color: var(--line); margin: 0 6px; }
 
     /* Vacant slots: the board always shows all 8 places, with unclaimed ones
        dimmed to read as "space on the ladder" rather than missing data. They
        are presentation only - a real player entering simply displaces one. */
-    .row.vacant .pname { color: #4a4560; text-shadow: none; letter-spacing: 3px; }
-    .row.vacant .pstats { color: #35314a; }
-    .row.vacant .prating { color: #35314a; text-shadow: none; }
+    .row.vacant .pname { color: var(--faint); text-shadow: none; letter-spacing: 3px; }
+    .row.vacant .pstats { color: var(--line); }
+    .row.vacant .prating { color: var(--line); text-shadow: none; }
     .row.vacant .place { opacity: .5; }
-    .row.vacant .tierspace { flex: 0 0 auto; width: 112px; }
+    .row.vacant .tierspace { flex: 0 0 auto; width: 128px; }
 
     .prating {
         flex: 0 0 auto; width: 84px; text-align: right;
         color: var(--score); font-size: 22px; line-height: 1; letter-spacing: 1px;
-        text-shadow: 2px 2px 0 #002a10;
+        font-family: var(--f-numbers, inherit);
+        text-shadow: 2px 2px 0 var(--score-shade);
         font-variant-numeric: tabular-nums;
     }
     .face {
         flex: 0 0 auto; width: 38px; height: 44px;
-        background: #0d0a18; border: 1px solid #3a3550;
+        background: var(--panel); border: 1px solid var(--line);
         object-fit: cover; display: block;
         transition: opacity .4s ease-out;
     }
@@ -228,9 +493,18 @@
        thumbnail on the same row - showing both is redundant, and they collide. */
     .row.expanded .face { opacity: 0; }
 
-    .tier { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; width: 112px; }
-    .tier svg { width: 26px; height: 30px; display: block; flex: 0 0 auto; }
-    .tier .tname { font-size: 9px; letter-spacing: 1.1px; line-height: 1.1; color: var(--tc, #9a93b5); }
+    /* 128 wide: GRANDMASTER in a wide face (Bank Gothic, Hyper Combo) needs
+       about 96 beside the shield, and at 112 it ran into the name. */
+    .tier { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; width: 128px; }
+    .tier svg, .tier .rimg { width: 26px; height: 30px; display: block; flex: 0 0 auto; }
+    /* A host's rank image sits in the shield's box, whole. Smoothed, unlike
+       the pixel art: it is usually drawn bigger than the badge, and shrinking
+       it pixel by pixel drops lines. */
+    .rimg { object-fit: contain; image-rendering: auto; }
+    /* A host's rank name can be 16 letters in one word: past the 96 beside
+       the shield it breaks onto a second line instead of running into the
+       player's name. */
+    .tier .tname { font-size: 9px; letter-spacing: 1.1px; line-height: 1.1; color: var(--tc, var(--dim)); min-width: 0; overflow-wrap: anywhere; }
 
     /* ---------- 1st place's expanding detail ----------
        A sibling right after row 1 in the list flow: growing its height pushes
@@ -249,16 +523,16 @@
     }
     #detail .bar {
         position: absolute; left: 58px; top: 2px; width: 3px; height: 104px;
-        background: linear-gradient(#ff8800, rgba(255,136,0,0));
+        background: linear-gradient(var(--accent), transparent);
     }
     #detail .cstats {
         color: var(--dim); font-size: 12px; letter-spacing: 1px; line-height: 1.95;
     }
-    #detail .cstats b { color: #9fd8ff; font-weight: normal; }
+    #detail .cstats b { color: var(--stat); font-weight: normal; }
     #detail .cstats .big { color: var(--ink); font-size: 13px; }
     #detail .cstats .chip {
         display: inline-block; color: var(--accent);
-        border: 1px solid #4a3f6b; padding: 1px 7px; font-size: 11px;
+        border: 1px solid var(--line); padding: 1px 7px; font-size: 11px;
     }
 
     /* The pose is a BOX sized to the animation's own bounding box; each frame
@@ -283,37 +557,35 @@
     }
     #champInfo { position: absolute; left: 6%; top: 146px; width: 48%; }
     #champInfo .crown {
-        font-family: 'Arial Black', 'Bahnschrift', sans-serif; font-size: 15px; letter-spacing: 4px;
+        font-family: var(--f-title, 'Arial Black', 'Bahnschrift', sans-serif); font-size: 15px; letter-spacing: 4px;
         color: var(--accent); line-height: 1; margin-bottom: 12px;
     }
     #champInfo .cname {
         color: var(--name); font-size: 42px; line-height: 1.05; letter-spacing: 3px;
-        text-shadow: 3px 3px 0 #2a0000;
+        font-family: var(--f-names, inherit);
+        text-shadow: 3px 3px 0 var(--name-shade);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     #champInfo .crating {
         color: var(--score); font-size: 30px; line-height: 1; letter-spacing: 2px;
-        margin-top: 14px; text-shadow: 2px 2px 0 #002a10;
+        font-family: var(--f-numbers, inherit);
+        margin-top: 14px; text-shadow: 2px 2px 0 var(--score-shade);
     }
     #champInfo .cstats { color: var(--dim); font-size: 12px; letter-spacing: 1px; margin-top: 12px; line-height: 1.9; }
-    #champInfo .cstats b { color: #9fd8ff; font-weight: normal; }
+    #champInfo .cstats b { color: var(--stat); font-weight: normal; }
     #champTier { margin-top: 16px; }
-    #champTier svg { width: 44px; height: 50px; }
+    #champTier svg, #champTier .rimg { width: 44px; height: 50px; }
     #champTier .tname { font-size: 15px; letter-spacing: 3px; }
 
     /* ---------- scene: logo card ---------- */
     #scene-logo { display: grid; place-items: center; }
     #logoCard { text-align: center; }
     #logoCard .lmain {
-        font-family: 'Arial Black', 'Bahnschrift', sans-serif;
+        font-family: var(--f-title, 'Arial Black', 'Bahnschrift', sans-serif);
         font-size: 62px; letter-spacing: 4px; line-height: 1;
-        background: linear-gradient(#fff6d8 0%, #ffb02e 45%, #ff6a00 64%, #b32b00 100%);
-        -webkit-background-clip: text; background-clip: text; color: transparent;
-        -webkit-text-stroke: 2px #2a0f00; paint-order: stroke fill;
-        text-shadow: 0 5px 0 rgba(0,0,0,.5);
     }
-    #logoCard .lsub { margin-top: 18px; font-size: 15px; letter-spacing: 9px; color: #9a93b5; }
-    #logoCard .lfoot { margin-top: 26px; font-size: 11px; letter-spacing: 4px; color: #56506e; }
+    #logoCard .lsub { margin-top: 18px; font-size: 15px; letter-spacing: 9px; color: color-mix(in srgb, var(--ink) 55%, var(--dim)); }
+    #logoCard .lfoot { margin-top: 26px; font-size: 11px; letter-spacing: 4px; color: color-mix(in srgb, var(--dim) 75%, var(--bg)); }
     #logoCard .lfoot b { color: var(--accent); font-weight: normal; }
 
     #msg {
@@ -322,7 +594,218 @@
         font-size: 15px; letter-spacing: 2px; color: var(--dim); line-height: 2.1;
     }
     #msg b { color: var(--accent); font-weight: normal; }
-    #msg small { font-size: 11px; color: #4a4560; letter-spacing: 1px; }
+    #msg small { font-size: 11px; color: var(--faint); letter-spacing: 1px; }
+    /* The words a host marks with '*' (accentText in the script), wherever
+       the board's text goes. */
+    b.acc { color: var(--accent); font-weight: normal; }
+
+    /* A name too long for its place scrolls to its end and back rather than
+       being cut off (scrollIfLong in the script; not with reduced motion). */
+    .scrolls { text-overflow: clip !important; }
+    .scrolls > .mq { display: inline-block; animation: mq var(--mq-t, 4s) ease-in-out infinite alternate; }
+    @keyframes mq { 0%, 18% { transform: translateX(0); } 82%, 100% { transform: translateX(var(--mq-dx, 0)); } }
+
+    /* =====================================================================
+       THE OTHER FORMATS live in #flow, over the whole window. Each has two
+       compositions of fixed proportions, wide and tall (stacked), measured
+       in --u (BOXES in the script). fitFlow() picks the one that shows
+       bigger in this window, sets --u so all of it fits, and centers it in
+       .comp: any window shape gets the format at its largest, never
+       stretched out of proportion.
+       ===================================================================== */
+    #flow {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        --u: 10px; --W: 100; --H: 52;
+        --ft: var(--f-title, 'Arial Black', 'Bahnschrift', sans-serif);
+        --fn: var(--f-names, 'Bahnschrift', 'Arial Black', sans-serif);
+        --fd: var(--f-numbers, 'Arial Black', 'Bahnschrift', sans-serif);
+    }
+    #flow .comp {
+        position: relative; flex: 0 0 auto; display: flex; flex-direction: column;
+        width: calc(var(--u) * var(--W)); height: calc(var(--u) * var(--H));
+    }
+    #flow .vac { opacity: .45; }
+    #flow .pose { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); }
+    #flow .badge svg, #flow .badge .rimg { display: block; width: 100%; height: 100%; }
+    /* Whole and centered in every format: the hi-score table's badge sits in
+       the fighter cell beside the portrait, whose cover crop must not reach it. */
+    #flow .badge .rimg { object-fit: contain; object-position: 50% 50%; }
+    #flow .mono { font-variant-numeric: tabular-nums; }
+    #flow .title {
+        position: static; transform: none; width: auto; flex: 0 0 auto;
+        font-family: var(--ft); font-size: calc(var(--u) * 3.8); letter-spacing: calc(var(--u) * .6);
+        padding: calc(var(--u) * 1.6) 0 calc(var(--u) * 1.4);
+    }
+    #flow .title .txt { margin-right: calc(var(--u) * -.6); }
+    [data-header="ruled"] #flow .title { gap: calc(var(--u) * 2.2); padding-inline: calc(var(--u) * 4); }
+    #flow[data-layout="tall"] .title { font-size: calc(var(--u) * 2.9); letter-spacing: calc(var(--u) * .35); }
+    #flow[data-layout="tall"] .title .txt { margin-right: calc(var(--u) * -.35); }
+    /* place numerals: medal colors for the podium three, the rank color after */
+    #flow .pl { font-family: var(--fd); line-height: 1; white-space: nowrap; color: var(--rank); text-shadow: 2px 2px 0 var(--rank-shade); }
+    #flow .pl sup { font-size: .45em; vertical-align: .9em; margin-left: .05em; }
+    #flow .m1 { --mc: var(--gold); --edge: #4a2c00; } #flow .m2 { --mc: var(--silver); --edge: #2f3a49; } #flow .m3 { --mc: var(--bronze); --edge: #45230a; }
+    #flow .pl.m1, #flow .pl.m2, #flow .pl.m3 { color: var(--mc); text-shadow: -1.5px -1.5px 0 var(--edge), 1.5px -1.5px 0 var(--edge), -1.5px 1.5px 0 var(--edge), 1.5px 1.5px 0 var(--edge), 0 3px 0 rgba(0,0,0,.45); }
+
+    /* ---- select: a character-select screen ---- */
+    .sel {
+        flex: 1; min-height: 0;
+        display: grid; grid-template-columns: 40% minmax(0, 1fr); gap: calc(var(--u) * 3.5);
+        padding: 0 calc(var(--u) * 4) calc(var(--u) * 3);
+    }
+    .sel .feature { display: flex; flex-direction: column; min-height: 0; }
+    .sel .room { position: relative; flex: 1; min-height: 0; }
+    .sel .room::after {   /* the floor the pose stands on */
+        content: ''; position: absolute; left: 12%; right: 12%; bottom: calc(var(--u) * -.8); height: calc(var(--u) * 1.8);
+        background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 35%, transparent), transparent 70%);
+    }
+    .sel .nameplate { flex: 0 0 auto; margin-top: calc(var(--u) * 1.6); display: grid; grid-template-columns: auto 1fr auto; align-items: end;
+        column-gap: calc(var(--u) * 1.6); border-top: 2px solid var(--accent); padding-top: calc(var(--u) * 1); }
+    .sel .nameplate .pl { font-size: calc(var(--u) * 5.4); grid-row: span 2; }
+    .sel .nameplate .nm { font-family: var(--fn); font-size: calc(var(--u) * 3.1); letter-spacing: calc(var(--u) * .25); color: var(--name); line-height: 1;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 2px 2px 0 var(--name-shade); }
+    .sel .nameplate .rt { font-family: var(--fd); font-size: calc(var(--u) * 3.4); color: var(--score); line-height: 1; text-shadow: 2px 2px 0 var(--score-shade); }
+    .sel .nameplate .sub { grid-column: 2 / 4; display: flex; align-items: center; gap: calc(var(--u) * .8); font-size: calc(var(--u) * 1.35); color: var(--dim);
+        letter-spacing: calc(var(--u) * .1); white-space: nowrap; line-height: 1.2; }
+    .sel .nameplate .sub b { color: var(--stat); font-weight: normal; }
+    .sel .nameplate .badge { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.6); flex: 0 0 auto; }
+    .sel .nameplate .tn { color: var(--tc); margin-right: calc(var(--u) * 1); }
+    .sel .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(var(--u) * 1.2); align-content: center; min-height: 0; }
+    .cell { position: relative; aspect-ratio: 6 / 7; background: var(--panel); border: 2px solid var(--line); overflow: hidden; }
+    .cell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+    .cell .pl { position: absolute; left: calc(var(--u) * .6); top: calc(var(--u) * .4); font-size: calc(var(--u) * 2.4); }
+    .cell .cn { position: absolute; left: 0; right: 0; bottom: 0; padding: calc(var(--u) * 2) calc(var(--u) * .6) calc(var(--u) * .5);
+        background: linear-gradient(transparent, color-mix(in srgb, var(--bg) 92%, transparent) 55%); font-family: var(--fn); line-height: 1.1;
+        font-size: calc(var(--u) * 1.5); letter-spacing: calc(var(--u) * .12); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cell .cn .cnn { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cell .cn i { display: block; font-style: normal; font-family: var(--fd); color: var(--score); font-size: 1.05em; margin-top: .2em; }
+    .cell .tierbar { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * .45); background: var(--tc); }
+    .cell.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 calc(var(--u) * 2.4) color-mix(in srgb, var(--accent) 55%, transparent); z-index: 1; }
+    .cell.on::after {
+        content: '1P'; position: absolute; right: 0; top: 0; padding: .15em .45em; background: var(--accent); color: var(--onaccent);
+        font-family: var(--fd); font-size: calc(var(--u) * 1.5); line-height: 1.1; animation: blink 1s steps(2, end) infinite;
+    }
+    @keyframes blink { 50% { opacity: .35; } }
+    #flow[data-layout="tall"] .sel { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+    #flow[data-layout="tall"] .sel .nameplate .sub { flex-wrap: wrap; white-space: normal; row-gap: calc(var(--u) * .4); }
+    #flow[data-layout="tall"] .cell .cn { font-size: calc(var(--u) * 1.25); letter-spacing: 0; }
+
+    /* ---- podium: the top three on stepped blocks ---- */
+    .pod {
+        flex: 1; min-height: 0;
+        display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--u) * 36); gap: calc(var(--u) * 3.5);
+        padding: 0 calc(var(--u) * 4) calc(var(--u) * 2.6);
+    }
+    /* minmax(0, ...): a long name scrolls inside its column instead of
+       widening the column past the composition */
+    .stage3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr); gap: calc(var(--u) * .6); min-height: 0; min-width: 0; }
+    .spot { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+    .spot .room { position: relative; flex: 1; min-height: 0; }
+    /* --bh is each step's height; a block whose words need more grows to fit
+       them (min-height), and nothing in it is squeezed: the name, the one
+       part that clips (overflow: hidden, for the scroll), used to give up
+       the difference and lose half its letters on the short 3rd block. */
+    .spot .block {
+        flex: 0 0 auto; min-height: var(--bh); display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        padding-top: calc(var(--u) * .7); border-top: calc(var(--u) * .55) solid var(--mc);
+        background: linear-gradient(color-mix(in srgb, var(--rank) 14%, var(--bg)), var(--panel));
+        transform-origin: 50% 100%; animation: rise .55s cubic-bezier(.2,.9,.3,1.1) both;
+    }
+    .spot.m1 { --bh: calc(var(--u) * 16); } .spot.m2 { --bh: calc(var(--u) * 12.5); } .spot.m3 { --bh: calc(var(--u) * 10); }
+    .spot.m3 .block { animation-delay: .1s; } .spot.m2 .block { animation-delay: .35s; } .spot.m1 .block { animation-delay: .6s; }
+    #flow .spot .pose { opacity: 0; animation: arrive .4s ease-out both; }
+    #flow .spot.m3 .pose { animation-delay: .7s; } #flow .spot.m2 .pose { animation-delay: .9s; } #flow .spot.m1 .pose { animation-delay: 1.15s; }
+    @keyframes rise { from { transform: scaleY(0); } }
+    @keyframes arrive { from { opacity: 0; transform: translate(-50%, calc(var(--u) * -2)); } to { opacity: 1; transform: translate(-50%, 0); } }
+    .spot .block > * { flex-shrink: 0; }
+    .spot .block .pl { font-size: calc(var(--u) * 4.2); line-height: 1; }
+    .spot.m1 .block .pl { font-size: calc(var(--u) * 5.6); }
+    .spot .block .nm { font-family: var(--fn); font-size: calc(var(--u) * 2); line-height: 1.1; letter-spacing: calc(var(--u) * .2); color: var(--name); margin-top: calc(var(--u) * .5); white-space: nowrap;
+        max-width: 100%; padding: 0 calc(var(--u) * .5); overflow: hidden; text-overflow: ellipsis; }
+    .spot.m1 .block .nm { color: var(--gold); font-size: calc(var(--u) * 2.5); }
+    .spot .block .rt { font-family: var(--fd); font-size: calc(var(--u) * 1.8); line-height: 1; color: var(--score); margin-top: calc(var(--u) * .4); }
+    .rest { display: flex; flex-direction: column; justify-content: center; gap: calc(var(--u) * .5); min-height: 0; }
+    .rest .lab { font-size: calc(var(--u) * 1.3); letter-spacing: calc(var(--u) * .3); color: var(--dim); margin-bottom: calc(var(--u) * .6); }
+    .rr { display: grid; grid-template-columns: calc(var(--u) * 4.4) calc(var(--u) * 4) 1fr auto; align-items: center; column-gap: calc(var(--u) * 1.2);
+          height: calc(var(--u) * 5.4); padding-right: calc(var(--u) * 1); border-bottom: 1px solid var(--line); }
+    .rr .pl { font-size: calc(var(--u) * 2.4); text-align: right; }
+    .rr img { width: calc(var(--u) * 4); height: calc(var(--u) * 4.6); object-fit: cover; object-position: 50% 0; background: var(--panel); border: 1px solid var(--line); }
+    .rr .nm { font-family: var(--fn); font-size: calc(var(--u) * 1.9); line-height: 1.1; color: var(--name); letter-spacing: calc(var(--u) * .15); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nmt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rr .nm small { display: block; font-family: var(--f-text, inherit); font-size: .62em; color: var(--tc); letter-spacing: .1em; margin-top: .25em; }
+    .rr .rt { font-family: var(--fd); font-size: calc(var(--u) * 2); color: var(--score); }
+    #flow[data-layout="tall"] .pod { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+
+    /* ---- hiscore: the arcade attract table ---- */
+    .hs { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .hst { display: grid; grid-template-columns: repeat(5, auto); column-gap: calc(var(--u) * 4); row-gap: calc(var(--u) * 1.05); align-items: center; }
+    .hst .hd { font-size: calc(var(--u) * 1.5); color: var(--dim); letter-spacing: calc(var(--u) * .3); padding-bottom: calc(var(--u) * .6); }
+    .hst .c { font-size: calc(var(--u) * 2.7); line-height: 1; color: var(--rc); letter-spacing: calc(var(--u) * .15); white-space: nowrap; opacity: 0; }
+    .hst .c.in { opacity: 1; }
+    .hst .c.rk, .hst .c.sc { font-family: var(--fd); }
+    .hst .c.sc { text-align: right; }
+    .hst .c.nm { font-family: var(--fn); min-width: 8ch; }
+    .hst .c.fx { display: flex; align-items: center; gap: calc(var(--u) * .8); }
+    .hst .c.fx > img { width: calc(var(--u) * 2.8); height: calc(var(--u) * 3.2); object-fit: cover; object-position: 50% 0; }
+    .hst .c.fx .badge { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.6); }
+    .hst .c.tr { font-size: calc(var(--u) * 1.5); color: var(--tc); letter-spacing: calc(var(--u) * .15); }
+    .hst .first { animation: flash 1.2s steps(1, end) infinite; }
+    @keyframes flash { 0% { color: var(--gold); } 25% { color: #fff; } 50% { color: var(--accent); } 75% { color: var(--name); } }
+    .hsfoot { flex: 0 0 auto; text-align: center; padding-bottom: calc(var(--u) * 2.4); font-size: calc(var(--u) * 1.5); letter-spacing: calc(var(--u) * .35); color: var(--dim); }
+    .hsfoot b { color: var(--accent); font-weight: normal; }
+    .caret { display: inline-block; width: .6em; height: .9em; background: var(--accent); vertical-align: -.05em; margin-left: .3em; animation: blink .8s steps(2, end) infinite; }
+    #flow[data-layout="tall"] .hst { grid-template-columns: repeat(4, auto); column-gap: calc(var(--u) * 2.4); }
+    #flow[data-layout="tall"] .hst .tr, #flow[data-layout="tall"] .hst .hd.trh { display: none; }
+    #flow[data-layout="tall"] .hsfoot { letter-spacing: calc(var(--u) * .12); }
+
+    /* ---- broadcast: a TV overlay ---- */
+    .bc {
+        flex: 1; min-height: 0;
+        display: grid; grid-template-columns: 46% minmax(0, 1fr); gap: calc(var(--u) * 3.5);
+        padding: 0 calc(var(--u) * 4) calc(var(--u) * 1.8);
+    }
+    .champ { position: relative; min-height: 0; }
+    .champ .card {
+        position: absolute; left: calc(var(--u) * 1.5); right: 0; bottom: 0; height: 64%; transform: skewX(-10deg);
+        background: linear-gradient(100deg, var(--accent-deep) 0%, var(--accent) 58%, color-mix(in srgb, var(--accent) 12%, transparent) 100%);
+        box-shadow: inset 0 calc(var(--u) * .5) 0 color-mix(in srgb, var(--accent) 45%, white);
+    }
+    .champ .room { position: absolute; right: 0; width: 44%; top: 0; bottom: 0; }
+    .champ .info { position: absolute; z-index: 1; left: calc(var(--u) * 4); bottom: calc(var(--u) * 2.4); max-width: 58%; color: var(--onaccent); }
+    .champ .tag { display: inline-block; font-family: var(--ft); font-size: calc(var(--u) * 1.4); letter-spacing: calc(var(--u) * .35); line-height: 1.2;
+        background: var(--bg); color: var(--gold); padding: .3em .7em; transform: skewX(-10deg); }
+    .champ .nm { font-family: var(--fn); font-size: calc(var(--u) * 4.4); letter-spacing: calc(var(--u) * .3); line-height: 1; margin-top: calc(var(--u) * .9);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 calc(var(--u) * .3) 0 color-mix(in srgb, var(--accent) 40%, black); }
+    .champ .rt { font-family: var(--fd); font-size: calc(var(--u) * 6.2); line-height: 1; margin-top: calc(var(--u) * .6); }
+    .champ .rt small { font-size: .3em; letter-spacing: .2em; margin-left: .4em; opacity: .8; }
+    .champ .rec { font-size: calc(var(--u) * 1.35); letter-spacing: calc(var(--u) * .12); opacity: .85; margin-top: calc(var(--u) * .9); line-height: 1.3; }
+    .champ .rec span { white-space: nowrap; }
+    .champ .rec span + span { margin-left: calc(var(--u) * 1.6); }
+    .ladder { display: flex; flex-direction: column; justify-content: center; gap: calc(var(--u) * .75); min-height: 0; }
+    .lbar {
+        display: grid; grid-template-columns: calc(var(--u) * 5.2) calc(var(--u) * 4) 1fr auto; align-items: center; column-gap: calc(var(--u) * 1.2);
+        height: calc(var(--u) * 5); transform: skewX(-10deg); padding-right: calc(var(--u) * 1.6);
+        background: linear-gradient(90deg, color-mix(in srgb, var(--rank) 12%, var(--bg)), var(--panel) 70%, color-mix(in srgb, var(--panel) 60%, transparent));
+        border-left: calc(var(--u) * .7) solid var(--tc);
+        animation: slide .45s cubic-bezier(.2,.9,.3,1.15) both;
+    }
+    .lbar > * { transform: skewX(10deg); }
+    @keyframes slide { from { opacity: 0; transform: translateX(calc(var(--u) * 6)) skewX(-10deg); } }
+    .lbar .pl { font-size: calc(var(--u) * 2.6); text-align: center; }
+    .lbar img { width: calc(var(--u) * 4); height: calc(var(--u) * 4.4); object-fit: cover; object-position: 50% 0; }
+    .lbar .nm { font-family: var(--fn); font-size: calc(var(--u) * 1.9); line-height: 1.1; letter-spacing: calc(var(--u) * .2); color: var(--name); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lbar .nm small { display: block; font-family: var(--f-text, inherit); font-size: .55em; color: var(--tc); letter-spacing: .15em; margin-top: .3em; }
+    .lbar .rt { font-family: var(--fd); font-size: calc(var(--u) * 2.2); color: var(--score); }
+    .ticker { flex: 0 0 auto; height: calc(var(--u) * 3.6); background: var(--panel); border-top: 2px solid var(--accent); overflow: hidden; white-space: nowrap; }
+    .ticker .tk { display: inline-block; padding-left: 100%; font-size: calc(var(--u) * 1.45); line-height: calc(var(--u) * 3.6); letter-spacing: calc(var(--u) * .2); color: var(--ink); animation: tick 38s linear -13s infinite; }
+    .ticker .tk b { color: var(--accent); font-weight: normal; }
+    .ticker .tk i { display: inline-block; width: .5em; height: .5em; background: var(--accent); transform: rotate(45deg); margin: 0 1.6em; vertical-align: .12em; }
+    @keyframes tick { to { transform: translateX(-100%); } }
+    #flow[data-layout="tall"] .bc { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+    #flow[data-layout="tall"] .champ .room { width: 40%; }
+
+    @media (prefers-reduced-motion: reduce) {
+        #flow *, #flow *::before, #flow *::after { animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
+    }
 </style>
 </head>
 <body>
@@ -330,12 +813,12 @@
     <img id="ghost" alt="">
 
     <div class="scene" id="scene-board">
-        <div class="title">SCORE RANKING</div>
+        <div class="title"><span class="plate"><span class="txt">SCORE RANKING</span></span></div>
         <div id="listwrap"><div id="list"></div></div>
     </div>
 
     <div class="scene" id="scene-champ">
-        <div class="title">RANK 1</div>
+        <div class="title"><span class="plate"><span class="txt">RANK 1</span></span></div>
         <div id="champWrap">
             <div id="champInfo">
                 <div class="crown">CHAMPION</div>
@@ -350,12 +833,13 @@
 
     <div class="scene" id="scene-logo">
         <div id="logoCard">
-            <div class="lmain"></div>
+            <div class="lmain"><span class="plate"><span class="txt"></span></span></div>
             <div class="lsub"></div>
-            <div class="lfoot">ONLINE RANKINGS &nbsp;//&nbsp; PLAY A <b>RANKED MATCH</b> TO ENTER</div>
+            <div class="lfoot"></div>
         </div>
     </div>
 </div>
+<div class="scene" id="flow"></div>
 
 <script>
 (function () {
@@ -366,10 +850,60 @@
     var SERVER = String(QS.get('server') || CFG.server || '').replace(/\/+$/, '');
     var TITLE = String(QS.get('title') || CFG.title || 'WebMUGEN');
     var CREDIT = String(QS.get('credit') || CFG.credit || TITLE);
-    document.title = TITLE + ' - Score Ranking';
-    document.querySelector('#logoCard .lmain').textContent = CREDIT;
-    // Letter-spaced the way the arcade logo card has always shown the name.
-    document.querySelector('#logoCard .lsub').textContent = TITLE.toUpperCase().split('').join(' ');
+    var FORMAT = (window.BOARD_LOOK || {}).format || 'classic';
+
+    // ---- the board's words -----------------------------------------------
+    // Every line the board itself prints comes from the look's text (the head
+    // script fills in the board's own English for any the host did not set).
+    var LOOK = window.BOARD_LOOK || {};
+    var TEXT = LOOK.text || {};
+    var OWN = LOOK.own || {};      // only the lines the host set
+
+    // Puts a line of the host's words into node. A pair of '*' marks words
+    // drawn in the accent color: 'PLAY A *RANKED MATCH* TO ENTER'. Text nodes
+    // and elements only, never markup: the words are the host's.
+    function accentText(node, s) {
+        node.textContent = '';
+        var parts = String(s == null ? '' : s).split('*');
+        // A '*' without its pair is just a star.
+        if (parts.length % 2 === 0) parts.splice(-2, 2, parts[parts.length - 2] + '*' + parts[parts.length - 1]);
+        parts.forEach(function (part, i) {
+            // A run of spaces keeps its width (the logo line's '  //  ').
+            part = part.replace(/ {2,}/g, function (m) { return m.replace(/ /g, '\u00a0'); });
+            if (!part) return;
+            if (i % 2) {
+                var b = document.createElement('b');
+                b.className = 'acc';
+                b.textContent = part;
+                node.appendChild(b);
+            } else {
+                node.appendChild(document.createTextNode(part));
+            }
+        });
+        return node;
+    }
+    function plain(s) { return String(s).replace(/\*/g, ''); }
+
+    // A player's name (theirs, so text only) or the vacant slot's word.
+    function nameInto(node, p) {
+        if (p.vacant) return accentText(node, TEXT.vacant);
+        node.textContent = (p.name || '???').toUpperCase();
+        return node;
+    }
+
+    // ---- the fixed lines -------------------------------------------------
+    document.title = TITLE + ' - ' + (OWN.title ? plain(OWN.title) : 'Score Ranking');
+    // The logo card's two big lines: the host's own words when they set them
+    // (shown as typed), else the site's credit and its title, letter-spaced
+    // the way the arcade logo card has always shown the name.
+    if (OWN.logoMain) accentText(document.querySelector('#logoCard .lmain .txt'), OWN.logoMain);
+    else document.querySelector('#logoCard .lmain .txt').textContent = CREDIT;
+    if (OWN.logoSub) accentText(document.querySelector('#logoCard .lsub'), OWN.logoSub);
+    else document.querySelector('#logoCard .lsub').textContent = TITLE.toUpperCase().split('').join(' ');
+    accentText(document.querySelector('#logoCard .lfoot'), TEXT.logoFoot);
+    accentText(document.querySelector('#scene-board .title .txt'), TEXT.title);
+    accentText(document.querySelector('#scene-champ .title .txt'), TEXT.champTitle);
+    accentText(document.querySelector('#champInfo .crown'), TEXT.champion);
     var ART = 'leaderboard-art/';
     var ARTV = '';                 // cache-buster, from the manifest stamp
     var TOP_N = 8;
@@ -378,6 +912,7 @@
     var ONLY = QS.get('scene') || '';
 
     var stage = document.getElementById('stage');
+    var flow = document.getElementById('flow');
     var listEl = document.getElementById('list');
     var ghostImg = document.getElementById('ghost');
     var detailEl = null;           // rebuilt with each board pass
@@ -386,16 +921,42 @@
     var VISIBLE_ROWS = 5;
 
     // ---- responsive fit --------------------------------------------------
+    // The stage is as wide as the window's aspect asks (never under 600
+    // units, so a tall window shows the board whole and the backdrop above
+    // and below it); the content inside is capped at 880 and centered.
+    var stageW0 = 0;
     function fit() {
         var cw = document.documentElement.clientWidth;
         var ch = document.documentElement.clientHeight;
         if (!cw || !ch) return;
-        var dw = Math.round(480 * (cw / ch));
-        dw = Math.max(600, Math.min(1150, dw));
+        var dw = Math.max(600, Math.round(480 * (cw / ch)));
         var s = Math.min(cw / dw, ch / 480);
         stage.style.width = dw + 'px';
+        // The rows' name boxes widen and narrow with the stage, so a new
+        // width checks each name again: a scroll measured for the old one
+        // would run on past its end (or a name now too long be cut off).
+        if (dw !== stageW0) {
+            stageW0 = dw;
+            Array.prototype.forEach.call(document.querySelectorAll('#list .pname, #champInfo .cname'), function (n) { rescroll(n); });
+        }
         stage.style.transform =
             'translate(' + ((cw - dw * s) / 2) + 'px,' + ((ch - 480 * s) / 2) + 'px) scale(' + s + ')';
+        fitTitle(document.querySelector('#scene-board .title'), 'title');
+        fitTitle(document.querySelector('#scene-champ .title'), 'champTitle');
+    }
+    // A host's title can be longer than its line: it shrinks to fit rather
+    // than running off both sides. The board's own titles stay as drawn.
+    function fitTitle(t, key) {
+        if (!t || !OWN[key]) return;
+        var pl = t.querySelector('.plate');
+        t.style.fontSize = '';
+        // Twice: the letter spacing does not shrink with the letters.
+        for (var k = 0; k < 2 && pl; k++) {
+            var cs = getComputedStyle(t);
+            var room = t.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2 * (parseFloat(cs.columnGap) || 0);
+            if (!(room > 0) || pl.offsetWidth <= room) return;
+            t.style.fontSize = (parseFloat(cs.fontSize) * room / pl.offsetWidth) + 'px';
+        }
     }
     window.addEventListener('resize', fit);
     if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
@@ -403,7 +964,14 @@
     function stageW() { return parseFloat(stage.style.width) || 640; }
     function contentW() { return Math.min(stageW(), 880); }
 
-    // ---- tier badges -----------------------------------------------------
+    // ---- ranks -----------------------------------------------------------
+    // The server names each player's rank, and its reply lists the ranks,
+    // high to low (an older server sends none: then they are the original
+    // seven). A rank's badge is the shield: the original seven and UNRANKED
+    // in their own colors, any other name in the colors its place in the
+    // list gives it, spread over the seven (top GRANDMASTER's red, bottom
+    // BRONZE's). The look can recolor a rank's shield, change its pips or
+    // swap it for the host's own image.
     var TIERS = {
         UNRANKED:    { c1: '#5a5570', c2: '#3a3550', pips: 0 },
         BRONZE:      { c1: '#d08b4a', c2: '#8a4f22', pips: 1 },
@@ -414,29 +982,106 @@
         MASTER:      { c1: '#e0b0ff', c2: '#8a3fd4', pips: 6 },
         GRANDMASTER: { c1: '#ffb3b3', c2: '#d43f3f', pips: 7 }
     };
+    var LADDER = ['GRANDMASTER', 'MASTER', 'DIAMOND', 'PLATINUM', 'GOLD', 'SILVER', 'BRONZE'];
+    var DEFAULT_RANKS = [
+        { name: 'GRANDMASTER', min: 1200 }, { name: 'MASTER', min: 1150 }, { name: 'DIAMOND', min: 1100 },
+        { name: 'PLATINUM', min: 1050 }, { name: 'GOLD', min: 975 }, { name: 'SILVER', min: 925 }, { name: 'BRONZE', min: 0 }
+    ];
+    var RANKS = DEFAULT_RANKS;     // the reply's, once it is in (start)
+    var RANK_LOOK = (window.BOARD_LOOK || {}).ranks || {};
+    var RANK_DIR = 'leaderboard-ranks/';
 
-    function tierBadge(tierName, placement) {
-        var t = TIERS[tierName] || TIERS.UNRANKED;
+    function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+
+    // A list of ranks as the server sends it, high to low, or null when it
+    // is not one.
+    function rankList(v) {
+        if (!Array.isArray(v) || !v.length || v.length > 12) return null;
+        var out = [];
+        for (var i = 0; i < v.length; i++) {
+            var r = v[i] || {};
+            if (typeof r.name !== 'string' || !/^[A-Z0-9 ._-]{1,16}$/.test(r.name) || typeof r.min !== 'number' || !isFinite(r.min)) return null;
+            out.push({ name: r.name, min: r.min });
+        }
+        return out.sort(function (a, b) { return b.min - a.min; });
+    }
+
+    function mixHex(a, b, t) {
+        var x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16), out = 0;
+        [16, 8, 0].forEach(function (s) {
+            var u = (x >> s) & 255, v = (y >> s) & 255;
+            out |= Math.round(u + (v - u) * t) << s;
+        });
+        return '#' + ('00000' + out.toString(16)).slice(-6);
+    }
+    // The colors and pips of place i of n ranks: an even spread down the
+    // original seven, blending between two where it falls between them.
+    function byPlace(i, n) {
+        var f = n > 1 ? i * (LADDER.length - 1) / (n - 1) : 0, lo = Math.floor(f), t = f - lo;
+        var a = TIERS[LADDER[lo]], b = TIERS[LADDER[Math.min(lo + 1, LADDER.length - 1)]];
+        return { c1: mixHex(a.c1, b.c1, t), c2: mixHex(a.c2, b.c2, t), pips: Math.round(a.pips + (b.pips - a.pips) * t) };
+    }
+
+    // How a rank is drawn: { c1, c2, pips, image }.
+    function rankStyle(name) {
+        var base = has(TIERS, name) ? TIERS[name] : null;
+        for (var i = 0; !base && i < RANKS.length; i++) if (RANKS[i].name === name) base = byPlace(i, RANKS.length);
+        base = base || TIERS.UNRANKED;
+        var o = has(RANK_LOOK, name) ? RANK_LOOK[name] : {};
+        return { c1: o.c1 || base.c1, c2: o.c2 || base.c2, pips: o.pips != null ? o.pips : base.pips, image: o.image || '' };
+    }
+
+    var SVGNS = 'http://www.w3.org/2000/svg';
+    function svgEl(tag, attrs) {
+        var e = document.createElementNS(SVGNS, tag);
+        for (var k in attrs) e.setAttribute(k, attrs[k]);
+        return e;
+    }
+    // The shield in a rank's colors, its pips across the middle.
+    function shieldEl(s) {
         var uid = 'g' + Math.random().toString(36).slice(2, 8);
+        var svg = svgEl('svg', { viewBox: '0 0 24 28', 'aria-hidden': 'true' });
+        var defs = svgEl('defs', {}), grad = svgEl('linearGradient', { id: uid, x1: '0', y1: '0', x2: '0', y2: '1' });
+        grad.appendChild(svgEl('stop', { offset: '0', 'stop-color': s.c1 }));
+        grad.appendChild(svgEl('stop', { offset: '1', 'stop-color': s.c2 }));
+        defs.appendChild(grad);
+        svg.appendChild(defs);
+        svg.appendChild(svgEl('path', { d: 'M12 1.2 L22.4 4.8 V14 c0 7.2 -5.6 11 -10.4 12.6 C7.2 25 1.6 21.2 1.6 14 V4.8 Z',
+            fill: 'url(#' + uid + ')', stroke: '#15121f', 'stroke-width': '1.4' }));
+        svg.appendChild(svgEl('path', { d: 'M12 3.6 L20.2 6.4 V14 c0 5.8 -4.4 9 -8.2 10.3 C8 23 3.8 19.8 3.8 14 V6.4 Z',
+            fill: 'none', stroke: 'rgba(255,255,255,.32)', 'stroke-width': '.9' }));
+        for (var i = 0; i < s.pips; i++) {
+            var x = s.pips === 1 ? 12 : 12 + (i - (s.pips - 1) / 2) * (15 / (s.pips - 1));
+            svg.appendChild(svgEl('circle', { cx: x.toFixed(1), cy: '17.5', r: '1.5', fill: '#1a1226', opacity: '.75' }));
+        }
+        return svg;
+    }
+    // A rank's badge: the host's image when the look names one (the shield
+    // again if the file is missing), otherwise the shield.
+    function rankIcon(name) {
+        var s = rankStyle(name);
+        if (!s.image) return shieldEl(s);
+        var im = document.createElement('img');
+        im.className = 'rimg';
+        im.alt = '';
+        im.onerror = function () { if (im.parentNode) im.parentNode.replaceChild(shieldEl(s), im); };
+        im.src = RANK_DIR + s.image;
+        return im;
+    }
+
+    function tierLabel(p) { return p.placement > 0 ? 'UNRANKED' : String(p.tier || 'UNRANKED'); }
+    function tierColor(p) { return rankStyle(tierLabel(p)).c1; }
+
+    function tierBadge(p) {
+        var name = tierLabel(p);
         var wrap = document.createElement('div');
         wrap.className = 'tier';
-        wrap.style.setProperty('--tc', t.c1);
-        var pips = '';
-        for (var i = 0; i < t.pips; i++) {
-            var x = t.pips === 1 ? 12 : 12 + (i - (t.pips - 1) / 2) * (15 / (t.pips - 1));
-            pips += '<circle cx="' + x.toFixed(1) + '" cy="17.5" r="1.5" fill="#1a1226" opacity=".75"/>';
-        }
-        wrap.innerHTML =
-            '<svg viewBox="0 0 24 28" aria-hidden="true">' +
-              '<defs><linearGradient id="' + uid + '" x1="0" y1="0" x2="0" y2="1">' +
-                '<stop offset="0" stop-color="' + t.c1 + '"/><stop offset="1" stop-color="' + t.c2 + '"/>' +
-              '</linearGradient></defs>' +
-              '<path d="M12 1.2 L22.4 4.8 V14 c0 7.2 -5.6 11 -10.4 12.6 C7.2 25 1.6 21.2 1.6 14 V4.8 Z" ' +
-                'fill="url(#' + uid + ')" stroke="#15121f" stroke-width="1.4"/>' +
-              '<path d="M12 3.6 L20.2 6.4 V14 c0 5.8 -4.4 9 -8.2 10.3 C8 23 3.8 19.8 3.8 14 V6.4 Z" ' +
-                'fill="none" stroke="rgba(255,255,255,.32)" stroke-width=".9"/>' + pips +
-            '</svg>' +
-            '<div class="tname">' + (placement > 0 ? 'UNRANKED' : tierName) + '</div>';
+        wrap.style.setProperty('--tc', rankStyle(name).c1);
+        wrap.appendChild(rankIcon(name));
+        var tn = document.createElement('div');
+        tn.className = 'tname';
+        tn.textContent = name;
+        wrap.appendChild(tn);
         return wrap;
     }
 
@@ -488,6 +1133,30 @@
         })();
     }
 
+    // The other formats can show several poses at once (the podium), each
+    // with its own timer, standing at the bottom of the box it is given.
+    var poses = [];
+    function stopPoses() { poses.forEach(function (r) { clearTimeout(r.t); }); poses = []; }
+    function poseIn(room, p, maxH) {
+        var a = artFor(p.character), win = a && a.win;
+        if (p.vacant || !win || !win.frames || !win.frames.length) return;
+        var host = document.createElement('div'); host.className = 'pose';
+        var img = document.createElement('img'); img.alt = ''; host.appendChild(img); room.appendChild(host);
+        var r = room.getBoundingClientRect();
+        var s = Math.min(r.width / win.w, (maxH || r.height) / win.h);
+        if (!(s > 0)) return;
+        host.style.width = (win.w * s) + 'px'; host.style.height = (win.h * s) + 'px';
+        var i = 0, rec = { t: null };
+        (function step() {
+            var f = win.frames[i % win.frames.length];
+            img.src = ART + f.src + ARTV;
+            img.style.left = (f.x * s) + 'px'; img.style.top = (f.y * s) + 'px';
+            img.style.width = (f.w * s) + 'px'; img.style.height = (f.h * s) + 'px';
+            i++; rec.t = setTimeout(step, f.ms || 100);
+        })();
+        poses.push(rec);
+    }
+
     function preload(frames) {
         (frames || []).forEach(function (f) { var im = new Image(); im.src = ART + f.src + ARTV; });
     }
@@ -516,7 +1185,7 @@
             sp.className = 'tierspace';   // keeps the column grid aligned
             row.appendChild(sp);
         } else {
-            row.appendChild(tierBadge(p.tier || 'UNRANKED', p.placement || 0));
+            row.appendChild(tierBadge(p));
         }
 
         var who = document.createElement('div');
@@ -532,7 +1201,7 @@
             crown.textContent = '★';   // filled star
             nm.appendChild(crown);
         } else {
-            nm.textContent = (p.name || '???').toUpperCase();
+            nameInto(nm, p);
         }
         who.appendChild(nm);
 
@@ -541,7 +1210,7 @@
         var st = document.createElement('div');
         st.className = 'pstats';
         if (p.vacant) {
-            st.textContent = 'WAITING FOR A CHALLENGER';
+            accentText(st, TEXT.waiting);
         } else {
             var bits = ['<b>' + p.wins + '</b>W&nbsp;<b>' + p.losses + '</b>L', '<b>' + p.winRate + '</b>%'];
             if (p.streak >= 3) bits.push('<b>' + p.streak + '</b> STRAIGHT');
@@ -579,8 +1248,8 @@
         if (p.peakRating && p.peakRating > p.rating) bits.push('PEAK <b>' + p.peakRating + '</b>');
         // MAIN is only claimed when the server saw one character take a
         // majority of their recent matches; a roster-hopper gets no chip.
-        if (p.main) bits.push('MAIN <span class="chip">' + String(p.main).toUpperCase() + '</span>');
-        else if (p.character) bits.push('LAST <span class="chip">' + String(p.character).toUpperCase() + '</span>');
+        if (p.main) bits.push('MAIN <span class="chip">' + esc(String(p.main).toUpperCase()) + '</span>');
+        else if (p.character) bits.push('LAST <span class="chip">' + esc(String(p.character).toUpperCase()) + '</span>');
         d.innerHTML =
             '<div class="bar"></div>' +
             '<div class="inner"><div class="cstats">' + bits.join('<br>') + '</div></div>' +
@@ -590,24 +1259,71 @@
 
     function buildChampScene(p) {
         var info = document.getElementById('champInfo');
-        info.querySelector('.cname').textContent = (p.name || '???').toUpperCase();
+        var cname = info.querySelector('.cname');
+        cname.classList.remove('scrolls');
+        cname.textContent = (p.name || '???').toUpperCase();
+        scrollIfLong(cname);
         info.querySelector('.crating').textContent = p.rating + ' PTS';
         var bits = [
             '<b>' + p.wins + '</b> WINS &nbsp;/&nbsp; <b>' + p.losses + '</b> LOSSES',
             '<b>' + p.winRate + '</b>% WIN RATE OVER <b>' + p.games + '</b> GAMES'
         ];
         if (p.bestStreak > 1) bits.push('BEST RUN <b>' + p.bestStreak + '</b> STRAIGHT');
-        if (p.character) bits.push('MAIN &nbsp;<b>' + String(p.character).toUpperCase() + '</b>');
+        if (p.character) bits.push('MAIN &nbsp;<b>' + esc(String(p.character).toUpperCase()) + '</b>');
         info.querySelector('.cstats').innerHTML = bits.join('<br>');
         var tierHost = document.getElementById('champTier');
         tierHost.innerHTML = '';
-        tierHost.appendChild(tierBadge(p.tier || 'UNRANKED', p.placement || 0));
+        tierHost.appendChild(tierBadge(p));
     }
+
+    // A name wider than its place scrolls to its end and back (CSS .scrolls),
+    // unless the viewer asked for less motion; then it keeps its ellipsis.
+    // A name that is up for only `within` ms (select's nameplate, which the
+    // cursor replaces) reaches its end in that time: a pass reaches it at 82%.
+    var REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    function scrollIfLong(node, within) {
+        if (!node || REDUCE || node.classList.contains('scrolls')) return;
+        var over = node.scrollWidth - node.clientWidth;
+        if (over <= 1) return;
+        var mq = document.createElement('span');
+        mq.className = 'mq';
+        while (node.firstChild) mq.appendChild(node.firstChild);
+        node.appendChild(mq);
+        node.classList.add('scrolls');
+        var t = 2.4 + over / 45;
+        if (within > 0) t = Math.min(t, within / 1000 / 0.82);
+        node.style.setProperty('--mq-dx', -(over + 4) + 'px');
+        node.style.setProperty('--mq-t', t.toFixed(2) + 's');
+    }
+    // The same check again, for a name whose letters changed width (a font
+    // that arrived late): unwrapped first, then measured as new.
+    function rescroll(node) {
+        var mq = node && node.classList.contains('scrolls') ? node.querySelector(':scope > .mq') : null;
+        if (mq) { while (mq.firstChild) node.insertBefore(mq.firstChild, mq); node.removeChild(mq); node.classList.remove('scrolls'); }
+        scrollIfLong(node);
+    }
+
+    // A big name given `room` px: it ends there, and shrinks to fit it, to
+    // `floor` of its size at most, its letter spacing with it (so the whole
+    // name scales as one). What still runs over then scrolls.
+    function fitName(node, room, floor) {
+        if (!node || !(room > 0)) return;
+        node.style.maxWidth = Math.floor(room) + 'px';
+        var cs = getComputedStyle(node), size = parseFloat(cs.fontSize), gap = parseFloat(cs.letterSpacing) || 0, k = 1;
+        for (var i = 0; i < 3 && node.scrollWidth > node.clientWidth + 1 && k > floor; i++) {
+            k = Math.max(floor, k * node.clientWidth / node.scrollWidth);
+            node.style.fontSize = (size * k) + 'px';
+            node.style.letterSpacing = (gap * k) + 'px';
+        }
+    }
+
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
 
     // ---- scene machinery -------------------------------------------------
     // Each scene is an element plus an enter() that sets it up and returns
     // how long it wants to hold. Adding one = add an entry here and put its
-    // key in SEQUENCE (or pass ?scenes=a,b,c).
+    // key in SEQUENCE (or pass ?scenes=a,b,c). In the other formats the
+    // 'board' scene is #flow, drawn by that format's builder.
     var timers = [];
     function clearTimers() { timers.forEach(clearTimeout); timers = []; }
     function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
@@ -615,9 +1331,12 @@
     var ctx = { players: [], champArt: null };
 
     var SCENES = {
-        board: {
+        board: FORMAT === 'classic' ? {
             el: document.getElementById('scene-board'),
             enter: function () { return runBoard(); }
+        } : {
+            el: flow,
+            enter: function () { return runFlow(); }
         },
         champ: {
             el: document.getElementById('scene-champ'),
@@ -644,11 +1363,13 @@
         .split(',').map(function (s) { return s.trim(); })
         .filter(function (s) { return SCENES[s]; });
 
+    var ALL_SCENES = [document.getElementById('scene-board'), document.getElementById('scene-champ'), document.getElementById('scene-logo'), flow];
     function showScene(key) {
-        for (var k in SCENES) SCENES[k].el.classList.toggle('on', k === key);
+        var on = SCENES[key] && SCENES[key].el;
+        ALL_SCENES.forEach(function (el) { el.classList.toggle('on', el === on); });
     }
 
-    // ---- the board's own choreography ------------------------------------
+    // ---- the board's own choreography (classic) --------------------------
     // 1. the bottom five slide in from the right, one after another
     // 2. the board climbs, the top three sliding in the same way as they
     //    scroll into view
@@ -672,6 +1393,7 @@
             return r;
         });
         if (!rows.length) return 2000;
+        rows.forEach(function (r) { scrollIfLong(r.querySelector('.pname')); });
 
         var overflow = Math.max(0, top.length - VISIBLE_ROWS);
         var startY = -overflow * ROW_H;
@@ -747,11 +1469,248 @@
         return settled + HOLD + 700;
     }
 
+    // ---- the other formats -------------------------------------------------
+    // Each builder fills #flow from ctx.players and returns how long it holds.
+    // Their own steps run on flowTimers, so a resize can draw the format again
+    // (new sizes, new pose scales) without disturbing the rotation.
+    var flowTimers = [];
+    var root = flow;               // the composition the builders fill (runFlow)
+    function flowLater(fn, ms) { flowTimers.push(setTimeout(fn, ms)); }
+    function clearFlow() { flowTimers.forEach(clearTimeout); flowTimers = []; stopPoses(); flow.innerHTML = ''; }
+
+    function el(tag, cls, text) { var d = document.createElement(tag); if (cls) d.className = cls; if (text != null) d.textContent = text; return d; }
+    function flowTitle() {
+        var t = el('div', 'title'), pl = el('span', 'plate'), tx = accentText(el('span', 'txt'), TEXT.title);
+        pl.appendChild(tx); t.appendChild(pl); return t;
+    }
+    // A real player's name, for the ticker (it skips the vacant slots; every
+    // other name goes in with nameInto).
+    function nameOf(p) { return (p.name || '???').toUpperCase(); }
+    function placeEl(i, p) {
+        var d = el('div', 'pl' + (i < 3 && !p.vacant ? ' m' + (i + 1) : ''));
+        d.appendChild(document.createTextNode(String(i + 1)));
+        d.appendChild(el('sup', null, SUFFIX[i] || 'th'));
+        return d;
+    }
+    function faceEl(p) {
+        var a = !p.vacant && artFor(p.character), im = el('img');
+        im.alt = '';
+        if (a && a.portrait) im.src = ART + a.portrait + ARTV; else im.style.visibility = 'hidden';
+        return im;
+    }
+    function badgeEl(p) { var b = el('span', 'badge'); if (!p.vacant) b.appendChild(rankIcon(tierLabel(p))); return b; }
+
+    var FLOW = {
+        // A character-select screen: the cursor walks the real players and
+        // whoever it is on stands big beside the grid.
+        select: function () {
+            root.appendChild(flowTitle());
+            var main = el('div', 'sel'), feat = el('div', 'feature'), room = el('div', 'room'), plate = el('div', 'nameplate'), grid = el('div', 'grid');
+            feat.appendChild(room); feat.appendChild(plate); main.appendChild(feat); main.appendChild(grid); root.appendChild(main);
+            var ps = ctx.players;
+            var cells = ps.map(function (p, i) {
+                var c = el('div', 'cell' + (p.vacant ? ' vac' : '')); c.style.setProperty('--tc', p.vacant ? 'transparent' : tierColor(p));
+                c.appendChild(faceEl(p)); c.appendChild(placeEl(i, p));
+                var cn = el('div', 'cn'); cn.appendChild(nameInto(el('span', 'cnn mqable'), p)); if (!p.vacant) cn.appendChild(el('i', 'mono', String(p.rating))); c.appendChild(cn);
+                c.appendChild(el('div', 'tierbar'));
+                grid.appendChild(c); return c;
+            });
+            // `stay`: how long this stop is up before the cursor moves on.
+            function show(i, stay) {
+                var p = ps[i];
+                cells.forEach(function (c, j) { c.classList.toggle('on', j === i); });
+                stopPoses(); room.innerHTML = ''; plate.innerHTML = '';
+                plate.appendChild(placeEl(i, p));
+                plate.appendChild(nameInto(el('div', 'nm mqable'), p));
+                plate.appendChild(el('div', 'rt mono', String(p.rating)));
+                var sub = el('div', 'sub'); sub.style.setProperty('--tc', tierColor(p));
+                sub.appendChild(badgeEl(p)); sub.appendChild(el('span', 'tn', tierLabel(p)));
+                sub.insertAdjacentHTML('beforeend', '<span><b>' + p.wins + '</b> W <b>' + p.losses + '</b> L</span><span><b>' + p.winRate + '%</b></span>'
+                    + (p.streak > 1 ? '<span><b>' + p.streak + '</b> STRAIGHT</span>' : ''));
+                plate.appendChild(sub);
+                // Each stop's name is new, after runFlow's pass over the
+                // names: it gets its own check (it never scrolled before),
+                // and reaches its end before the cursor moves on.
+                scrollIfLong(plate.querySelector('.nm'), stay - 300);
+                // the nameplate first, so the pose is sized to the room it leaves
+                poseIn(room, p);
+            }
+            var real = ps.filter(function (p) { return !p.vacant; }).length;
+            var FIRST = 4200, STEP = 2400, t = FIRST;
+            if (STILL || real < 2) { show(0, 9000); return 9000; }
+            show(0, FIRST);
+            for (var i = 1; i < real; i++) { (function (k, at) { flowLater(function () { show(k, STEP); }, at); })(i, t); t += STEP; }
+            return t;
+        },
+
+        // The top three do their win poses on stepped blocks; 4th to 8th wait
+        // beside them.
+        podium: function () {
+            root.appendChild(flowTitle());
+            var main = el('div', 'pod'), st = el('div', 'stage3'), rest = el('div', 'rest');
+            main.appendChild(st); main.appendChild(rest); root.appendChild(main);
+            var rooms = [];
+            [1, 0, 2].forEach(function (i) {
+                var p = ctx.players[i] || { vacant: true };
+                var s = el('div', 'spot m' + (i + 1) + (p.vacant ? ' vac' : '')), room = el('div', 'room'), b = el('div', 'block');
+                b.appendChild(placeEl(i, p)); b.appendChild(nameInto(el('div', 'nm mqable'), p));
+                if (!p.vacant) b.appendChild(el('div', 'rt mono', String(p.rating)));
+                s.appendChild(room); s.appendChild(b); st.appendChild(s); rooms.push([room, p]);
+            });
+            rest.appendChild(accentText(el('div', 'lab'), TEXT.challengers));
+            ctx.players.slice(3).forEach(function (p, j) {
+                var r = el('div', 'rr' + (p.vacant ? ' vac' : '')); r.style.setProperty('--tc', tierColor(p));
+                r.appendChild(placeEl(j + 3, p)); r.appendChild(faceEl(p));
+                var nm = el('div', 'nm'); nm.appendChild(nameInto(el('span', 'nmt mqable'), p)); if (!p.vacant) nm.appendChild(el('small', null, tierLabel(p))); r.appendChild(nm);
+                r.appendChild(el('div', 'rt mono', p.vacant ? '' : String(p.rating)));
+                rest.appendChild(r);
+            });
+            // All three stand the same height (that of the champion's room,
+            // the shortest, since 1st's block is the tallest), so each step up
+            // reads as a step up and no one is drawn bigger for a bigger sprite.
+            var h = Math.min.apply(null, rooms.map(function (rp) { return rp[0].getBoundingClientRect().height; })) * 0.96;
+            rooms.forEach(function (rp) { poseIn(rp[0], rp[1], h); });
+            return 11000;
+        },
+
+        // The arcade attract table: type only, each rank its own color; the
+        // rows come in one after another and 1st place flashes.
+        hiscore: function () {
+            root.appendChild(flowTitle());
+            var main = el('div', 'hs'), t = el('div', 'hst');
+            ['RANK', 'SCORE', 'NAME', 'FIGHTER', 'TIER'].forEach(function (h) { t.appendChild(el('div', 'hd' + (h === 'TIER' ? ' trh' : ''), h)); });
+            var COLORS = ['var(--gold)', 'var(--silver)', 'var(--bronze)', 'var(--name)', 'var(--accent)', 'var(--score)', 'var(--stat)', 'var(--rank)'];
+            var rows = ctx.players.map(function (p, i) {
+                var cs = [
+                    el('div', 'c rk', (i + 1) + (SUFFIX[i] || 'th').toUpperCase()),
+                    el('div', 'c sc mono', p.vacant ? '----' : String(p.rating)),
+                    nameInto(el('div', 'c nm'), p),
+                    el('div', 'c fx'),
+                    el('div', 'c tr', p.vacant ? '' : tierLabel(p))
+                ];
+                if (!p.vacant) { cs[3].appendChild(faceEl(p)); cs[3].appendChild(badgeEl(p)); }
+                cs.forEach(function (c) {
+                    c.style.setProperty('--rc', p.vacant ? 'var(--faint)' : COLORS[i] || 'var(--ink)');
+                    c.style.setProperty('--tc', tierColor(p));
+                    if (i === 0 && !p.vacant && /\b(rk|sc|nm)\b/.test(c.className)) c.classList.add('first');
+                    t.appendChild(c);
+                });
+                return cs;
+            });
+            main.appendChild(t); root.appendChild(main);
+            // A wide face can make the table wider than its composition (a
+            // phone, a square window): it is drawn smaller to fit, from its
+            // center, instead of running off both edges of the window.
+            if (t.offsetWidth > main.clientWidth && main.clientWidth > 0) t.style.transform = 'scale(' + (main.clientWidth / t.offsetWidth).toFixed(4) + ')';
+            var foot = el('div', 'hsfoot');
+            accentText(foot, TEXT.enterName);
+            foot.appendChild(el('span', 'caret'));
+            root.appendChild(foot);
+            rows.forEach(function (cs, i) { flowLater(function () { cs.forEach(function (c) { c.classList.add('in'); }); }, STILL ? 0 : 300 + i * 220); });
+            return 10000;
+        },
+
+        // A TV overlay: the champion on a slanted card in the accent color,
+        // the rest as slanted bars edged in their tier's color, a ticker of
+        // records along the bottom.
+        broadcast: function () {
+            root.appendChild(flowTitle());
+            var main = el('div', 'bc'), ch = el('div', 'champ'), lad = el('div', 'ladder');
+            main.appendChild(ch); main.appendChild(lad); root.appendChild(main);
+            var p = ctx.players[0];
+            ch.appendChild(el('div', 'card'));
+            var room = el('div', 'room'); ch.appendChild(room);
+            var info = el('div', 'info');
+            info.appendChild(accentText(el('div', 'tag'), TEXT.champion));
+            info.appendChild(nameInto(el('div', 'nm mqable'), p));
+            var rt = el('div', 'rt mono', String(p.rating)); rt.appendChild(el('small', null, 'PTS')); info.appendChild(rt);
+            var rec = el('div', 'rec');
+            rec.appendChild(el('span', null, p.wins + ' W  ' + p.losses + ' L'));
+            rec.appendChild(el('span', null, p.winRate + '%'));
+            if (p.bestStreak > 1) rec.appendChild(el('span', null, 'BEST RUN ' + p.bestStreak));
+            info.appendChild(rec);
+            ch.appendChild(info);
+            ctx.players.slice(1).forEach(function (q, j) {
+                var b = el('div', 'lbar' + (q.vacant ? ' vac' : '')); b.style.setProperty('--tc', q.vacant ? 'var(--line)' : tierColor(q));
+                b.style.animationDelay = (STILL ? 0 : 0.15 + j * 0.09) + 's';
+                b.appendChild(placeEl(j + 1, q)); b.appendChild(faceEl(q));
+                var nm = el('div', 'nm'); nm.appendChild(nameInto(el('span', 'nmt mqable'), q)); if (!q.vacant) nm.appendChild(el('small', null, tierLabel(q))); b.appendChild(nm);
+                b.appendChild(el('div', 'rt mono', q.vacant ? '' : String(q.rating)));
+                lad.appendChild(b);
+            });
+            // The ticker: what the rows do not show, for the players who have it.
+            var items = [];
+            ctx.players.forEach(function (q) {
+                if (q.vacant) return;
+                var n = '<b>' + esc(nameOf(q)) + '</b> ';
+                if (q.streak >= 3) items.push(n + q.streak + ' STRAIGHT WINS');
+                else if (q.placement > 0) items.push(n + q.placement + ' PLACEMENT ' + (q.placement === 1 ? 'GAME' : 'GAMES') + ' TO GO');
+                else items.push(n + q.wins + ' W ' + q.losses + ' L AT ' + q.winRate + '%');
+            });
+            if (p.bestStreak > 1) items.push('BEST RUN <b>' + esc(nameOf(p)) + '</b> ' + p.bestStreak);
+            if (p.peakRating && p.peakRating > p.rating) items.push('PEAK RATING <b>' + p.peakRating + '</b>');
+            var tk = el('div', 'tk'); tk.innerHTML = items.join('<i></i>');
+            var tick = el('div', 'ticker'); tick.appendChild(tk); root.appendChild(tick);
+            poseIn(room, p);
+            // The champion's name is shown whole wherever it can be: it ends a
+            // unit short of the pose's room (a pose is never wider than that),
+            // or with no pose at the card's own limit, and shrinks to fit
+            // there, to half its size at most (still above the ladder's
+            // names), before it scrolls. It used to run on under the pose and
+            // end in an ellipsis.
+            var nmEl = info.querySelector('.nm'), u = parseFloat(getComputedStyle(flow).getPropertyValue('--u')) || 0;
+            fitName(nmEl, room.querySelector('.pose') ? room.getBoundingClientRect().left - nmEl.getBoundingClientRect().left - u : nmEl.clientWidth, 0.5);
+            return 14000;
+        }
+    };
+
+    // Each format's two compositions, [width, height] in --u: wide, and tall
+    // (stacked) for a window that shows it bigger that way.
+    var BOXES = {
+        select:    { wide: [100, 52], tall: [48, 76] },
+        podium:    { wide: [100, 52], tall: [48, 84] },
+        hiscore:   { wide: [100, 52], tall: [48, 60] },
+        broadcast: { wide: [100, 52], tall: [48, 90] }
+    };
+    function fitFlow() {
+        var b = BOXES[FORMAT] || BOXES.podium;
+        var vw = document.documentElement.clientWidth || innerWidth, vh = document.documentElement.clientHeight || innerHeight;
+        var uw = Math.min(vw / b.wide[0], vh / b.wide[1]);
+        var ut = Math.min(vw / b.tall[0], vh / b.tall[1]);
+        // The wide one unless the stacked one is clearly bigger: a square-ish
+        // window that could go either way keeps the format as designed.
+        var tall = ut > uw * 1.08, box = tall ? b.tall : b.wide;
+        flow.setAttribute('data-layout', tall ? 'tall' : 'wide');
+        flow.style.setProperty('--u', ((tall ? ut : uw) * 0.98).toFixed(3) + 'px');
+        flow.style.setProperty('--W', box[0]);
+        flow.style.setProperty('--H', box[1]);
+    }
+    function runFlow() {
+        clearFlow();
+        fitFlow();
+        root = el('div', 'comp');
+        flow.appendChild(root);
+        var hold = (FLOW[FORMAT] || FLOW.podium)();
+        fitTitle(root.querySelector('.title'), 'title');
+        // One argument only: forEach's index would arrive as scrollIfLong's
+        // time limit (`within`) and give every name after the first a 0 s
+        // scroll that never moves.
+        Array.prototype.forEach.call(flow.querySelectorAll('.mqable'), function (n) { scrollIfLong(n); });
+        return hold;
+    }
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+        if (FORMAT === 'classic' || !flow.classList.contains('on')) return;
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(runFlow, 200);
+    });
+
     // ---- the attract rotation --------------------------------------------
     var seqPos = 0;
     function runSequence() {
         clearTimers();
         stopAnim();
+        clearFlow();
         if (!SEQUENCE.length) return;
         var key = SEQUENCE[seqPos % SEQUENCE.length];
         seqPos++;
@@ -769,6 +1728,7 @@
 
         if (ONLY && SCENES[ONLY]) {
             clearTimers();
+            clearFlow();
             showScene(ONLY);
             SCENES[ONLY].enter();
             return;
@@ -777,13 +1737,19 @@
         runSequence();
     }
 
-    function showMessage(html) {
-        clearTimers(); stopAnim();
-        showScene('board');
+    // Messages always show on the classic board, whatever the format: a line
+    // and a smaller one under it, the host's words put up as text.
+    function showMessage(title, sub) {
+        clearTimers(); stopAnim(); clearFlow();
+        var board = document.getElementById('scene-board');
+        ALL_SCENES.forEach(function (s) { s.classList.toggle('on', s === board); });
         listEl.innerHTML = '';
         var m = document.getElementById('msg');
-        if (!m) { m = document.createElement('div'); m.id = 'msg'; SCENES.board.el.appendChild(m); }
-        m.innerHTML = html;
+        if (!m) { m = document.createElement('div'); m.id = 'msg'; board.appendChild(m); }
+        m.textContent = '';
+        m.appendChild(accentText(document.createElement('span'), title));
+        m.appendChild(document.createElement('br'));
+        m.appendChild(accentText(document.createElement('small'), sub));
     }
     function hideMessage() { var m = document.getElementById('msg'); if (m) m.remove(); }
 
@@ -798,10 +1764,52 @@
         { place: 7, name: 'buttons', rating: 914,  tier: 'BRONZE',   wins: 5, losses: 16, games: 21, winRate: 23.8, streak: -3, bestStreak: 1, character: 'kfm' },
         { place: 8, name: 'rookie',  rating: 1000, tier: 'UNRANKED', placement: 2, wins: 1, losses: 0, games: 1, winRate: 100, streak: 1, bestStreak: 1, character: 'kfm' }
     ];
+    // The sample players fight with this site's own characters when there is
+    // art for them (those with a win pose first), so a preview shows the
+    // build's roster rather than names it has no pictures for.
+    function demoPlayers() {
+        var keys = Object.keys(art.chars || {});
+        var posed = keys.filter(function (k) { var w = art.chars[k].win; return w && w.frames && w.frames.length; });
+        var order = posed.concat(keys.filter(function (k) { return posed.indexOf(k) < 0; }));
+        return demoRanks(DEMO_PLAYERS.map(function (p, i) {
+            var q = {}; for (var k in p) q[k] = p[k];
+            if (order.length) { q.character = order[i % order.length]; q.main = p.main ? q.character : ''; }
+            return q;
+        }));
+    }
+    // With the host's own ranks (?ranks=, the Studio's preview) the sample's
+    // ranked players spread over them, top to bottom, each rated inside its
+    // rank, so the preview shows the badges the host made. With the original
+    // seven the sample stays as it always was.
+    var SAMPLE_RANKS = null;
+    try { SAMPLE_RANKS = rankList(JSON.parse(QS.get('ranks') || 'null')); } catch (e) { SAMPLE_RANKS = null; }
+    function demoRanks(players) {
+        if (!SAMPLE_RANKS || JSON.stringify(SAMPLE_RANKS) === JSON.stringify(DEFAULT_RANKS)) return players;
+        RANKS = SAMPLE_RANKS;
+        var ranked = players.filter(function (p) { return !(p.placement > 0); });
+        var n = RANKS.length, k = ranked.length;
+        var at = ranked.map(function (p, i) { return k > 1 ? Math.round(i * (n - 1) / (k - 1)) : 0; });
+        ranked.forEach(function (p, i) {
+            var j = at[i];
+            // Inside the rank: under the next one up (or 150 over the top
+            // rank's floor), at most 150 down from there.
+            var hi = j > 0 ? RANKS[j - 1].min - 1 : RANKS[j].min + 150;
+            var lo = Math.max(RANKS[j].min, hi - 150);
+            var same = at.filter(function (x) { return x === j; }).length;
+            var q = at.slice(0, i).filter(function (x) { return x === j; }).length;
+            var lift = p.peakRating ? p.peakRating - p.rating : 0;
+            p.tier = RANKS[j].name;
+            p.rating = Math.round(hi - (hi - lo) * (q + 0.5) / same);
+            if (lift) p.peakRating = p.rating + lift;
+        });
+        return players;
+    }
 
     function start() {
+        // The chosen fonts are in by now: measure a host's titles with them.
+        fit();
         if (!DEMO && !SERVER) {
-            showMessage('NO LEADERBOARD ADDRESS SET<br><small>SET ONE IN THE STUDIO: SETTINGS &gt; ONLINE &gt; LEADERBOARD</small>');
+            showMessage('NO LEADERBOARD ADDRESS SET', 'SET ONE IN THE STUDIO: SETTINGS > ONLINE > LEADERBOARD');
             return;
         }
         var artReq = fetch(ART + 'manifest.json', { cache: 'no-cache' })
@@ -809,7 +1817,7 @@
             .catch(function () { return { chars: {} }; });
 
         var boardReq = DEMO
-            ? Promise.resolve({ players: DEMO_PLAYERS })
+            ? Promise.resolve({ demo: true })
             : fetch(SERVER + '/mugen/leaderboard?limit=' + TOP_N, { cache: 'no-store' })
                 .then(function (r) { return r.json(); })
                 .catch(function () { return null; });
@@ -818,12 +1826,16 @@
             art = res[0] || { chars: {} };
             ARTV = art.stamp ? '?v=' + art.stamp : '';
             var board = res[1];
+            // The server's ranks, for the colors of any it named itself; an
+            // older server sends none and has only the original seven.
+            RANKS = (board && rankList(board.ranks)) || DEFAULT_RANKS;
+            if (board && board.demo) board = { players: demoPlayers() };
             if (!board) {
-                showMessage('COULD NOT REACH THE RANKING SERVER<br><small>IT MAY BE WAKING UP - TRY AGAIN IN A MOMENT</small>');
+                showMessage(TEXT.offlineTitle, TEXT.offlineSub);
                 return;
             }
             if (!board.players || !board.players.length) {
-                showMessage('NO RANKED MATCHES YET<br><small>PLAY A <b>RANKED MATCH</b> ONLINE TO PUT YOUR NAME HERE</small>');
+                showMessage(TEXT.emptyTitle, TEXT.emptySub);
                 return;
             }
             // Fill the remaining places with vacant slots so the board always
@@ -833,14 +1845,44 @@
             // padding shrinks by itself.
             var roster = board.players.slice(0, TOP_N);
             while (roster.length < TOP_N) {
-                roster.push({ vacant: true, name: 'OPEN', rating: 0, wins: 0, losses: 0, games: 0, winRate: 0, streak: 0 });
+                roster.push({ vacant: true, rating: 0, wins: 0, losses: 0, games: 0, winRate: 0, streak: 0 });
             }
             hideMessage();
             startShow(roster);
         });
     }
 
-    start();
+    // Wait for the chosen fonts, so the formats measure their boxes, poses
+    // and names with the letters they will show. document.fonts.ready alone
+    // is not that: a face no text has used yet has not started loading, so
+    // it resolved at once and a name was measured in the system font, fitted,
+    // and then ran out of its box in the real one with nothing to scroll it.
+    // Each declared face (only the chosen ones are) is asked for by name, for
+    // 3 s at most: a font that never comes leaves the system font, as before.
+    function chosenFonts() {
+        if (!document.fonts || !document.fonts.forEach) return Promise.resolve();
+        var loads = [];
+        document.fonts.forEach(function (f) { loads.push(f.load().catch(function () {})); });
+        return Promise.race([Promise.all(loads), new Promise(function (r) { setTimeout(r, 3000); })]);
+    }
+    // A face still loading when the board starts (past those 3 s: a slow
+    // connection) changes every name's width when it lands, so the board
+    // measures again then: a format draws itself again, as on a resize, and
+    // the classic rows check their names. Only those faces: one that loaded
+    // in time never redraws anything.
+    var lateFaces = null;
+    function boot() {
+        lateFaces = [];
+        if (document.fonts && document.fonts.forEach) document.fonts.forEach(function (f) { if (f.status !== 'loaded') lateFaces.push(f); });
+        start();
+    }
+    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', function (e) {
+        if (!lateFaces || !(e.fontfaces || []).some(function (f) { return lateFaces.indexOf(f) >= 0; })) return;
+        fit();
+        if (FORMAT !== 'classic') { if (flow.classList.contains('on')) { clearTimeout(resizeTimer); resizeTimer = setTimeout(runFlow, 200); } }
+        else Array.prototype.forEach.call(document.querySelectorAll('#list .pname, #champInfo .cname'), rescroll);
+    });
+    chosenFonts().then(boot, boot);
 
     // Refresh only while someone is actually looking at the page.
     //

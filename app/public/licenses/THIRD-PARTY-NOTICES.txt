@@ -33,37 +33,38 @@ app\ - the scripts and pages
   Saira (public\fonts)  (OFL-1.1, see [11])
   Share Tech Mono (public\fonts)  (OFL-1.1, see [12])
   DotGothic16 (addons\jpfont; a build gets it when its Command List needs it)  (OFL-1.1, see [13])
+  the Score Ranking board's 16 arcade fonts (public\ranking\leaderboard-fonts; a Website export carries the ones its board picks, with FONTS.txt)  (free fan-made fonts, no license terms, see [14])
 
 app\Dependencies\ikemen-go-src\bin\ikemen-v2.wasm - Ikemen GO, the web engine
   Ikemen GO  (MIT, see [3])
   Go runtime and standard library (go1.26.5)  (BSD-3-Clause, see [2])
-  github.com/ebitengine/oto/v3 v3.2.0  (Apache-2.0, see [14])
-  github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [15])
-  github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [16])
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [17])
-  github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [14])
-  github.com/icza/bitio v1.1.0  (Apache-2.0, see [18])
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [19])
-  github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [20])
-  github.com/jfreymuth/vorbis v1.0.2  (MIT, see [20])
-  github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [21])
-  github.com/lukegb/dds v0.0.0-20190402175749-8b7170e64003  (Apache-2.0, see [22])
-  github.com/mdouchement/hdr v0.2.4  (MIT, see [23])
-  github.com/mewkiz/flac v1.0.12  (Unlicense (public domain), see [24])
-  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14  (Unlicense (public domain), see [25])
-  github.com/pkg/errors v0.9.1  (BSD-2-Clause, see [26])
-  github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [27])
-  github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [28])
-  github.com/tidwall/gjson v1.18.0  (MIT, see [29])
-  github.com/tidwall/match v1.1.1  (MIT, see [29])
-  github.com/tidwall/pretty v1.2.0  (MIT, see [30])
-  github.com/tidwall/sjson v1.2.5  (MIT, see [29])
-  github.com/yuin/gopher-lua v1.1.0  (MIT, see [31])
+  github.com/ebitengine/oto/v3 v3.2.0  (Apache-2.0, see [15])
+  github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [16])
+  github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [17])
+  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [18])
+  github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [15])
+  github.com/icza/bitio v1.1.0  (Apache-2.0, see [19])
+  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [20])
+  github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [21])
+  github.com/jfreymuth/vorbis v1.0.2  (MIT, see [21])
+  github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [22])
+  github.com/lukegb/dds v0.0.0-20190402175749-8b7170e64003  (Apache-2.0, see [23])
+  github.com/mdouchement/hdr v0.2.4  (MIT, see [24])
+  github.com/mewkiz/flac v1.0.12  (Unlicense (public domain), see [25])
+  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14  (Unlicense (public domain), see [26])
+  github.com/pkg/errors v0.9.1  (BSD-2-Clause, see [27])
+  github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [28])
+  github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [29])
+  github.com/tidwall/gjson v1.18.0  (MIT, see [30])
+  github.com/tidwall/match v1.1.1  (MIT, see [30])
+  github.com/tidwall/pretty v1.2.0  (MIT, see [31])
+  github.com/tidwall/sjson v1.2.5  (MIT, see [30])
+  github.com/yuin/gopher-lua v1.1.0  (MIT, see [32])
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498  (BSD-3-Clause, see [8])
   golang.org/x/image v0.22.0  (BSD-3-Clause, see [2])
   golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a  (BSD-3-Clause, see [8])
   golang.org/x/text v0.20.0  (BSD-3-Clause, see [2])
-  gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [32])
+  gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [33])
 
 app\Dependencies\Ikemen_GO-v1.0.0-windows.zip - Ikemen GO for Windows, the official release, unmodified
     Its own notices are LICENSES.txt inside the zip, and every Desktop export
@@ -73,48 +74,48 @@ app\Dependencies\Ikemen_GO-v1.0.0-windows.zip - Ikemen GO for Windows, the offic
     release page (src_ffmpeg.tar.gz). Also in the zip, and not in that file
     (every Desktop export carries these in its own THIRD-PARTY-NOTICES.txt):
   Go runtime and standard library in Ikemen_GO.exe (go1.20.14)  (BSD-3-Clause, see [2])
-  github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b  (MIT, see [33])
-  github.com/TheTitanrain/w32 v0.0.0-20200114052255-2654d97dbd3d  (BSD-3-Clause, see [34])
-  github.com/flopp/go-findfont v0.1.0  (MIT, see [35])
-  github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71  (MIT, see [36])
-  github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [15])
-  github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [16])
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [17])
-  github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [14])
-  github.com/icza/bitio v1.1.0  (Apache-2.0, see [18])
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [19])
-  github.com/ikemen-engine/reisen v0.1.10-0.20260911210321-7972c2bbc957  (MIT, see [37])
-  github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [20])
-  github.com/jfreymuth/vorbis v1.0.2  (MIT, see [20])
-  github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [21])
-  github.com/lukegb/dds v0.0.0-20190402175749-8b7170e64003  (Apache-2.0, see [22])
-  github.com/mdouchement/hdr v0.2.4  (MIT, see [23])
-  github.com/mewkiz/flac v1.0.12  (Unlicense (public domain), see [24])
-  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14  (Unlicense (public domain), see [25])
-  github.com/pkg/errors v0.9.1  (BSD-2-Clause, see [26])
-  github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [27])
-  github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [28])
-  github.com/sqweek/dialog v0.0.0-20220809060634-e981b270ebbf  (ISC, see [38])
-  github.com/tidwall/gjson v1.18.0  (MIT, see [29])
-  github.com/tidwall/match v1.1.1  (MIT, see [29])
-  github.com/tidwall/pretty v1.2.0  (MIT, see [30])
-  github.com/tidwall/sjson v1.2.5  (MIT, see [29])
-  github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12  (BSD-3-Clause, see [39])
-  github.com/yuin/gopher-lua v1.1.0  (MIT, see [31])
+  github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b  (MIT, see [34])
+  github.com/TheTitanrain/w32 v0.0.0-20200114052255-2654d97dbd3d  (BSD-3-Clause, see [35])
+  github.com/flopp/go-findfont v0.1.0  (MIT, see [36])
+  github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71  (MIT, see [37])
+  github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [16])
+  github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [17])
+  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [18])
+  github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [15])
+  github.com/icza/bitio v1.1.0  (Apache-2.0, see [19])
+  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [20])
+  github.com/ikemen-engine/reisen v0.1.10-0.20260911210321-7972c2bbc957  (MIT, see [38])
+  github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [21])
+  github.com/jfreymuth/vorbis v1.0.2  (MIT, see [21])
+  github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [22])
+  github.com/lukegb/dds v0.0.0-20190402175749-8b7170e64003  (Apache-2.0, see [23])
+  github.com/mdouchement/hdr v0.2.4  (MIT, see [24])
+  github.com/mewkiz/flac v1.0.12  (Unlicense (public domain), see [25])
+  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14  (Unlicense (public domain), see [26])
+  github.com/pkg/errors v0.9.1  (BSD-2-Clause, see [27])
+  github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [28])
+  github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [29])
+  github.com/sqweek/dialog v0.0.0-20220809060634-e981b270ebbf  (ISC, see [39])
+  github.com/tidwall/gjson v1.18.0  (MIT, see [30])
+  github.com/tidwall/match v1.1.1  (MIT, see [30])
+  github.com/tidwall/pretty v1.2.0  (MIT, see [31])
+  github.com/tidwall/sjson v1.2.5  (MIT, see [30])
+  github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12  (BSD-3-Clause, see [40])
+  github.com/yuin/gopher-lua v1.1.0  (MIT, see [32])
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498  (BSD-3-Clause, see [8])
   golang.org/x/image v0.22.0  (BSD-3-Clause, see [2])
   golang.org/x/mobile v0.0.0-20221110043201-43a038452099  (BSD-3-Clause, see [8])
   golang.org/x/sys v0.18.0  (BSD-3-Clause, see [8])
   golang.org/x/text v0.20.0  (BSD-3-Clause, see [2])
-  gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [32])
-  lib\libgcc_s_seh-1.dll, lib\libstdc++-6.dll (the GCC runtime)  (GPL-3.0 with the GCC Runtime Library Exception, see [40] and [41])
-  lib\libwinpthread-1.dll (mingw-w64)  (MIT, see [42])
+  gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [33])
+  lib\libgcc_s_seh-1.dll, lib\libstdc++-6.dll (the GCC runtime)  (GPL-3.0 with the GCC Runtime Library Exception, see [41] and [42])
+  lib\libwinpthread-1.dll (mingw-w64)  (MIT, see [43])
 
 app\Dependencies\release, release-v2 and ikemen-go-src\data, font, external
   Ikemen GO's data and scripts; the default-3x5 font by Gacel and the engine icon by Cylia Margatroid  (MIT, CC BY 3.0, see [3])
   the screenpack, lifebars and sounds (data\ikemen1 and the rest)  (CC BY 3.0, see [4])
   Elecbyte's screens, sounds, fonts and Kung Fu Man  (CC BY-NC 3.0, see [5])
-  Open Sans (font\Open_Sans)  (Apache-2.0, see [22])
+  Open Sans (font\Open_Sans)  (Apache-2.0, see [23])
 
 app\starter - the starter; the first start makes Content\default from it
   Kung Fu Man and his stage (Elecbyte)  (CC BY-NC 3.0, non-commercial, see [5])
@@ -3698,7 +3699,42 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 
 --------------------------------------------------------------------------------
-[14] Apache-2.0
+[14] see the text - the Score Ranking board's 16 arcade fonts
+--------------------------------------------------------------------------------
+Applies to:
+  the Score Ranking board's 16 arcade fonts (public\ranking\leaderboard-fonts)
+
+THE SCORE RANKING BOARD'S ARCADE FONTS
+======================================
+
+These 16 fonts are free, fan-made arcade fonts. Their makers released them
+for anyone to use, without their names and without any license terms. They
+are included here as they were released, so a host can pick them for the
+Score Ranking leaderboard page. Mugen Studio's MIT license does not cover
+them.
+
+A Website export copies only the fonts a board picks, with this file, into a
+leaderboard-fonts folder beside leaderboard.html.
+
+  alpha-1.otf                 Alpha 1
+  arcade-configuration.otf    Arcade Configuration
+  arcade-service-2.otf        Arcade Service 2
+  arcade-service-3.otf        Arcade Service 3
+  bizarre-future.otf          Bizarre Future
+  cota.otf                    COTA
+  hyper-combo.otf             Hyper Combo
+  inkz-monster-savior.otf     INKZ Monster Savior
+  kof-2003.otf                KOF 2003
+  msh-name.otf                MSH Name
+  mvc.otf                     MVC
+  mvc-heros-name.otf          MvC Hero's Name
+  second-impact.otf           Second Impact
+  sf3-new-generation.otf      SF3 New Generation
+  street-fighter-alpha.otf    Street Fighter Alpha
+  tournament.otf              Tournament
+
+--------------------------------------------------------------------------------
+[15] Apache-2.0
 --------------------------------------------------------------------------------
 Applies to:
   github.com/ebitengine/oto/v3 v3.2.0 (the web engine)
@@ -3908,7 +3944,7 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
-[15] BSD-3-Clause - github.com/go-gl/mathgl
+[16] BSD-3-Clause - github.com/go-gl/mathgl
 --------------------------------------------------------------------------------
 Applies to:
   github.com/go-gl/mathgl v1.0.0 (the web engine)
@@ -3939,7 +3975,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------------------------------
-[16] FreeType License - github.com/golang/freetype
+[17] FreeType License - github.com/golang/freetype
 --------------------------------------------------------------------------------
 Applies to:
   github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 (the web engine)
@@ -4129,7 +4165,7 @@ Legal Terms
 --- end of FTL.TXT ---
 
 --------------------------------------------------------------------------------
-[17] MIT - github.com/gopxl/beep/v2
+[18] MIT - github.com/gopxl/beep/v2
 --------------------------------------------------------------------------------
 Applies to:
   github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99 (the web engine)
@@ -4158,7 +4194,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[18] Apache-2.0 - github.com/icza/bitio
+[19] Apache-2.0 - github.com/icza/bitio
 --------------------------------------------------------------------------------
 Applies to:
   github.com/icza/bitio v1.1.0 (the web engine)
@@ -4367,7 +4403,7 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
-[19] MIT - github.com/ikemen-engine/ggpo
+[20] MIT - github.com/ikemen-engine/ggpo
 --------------------------------------------------------------------------------
 Applies to:
   github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2 (the web engine)
@@ -4396,7 +4432,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[20] MIT
+[21] MIT
 --------------------------------------------------------------------------------
 Applies to:
   github.com/jfreymuth/oggvorbis v1.0.5 (the web engine)
@@ -4427,7 +4463,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[21] MIT - github.com/lucasb-eyer/go-colorful
+[22] MIT - github.com/lucasb-eyer/go-colorful
 --------------------------------------------------------------------------------
 Applies to:
   github.com/lucasb-eyer/go-colorful v1.2.0 (the web engine)
@@ -4442,7 +4478,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-[22] Apache-2.0
+[23] Apache-2.0
 --------------------------------------------------------------------------------
 Applies to:
   github.com/lukegb/dds v0.0.0-20190402175749-8b7170e64003 (the web engine)
@@ -4653,7 +4689,7 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
-[23] MIT - github.com/mdouchement/hdr
+[24] MIT - github.com/mdouchement/hdr
 --------------------------------------------------------------------------------
 Applies to:
   github.com/mdouchement/hdr v0.2.4 (the web engine)
@@ -4682,7 +4718,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[24] Unlicense (public domain) - github.com/mewkiz/flac
+[25] Unlicense (public domain) - github.com/mewkiz/flac
 --------------------------------------------------------------------------------
 Applies to:
   github.com/mewkiz/flac v1.0.12 (the web engine)
@@ -4714,7 +4750,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 
 --------------------------------------------------------------------------------
-[25] Unlicense (public domain) - github.com/mewkiz/pkg
+[26] Unlicense (public domain) - github.com/mewkiz/pkg
 --------------------------------------------------------------------------------
 Applies to:
   github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 (the web engine)
@@ -4746,7 +4782,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 
 --------------------------------------------------------------------------------
-[26] BSD-2-Clause - github.com/pkg/errors
+[27] BSD-2-Clause - github.com/pkg/errors
 --------------------------------------------------------------------------------
 Applies to:
   github.com/pkg/errors v0.9.1 (the web engine)
@@ -4777,7 +4813,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------------------------------
-[27] BSD-2-Clause - github.com/qmuntal/gltf
+[28] BSD-2-Clause - github.com/qmuntal/gltf
 --------------------------------------------------------------------------------
 Applies to:
   github.com/qmuntal/gltf v0.24.2 (the web engine)
@@ -4810,7 +4846,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------------------------------
-[28] MIT - github.com/samhocevar/go-meltysynth
+[29] MIT - github.com/samhocevar/go-meltysynth
 --------------------------------------------------------------------------------
 Applies to:
   github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16 (the web engine)
@@ -4843,7 +4879,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[29] MIT
+[30] MIT
 --------------------------------------------------------------------------------
 Applies to:
   github.com/tidwall/gjson v1.18.0 (the web engine)
@@ -4875,7 +4911,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-[30] MIT - github.com/tidwall/pretty
+[31] MIT - github.com/tidwall/pretty
 --------------------------------------------------------------------------------
 Applies to:
   github.com/tidwall/pretty v1.2.0 (the web engine)
@@ -4903,7 +4939,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-[31] MIT - github.com/yuin/gopher-lua
+[32] MIT - github.com/yuin/gopher-lua
 --------------------------------------------------------------------------------
 Applies to:
   github.com/yuin/gopher-lua v1.1.0 (the web engine)
@@ -4932,7 +4968,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[32] Apache-2.0 - gopkg.in/ini.v1
+[33] Apache-2.0 - gopkg.in/ini.v1
 --------------------------------------------------------------------------------
 Applies to:
   gopkg.in/ini.v1 v1.67.0 (the web engine)
@@ -5131,7 +5167,7 @@ third-party archives.
    limitations under the License.
 
 --------------------------------------------------------------------------------
-[33] MIT - github.com/Eiton/vulkan
+[34] MIT - github.com/Eiton/vulkan
 --------------------------------------------------------------------------------
 Applies to:
   github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b (Ikemen_GO.exe)
@@ -5158,7 +5194,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-[34] BSD-3-Clause - github.com/TheTitanrain/w32
+[35] BSD-3-Clause - github.com/TheTitanrain/w32
 --------------------------------------------------------------------------------
 Applies to:
   github.com/TheTitanrain/w32 v0.0.0-20200114052255-2654d97dbd3d (Ikemen_GO.exe)
@@ -5188,7 +5224,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------------------------------
-[35] MIT - github.com/flopp/go-findfont
+[36] MIT - github.com/flopp/go-findfont
 --------------------------------------------------------------------------------
 Applies to:
   github.com/flopp/go-findfont v0.1.0 (Ikemen_GO.exe)
@@ -5216,7 +5252,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[36] MIT - github.com/go-gl/gl
+[37] MIT - github.com/go-gl/gl
 --------------------------------------------------------------------------------
 Applies to:
   github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71 (Ikemen_GO.exe)
@@ -5244,7 +5280,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[37] MIT - github.com/ikemen-engine/reisen
+[38] MIT - github.com/ikemen-engine/reisen
 --------------------------------------------------------------------------------
 Applies to:
   github.com/ikemen-engine/reisen v0.1.10-0.20260911210321-7972c2bbc957 (Ikemen_GO.exe)
@@ -5272,7 +5308,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[38] ISC - github.com/sqweek/dialog
+[39] ISC - github.com/sqweek/dialog
 --------------------------------------------------------------------------------
 Applies to:
   github.com/sqweek/dialog v0.0.0-20220809060634-e981b270ebbf (Ikemen_GO.exe)
@@ -5294,7 +5330,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 --------------------------------------------------------------------------------
-[39] BSD-3-Clause - github.com/veandco/go-sdl2
+[40] BSD-3-Clause - github.com/veandco/go-sdl2
 --------------------------------------------------------------------------------
 Applies to:
   github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12 (Ikemen_GO.exe)
@@ -5326,7 +5362,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --------------------------------------------------------------------------------
-[40] GPL-3.0 - the GCC runtime libraries
+[41] GPL-3.0 - the GCC runtime libraries
 --------------------------------------------------------------------------------
 Applies to:
   lib\libgcc_s_seh-1.dll, lib\libstdc++-6.dll (GCC runtime)
@@ -6009,7 +6045,7 @@ Public License instead of this License.  But first, please read
 <http://www.gnu.org/philosophy/why-not-lgpl.html>.
 
 --------------------------------------------------------------------------------
-[41] GCC Runtime Library Exception 3.1
+[42] GCC Runtime Library Exception 3.1
 --------------------------------------------------------------------------------
 Applies to:
   lib\libgcc_s_seh-1.dll, lib\libstdc++-6.dll (GCC runtime)
@@ -6088,7 +6124,7 @@ presumption that third-party software is unaffected by the copyleft
 requirements of the license of GCC.
 
 --------------------------------------------------------------------------------
-[42] mingw-w64 winpthreads
+[43] mingw-w64 winpthreads
 --------------------------------------------------------------------------------
 Applies to:
   lib\libwinpthread-1.dll

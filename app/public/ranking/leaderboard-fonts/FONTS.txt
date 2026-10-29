@@ -1,0 +1,28 @@
+THE SCORE RANKING BOARD'S ARCADE FONTS
+======================================
+
+These 16 fonts are free, fan-made arcade fonts. Their makers released them
+for anyone to use, without their names and without any license terms. They
+are included here as they were released, so a host can pick them for the
+Score Ranking leaderboard page. Mugen Studio's MIT license does not cover
+them.
+
+A Website export copies only the fonts a board picks, with this file, into a
+leaderboard-fonts folder beside leaderboard.html.
+
+  alpha-1.otf                 Alpha 1
+  arcade-configuration.otf    Arcade Configuration
+  arcade-service-2.otf        Arcade Service 2
+  arcade-service-3.otf        Arcade Service 3
+  bizarre-future.otf          Bizarre Future
+  cota.otf                    COTA
+  hyper-combo.otf             Hyper Combo
+  inkz-monster-savior.otf     INKZ Monster Savior
+  kof-2003.otf                KOF 2003
+  msh-name.otf                MSH Name
+  mvc.otf                     MVC
+  mvc-heros-name.otf          MvC Hero's Name
+  second-impact.otf           Second Impact
+  sf3-new-generation.otf      SF3 New Generation
+  street-fighter-alpha.otf    Street Fighter Alpha
+  tournament.otf              Tournament
