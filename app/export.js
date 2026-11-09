@@ -88,6 +88,10 @@ function copyBranded(src, dest, roster, { isPublic = false } = {}) {
     // copy, where the roster holds that host's address and never the author's.
     identityUrl: isPublic ? '' : (roster.identityUrl || ''),
   };
+  // THE GAME ONLY PAGE (Options > Game only page): the picture and nothing
+  // else, its options behind a MENU button. Written only when it is on, so a
+  // build without it gets the very block it always did.
+  if (roster.gameOnly === true) brand.gameOnly = true;
   //
   // $' and $$ are patterns, and a title holding one broke the block and the
   // page. '<' is escaped so a title cannot close the <script> the block is in.
@@ -388,6 +392,23 @@ function exportSite({ pack = false, v2 = false, public: isPublic = false, dest }
     }
     copy(srcFile, path.join(DIST, f));
     if (f === 'identity.js') haveIdentity = true;
+  }
+  // A library a page loads by itself, only when it needs it, has no <script
+  // src>: studio-lite.html imports its .rar and .7z unpacker the first time
+  //
+  // it. The page names the folder (./vendor/<name>/<version>/), and the folder
+  //
+  // the page for the same reason the scripts are.
+  const vendorDirs = (htmlFile) => [...new Set([...fs.readFileSync(htmlFile, 'utf8')
+    .matchAll(/['"]\.\/(vendor\/[\w.-]+\/[\w.-]+)\/['"]/g)].map((m) => m[1]))];
+  for (const page of PAGES) {
+    for (const d of vendorDirs(path.join(webDir, page))) {
+      const srcDir = path.join(webDir, ...d.split('/'));
+      let names = [];
+      try { names = fs.readdirSync(srcDir, { withFileTypes: true }).filter((e) => e.isFile()).map((e) => e.name); } catch (e) { /* missing: below */ }
+      if (!names.length) throw new Error('export: required folder missing: ' + path.relative(ROOT, srcDir) + ' (referenced by ' + page + ')');
+      for (const f of names) copy(path.join(srcDir, f), path.join(DIST, ...d.split('/'), f));
+    }
   }
   copyBranded(path.join(webDir, 'index.html'), path.join(DIST, 'index.html'), roster, { isPublic });
   // The game boot page is always reachable at play.html. On public builds the

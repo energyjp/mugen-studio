@@ -200,16 +200,16 @@
 
   <h2>Characters</h2>
   <div class="drop" data-type="character">
-    <b>Drop a character folder or .zip</b>
-    <small>a folder/zip containing the character's <code>.def</code> and its files</small>
+    <b>Drop a character folder, .zip, .rar or .7z</b>
+    <small>a folder or archive containing the character's <code>.def</code> and its files</small>
     <div><button class="pick" data-dir="1">choose a folder…</button></div>
   </div>
   <div id="charList"></div>
 
   <h2>Stages</h2>
   <div class="drop" data-type="stage">
-    <b>Drop a stage folder or .zip</b>
-    <small>a folder/zip containing the stage's <code>.def</code> and its sprites</small>
+    <b>Drop a stage folder, .zip, .rar or .7z</b>
+    <small>a folder or archive containing the stage's <code>.def</code> and its sprites</small>
     <div><button class="pick" data-dir="1">choose a folder…</button></div>
   </div>
   <div id="stageList"></div>
@@ -227,7 +227,7 @@
 
   <h2>Theme</h2>
   <div class="drop" data-type="theme">
-    <b>Drop a screenpack folder or .zip</b>
+    <b>Drop a screenpack folder, .zip, .rar or .7z</b>
     <small>a motif with a <code>system.def</code> — changes the menus, select screen and lifebars</small>
     <div><button class="pick" data-dir="1">choose a folder…</button></div>
   </div>
@@ -257,6 +257,12 @@
 <!-- Motif [Select Info] parsing + select.def authoring, shared with the
      desktop Studio so the two cannot drift. -->
 <script src="./motif-core.js"></script>
+<!-- The pause menu's Command List for a character a player adds: the Studio's
+     own writer (cmdlist.js runs this core too), so the list is the one the
+     Website export writes. The two cores it reads the files with come first. -->
+<script src="./scenelib-core.js"></script>
+<script src="./cnsexpr-core.js"></script>
+<script src="./cmdlist-core.js"></script>
 <script>
 (function () {
   'use strict';
@@ -295,7 +301,7 @@
   }
   const load = (k) => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } };
   const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-  const slug = (s) => s.toLowerCase().replace(/\.(zip|def)$/i, '').replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'item';
+  const slug = (s) => s.toLowerCase().replace(/\.(zip|rar|7z|def)$/i, '').replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'item';
   function latin1(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s; }
 
   // ---- H-compat + netplay detection (client-side port of the desktop scan) ----
@@ -1045,7 +1051,7 @@
       const root = [...firsts][0];
       return { folderName: root, files: entries.map(e => ({ path: e.path.slice(root.length + 1), bytes: e.bytes })) };
     }
-    return { folderName: fallback.replace(/\.zip$/i, ''), files: entries };
+    return { folderName: fallback.replace(ARCHIVE_RE, ''), files: entries };
   }
   const findMainDef = (files, folderName) => {
     const defs = files.filter(f => /\.def$/i.test(f.path));
@@ -1083,6 +1089,213 @@
     }).sort((a, b) => b.score - a.score || a.depth - b.depth);
     return scored[0].path;
   };
+
+  // ---- .rar and .7z (libarchive, fetched the first time one is dropped) ----
+  // The desktop Studio unpacks these with Windows' tar.exe, which is
+  // libarchive. A page cannot run that, so it runs libarchive itself, built for
+  // the browser by the libarchive.js package and kept at an exact version in
+  // vendor/libarchive/<version>/ with the license texts of everything in it
+  // (VENDOR.json says where each file came from; THIRD-PARTY-NOTICES names
+  // them). Nothing of it loads until an archive other than a .zip arrives: a
+  // .zip keeps unzip() above, and the page's first load fetches nothing more.
+  // Each archive gets its own worker (worker-bundle.js, which loads
+  // libarchive.wasm beside it), ended when the files are out.
+  //
+  // What the package does not do, and this does around it:
+  //  - NAMES the way unzip() writes them: one character per byte the archive
+  //    stores. RAR 5 stores names as UTF-8, 7z as UTF-16 and RAR 4 as Unicode
+  //    when a name needs it; libarchive hands each back as text, written here
+  //    as its UTF-8 bytes, which is what a .zip stores for the same name (its
+  //    UTF-8 flag) - so one pack gives the same paths in any of the three. An
+  //    old RAR 4 name WITHOUT the Unicode flag is the code page of the Windows
+  //    that made it (Shift-JIS on a Japanese one, as in old MUGEN zips), which
+  //    the package decodes as UTF-8 and garbles; that name is read from the
+  //    archive's own header instead, raw, as unzip() keeps an old zip's.
+  //  - DAMAGE. Its worker stops listing at a header it cannot read without
+  //    saying so, and reads each file's exact size, so the CRC that libarchive
+  //    checks one read later is never checked: a .rar cut short came back as 4
+  //    of its 13 files and a RAR 4 with damaged data as all of them, both with
+  //    no error. So a .rar's headers are walked here too, and every file in it
+  //    must come back, with its size and its CRC-32. (7z keeps its file list at
+  //    the end, so a cut one lists nothing, and libarchive checks its CRCs in
+  //    the same read.)
+  const ARCHIVE_RE = /\.(zip|rar|7z)$/i;
+  const LIBARCHIVE = './vendor/libarchive/2.0.2/';
+  let libarchive = null;
+  const isRar = (b) => b.length > 7 && b[0] === 0x52 && b[1] === 0x61 && b[2] === 0x72 && b[3] === 0x21 && b[4] === 0x1a && b[5] === 0x07;
+  const is7z = (b) => b.length > 6 && b[0] === 0x37 && b[1] === 0x7a && b[2] === 0xbc && b[3] === 0xaf && b[4] === 0x27 && b[5] === 0x1c;
+  let crcTable = null;
+  function crc32(bytes) {
+    if (!crcTable) {
+      crcTable = new Int32Array(256);
+      for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcTable[n] = c; }
+    }
+    let c = -1;
+    for (let i = 0; i < bytes.length; i++) c = crcTable[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ -1) >>> 0;
+  }
+  // A .rar's own file list, from its block headers (RAR 4 is the RAR 2.9
+  // format, RAR 5 the RAR 5.0 one; rarlab.com documents both). One record per
+  // file or folder header in archive order, which is the order libarchive
+  // hands entries back: { name, dir, size, crc } - `name` only for a RAR 4
+  // name without the Unicode flag (its raw bytes, one character per byte),
+  // `size` null when the archive does not know it, `crc` null when it keeps
+  // none. `cut`: a header or its data runs past the end of the file. `locked`:
+  // the archive or a file in it is password-protected. null when it is not a
+  // RAR at all.
+  function rarHeaders(b) {
+    if (!isRar(b)) return null;
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    const out = { files: [], cut: false, locked: false };
+    if (b[6] === 0x00) {   // RAR 4
+      let p = 7;
+      while (p < b.length) {
+        if (p + 7 > b.length) { out.cut = true; break; }
+        const type = b[p + 2], flags = dv.getUint16(p + 3, true), size = dv.getUint16(p + 5, true);
+        if (size < 7 || p + size > b.length) { out.cut = true; break; }
+        if (type === 0x73 && (flags & 0x80)) { out.locked = true; break; }   // headers encrypted
+        if (type === 0x7b) break;   // end of archive
+        let data = flags & 0x8000 ? dv.getUint32(p + 7, true) : 0;
+        if (type === 0x74) {
+          if (size < 32) { out.cut = true; break; }
+          const large = flags & 0x100;
+          if (large) data += dv.getUint32(p + 32, true) * 0x100000000;
+          const nameAt = p + 32 + (large ? 8 : 0), nameSize = dv.getUint16(p + 26, true);
+          out.files.push({
+            name: flags & 0x200 ? null : latin1(b.subarray(nameAt, nameAt + nameSize)),
+            dir: (flags & 0xe0) === 0xe0,
+            size: dv.getUint32(p + 11, true) + (large ? dv.getUint32(p + 36, true) * 0x100000000 : 0),
+            crc: dv.getUint32(p + 16, true),
+          });
+          if (flags & 0x04) out.locked = true;
+        }
+        p += size + data;
+        if (p > b.length) { out.cut = true; break; }
+      }
+      return out;
+    }
+    if (b[6] !== 0x01 || b[7] !== 0x00) return null;
+    let p = 8;
+    const vint = () => {
+      let v = 0, m = 1;
+      for (;;) {
+        if (p >= b.length) throw new RangeError('cut');
+        const x = b[p++];
+        v += (x & 0x7f) * m; m *= 128;
+        if (!(x & 0x80)) return v;
+      }
+    };
+    try {
+      while (p < b.length) {
+        p += 4;   // the header's CRC-32
+        const hsize = vint(), body = p;
+        if (body + hsize > b.length) { out.cut = true; break; }
+        const type = vint(), flags = vint();
+        const extra = flags & 0x01 ? vint() : 0, data = flags & 0x02 ? vint() : 0;
+        if (type === 4) { out.locked = true; break; }   // headers encrypted
+        if (type === 5) break;   // end of archive
+        if (type === 2) {
+          const ff = vint(), size = vint();
+          vint();   // attributes
+          if (ff & 0x02) p += 4;   // modification time
+          const crc = ff & 0x04 ? dv.getUint32(p, true) : null;
+          out.files.push({ name: null, dir: !!(ff & 0x01), size: ff & 0x08 ? null : size, crc });
+          // The extra area's records; type 1 is the file's encryption.
+          for (p = body + hsize - extra; p < body + hsize;) {
+            const rsize = vint(), rstart = p;
+            if (vint() === 1) out.locked = true;
+            p = rstart + rsize;
+          }
+        }
+        p = body + hsize + data;
+        if (p > b.length) { out.cut = true; break; }
+      }
+    } catch (e) { out.cut = true; }
+    return out;
+  }
+  // The words for an archive that will not open, after the desktop Studio's
+  // (modlib.js untarTrouble), naming the file.
+  function archiveTrouble(name, why, hdr) {
+    if ((hdr && hdr.locked) || /passphrase|password|encrypt|crypto/i.test(why)) {
+      return name + ' is password-protected. Unpack it with its password in 7-Zip or WinRAR, then drop the folder';
+    }
+    if (/unrecognized archive format/i.test(why)) return name + ' is not a .zip, .rar or .7z archive';
+    if (/unsupported|not supported/i.test(why)) return name + ' uses something this page cannot unpack (' + why + '). Unpack it with 7-Zip or WinRAR, then drop the folder';
+    return name + ' is damaged or cut short' + (why ? ' (' + why + ')' : '');
+  }
+  // A dropped .rar or .7z (or a renamed one: what it IS decides, not its name)
+  // as unzip() returns a .zip: [{ path, bytes }], files only, archive order.
+  async function unarchive(file, bytes) {
+    const name = file.name;
+    toast('Unpacking ' + name + '…');
+    let Archive;
+    try {
+      if (!libarchive) libarchive = import(LIBARCHIVE + 'libarchive.js');
+      ({ Archive } = await libarchive);
+    } catch (e) {
+      libarchive = null;   // a later drop tries again
+      throw new Error('the .rar and .7z unpacker did not load (' + e.message + '). Unpack ' + name + ' with 7-Zip or WinRAR, then drop the folder');
+    }
+    // A worker that cannot start is said, not waited on forever. These errors
+    // are the page's own and go out as they are; libarchive's are put in words.
+    const own = (msg) => Object.assign(new Error(msg + '. Unpack ' + name + ' with 7-Zip or WinRAR, then drop the folder'), { own: true });
+    let stop;
+    const failed = new Promise((resolve, reject) => { stop = reject; });
+    failed.catch(() => {});
+    const started = setTimeout(() => stop(own('the .rar and .7z unpacker did not start within a minute')), 60000);
+    Archive.init({
+      getWorker: () => {
+        const w = new Worker(new URL(LIBARCHIVE + 'worker-bundle.js', document.baseURI), { type: 'module' });
+        w.addEventListener('error', (e) => stop(own('the .rar and .7z unpacker did not start' + (e.message ? ' (' + e.message + ')' : ''))));
+        return w;
+      },
+    });
+    const hdr = rarHeaders(bytes);
+    let reader = null, entries;
+    try {
+      reader = await Promise.race([Archive.open(file), failed]);
+      clearTimeout(started);
+      // The worker's own list rather than extractFiles(), which folds it into
+      // nested folders and loses the archive's order and any repeated name.
+      entries = await Promise.race([reader.client.extractFiles(), failed]);
+    } catch (e) {
+      if (e && e.own) throw e;
+      throw new Error(archiveTrouble(name, String((e && e.message) || e), hdr));
+    } finally {
+      clearTimeout(started);
+      if (reader) reader.close();
+    }
+    if (hdr && hdr.locked) throw new Error(archiveTrouble(name, '', hdr));
+    // The walk is trusted when it lines up with libarchive's list: the same
+    // number of entries, and every plain-ASCII RAR 4 name the same in both.
+    const ascii = (s) => !/[^\x00-\x7f]/.test(s);
+    const lined = hdr && hdr.files.length === entries.length && hdr.files.every((h, i) =>
+      h.name === null || entries[i].type !== 'FILE' || !ascii(h.name) || entries[i].path === h.name.replace(/\\/g, '/'));
+    if (hdr && (hdr.cut || hdr.files.length !== entries.length)) throw new Error(archiveTrouble(name, '', hdr));
+    const files = [];
+    entries.forEach((e, i) => {
+      if (e.type !== 'FILE') return;
+      const h = lined ? hdr.files[i] : null;
+      if (h && !h.dir && ((h.size !== null && e.fileData.length !== h.size) || (h.crc !== null && crc32(e.fileData) !== h.crc))) {
+        throw new Error(archiveTrouble(name, 'a file in it fails its CRC check: ' + e.path, hdr));
+      }
+      const path = h && h.name !== null ? h.name : latin1(enc.encode(e.path));
+      files.push({ path: path.replace(/\\/g, '/'), bytes: e.fileData });
+    });
+    if (!files.length) {
+      throw new Error(hdr || is7z(bytes) ? name + ' is empty, damaged or cut short' : name + ' is not a .zip, .rar or .7z archive');
+    }
+    return files;
+  }
+  // Every archive a box takes, as [{ path, bytes }] for stripCommonRoot. A zip
+  // by its bytes - or by its name, when the bytes are not a RAR or a 7z - goes
+  // to unzip() exactly as before; anything else to libarchive.
+  async function unpackArchive(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const pk = bytes.length > 3 && bytes[0] === 0x50 && bytes[1] === 0x4b && (bytes[2] === 3 || bytes[2] === 5);
+    if (pk || (/\.zip$/i.test(file.name) && !isRar(bytes) && !is7z(bytes))) return unzip(bytes);
+    return unarchive(file, bytes);
+  }
 
   // ---- select.def rebuild ----
   async function fetchBase() {
@@ -1371,7 +1584,20 @@
       }
     }
     const charFiles = files.filter((f) => !stageOwned.has(f.path));
-    for (const f of charFiles) await ikemenMods.add('chars/' + mount + '/' + f.path, f.bytes);
+    // THE PAUSE MENU'S COMMAND LIST (cmdlist-core.js, the Website export's
+    // writer): movelist.dat beside the def and a `movelist` line as the first of
+    // its [Files], in the copy this page keeps - the file and the line the
+    // export writes, at the same paths, so the game's pause menu lists her
+    // moves. A character that ships her own list is never touched, a name her
+    // folder already uses (in any letter case) is not taken, and the defaults
+    // apply (there is no Moves page here). A failure costs her the list only.
+    let ml = null;
+    try { ml = cmdlistCore.shipFiles(charFiles, def); }
+    catch (e) { console.warn('command list not written for ' + mount + ':', e.message); }
+    for (const f of charFiles) {
+      await ikemenMods.add('chars/' + mount + '/' + f.path, ml && f.path === ml.def.rel ? toLatin1(ml.def.text) : f.bytes);
+    }
+    if (ml) await ikemenMods.add('chars/' + mount + '/' + ml.file.rel, enc.encode(ml.file.text));
     const sizeMB = charFiles.reduce((n, f) => n + f.bytes.length, 0) / 1e6;
     const h = scanChar(files, def);
     // Remember where [Size] lives + the character's ORIGINAL scale, so the size
@@ -1412,6 +1638,8 @@
       palApplier: sffFile && sffFile.bytes[15] === 2 ? await inspectPalApplier(memGetter(files), def) : null,
       // Files it references that live outside its own folder - see scanMissingDeps.
       missingDeps: await scanMissingDeps(files, def, mount),
+      // The Command List written above: its file beside the def, and its moves.
+      commandList: ml ? { file: ml.file.rel, moves: ml.rows } : null,
     });
     save(KEYS.character, list); await rebuildSelectDef();
 
@@ -1466,7 +1694,7 @@
         + (skippedSfx.length === 1 ? '' : 's') + ' skipped');
       toast(folderName + ': ' + bits.join(', '), 'ok');
     }
-    return { mount, def, h, attached, addedTracks };
+    return { mount, def, h, attached, addedTracks, commandList: ml ? ml.rows : 0 };
   }
   // A stage .def names its files the way MUGEN's ROOT layout expects:
   //
@@ -2213,7 +2441,7 @@
     await rebuildSelectDef();
   }
 
-  // ---- ingest (folder drop, zip, or files) ----
+  // ---- ingest (folder drop, archive, or files) ----
   function readDir(entry, prefix, out) {
     return new Promise((resolve) => {
       const reader = entry.createReader(); const all = [];
@@ -2255,12 +2483,12 @@
       toast('Added ' + audio.length + ' track(s)', 'ok'); render(); return;
     }
     const dir = entries.find(e => e.isDirectory);
-    const zip = fileList.find(f => /\.zip$/i.test(f.name));
+    const archive = fileList.find(f => ARCHIVE_RE.test(f.name));
     let folderName, files;
     try {
       if (dir) { files = []; await readDir(dir, '', files); folderName = dir.name; }
-      else if (zip) ({ folderName, files } = stripCommonRoot(await unzip(new Uint8Array(await zip.arrayBuffer())), zip.name));
-      else return toast('Drop a folder or a .zip.', 'err');
+      else if (archive) ({ folderName, files } = stripCommonRoot(await unpackArchive(archive), archive.name));
+      else return toast('Drop a folder, or a .zip, .rar or .7z.', 'err');
       await finish(type, folderName, files);
     } catch (e) { toast('Could not read: ' + e.message, 'err'); }
   }
@@ -2275,7 +2503,11 @@
   async function finish(type, folderName, files) {
     try {
       toast('Adding ' + folderName + '…');
-      if (type === 'character') await addCharacter(folderName, files);
+      let listed = '';
+      if (type === 'character') {
+        const r = await addCharacter(folderName, files);
+        if (r && r.commandList) listed = ', Command List: ' + r.commandList + ' move' + (r.commandList === 1 ? '' : 's');
+      }
       else if (type === 'theme') {
         const r = await addTheme(folderName, files);
         if (r && r.videoScenes && r.videoScenes.length) {
@@ -2297,7 +2529,7 @@
         }
         toast(msg, 'ok'); render(); return;
       }
-      toast('Added ' + folderName + ' (' + files.length + ' files)', 'ok'); render();
+      toast('Added ' + folderName + ' (' + files.length + ' files' + listed + ')', 'ok'); render();
     } catch (e) { toast('Could not add: ' + e.message, 'err'); }
   }
 
@@ -3848,7 +4080,7 @@
   render();
   loadShipped();
 
-  window.__modStudio = { scanChar, netplayLevel, augmentSelectDef, currentMotifInfo, loadRules, saveRules, RULE_DEFS, setCharConsts, readCharConsts, patchCharConsts, renderSelectGrid, currentMotifSff, portraitFor, readCharacterEntries, unzip, addCharacter, addStage, scanStageDeps, addMusic, addTheme, removeTheme, listBuiltinMotifs, stripCommonRoot, rebuildSelectDef, fetchBase, load, KEYS, setCharScale, readSizeScale, parseShipped, toggleShipped, loadShipped, activeStageCount, removeItem, stageTracks, setStageTracks, setStageMusic, expectedBuildId, sendBuild, importBuild };
+  window.__modStudio = { scanChar, netplayLevel, augmentSelectDef, currentMotifInfo, loadRules, saveRules, RULE_DEFS, setCharConsts, readCharConsts, patchCharConsts, renderSelectGrid, currentMotifSff, portraitFor, readCharacterEntries, unzip, unpackArchive, rarHeaders, addCharacter, addStage, scanStageDeps, addMusic, addTheme, removeTheme, listBuiltinMotifs, stripCommonRoot, rebuildSelectDef, fetchBase, load, KEYS, setCharScale, readSizeScale, parseShipped, toggleShipped, loadShipped, activeStageCount, removeItem, stageTracks, setStageTracks, setStageMusic, expectedBuildId, sendBuild, importBuild };
 })();
 </script>
 </body>

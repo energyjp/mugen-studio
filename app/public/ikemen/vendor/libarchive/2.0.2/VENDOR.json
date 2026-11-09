@@ -1,0 +1,99 @@
+{
+  "note": "The .rar and .7z unpacker studio-lite.html loads the first time one is added. The four package files are libarchive.js 2.0.2 from npm, byte for byte; the LICENSE-*.txt texts are those of what its two bundles and its .wasm are built from. scripts/make-notices.js reads this file for the notices.",
+  "name": "libarchive.js",
+  "version": "2.0.2",
+  "what": "the Mod Studio's .rar and .7z unpacker, which studio-lite.html loads the first time one is added",
+  "license": "MIT",
+  "tarball": "https://registry.npmjs.org/libarchive.js/-/libarchive.js-2.0.2.tgz",
+  "tarballBytes": 1068246,
+  "tarballSha256": "bdcc65af6654b4adbb6cad203272d045d2e25a4cb4281be05b37cc877de92584",
+  "integrity": "sha512-JHb+P4suNSjvz/dMdRgOe7JAxluXJeialzSFkKHU5y0ZK+m175drPOaIYW6I9WXSDcPcQ13eCUgMnpgY0ggmoQ==",
+  "files": {
+    "libarchive.js": {
+      "from": "package/dist/libarchive.js",
+      "bytes": 8085,
+      "sha256": "7948329343f4039e3088bb9818af96b2e70fc7dac8a43b878ced4314de0c8f2a"
+    },
+    "worker-bundle.js": {
+      "from": "package/dist/worker-bundle.js",
+      "bytes": 61634,
+      "sha256": "552fd4c4e96e677b8d1ee28b96eec3f7761f19ae9069b6df40c1848b3b632493"
+    },
+    "libarchive.wasm": {
+      "from": "package/dist/libarchive.wasm",
+      "bytes": 1002547,
+      "sha256": "8a66066ed3ea1e6db0469ec752d8fca888a6bf737c6cff21fdbcb62241a72424"
+    },
+    "LICENSE": {
+      "from": "package/LICENSE",
+      "bytes": 1069,
+      "sha256": "cd2233ededca3500350239c4995a3bf4f57cb810b77074d266b0fb0d781dc161"
+    }
+  },
+  "build": "libarchive.wasm is the package repository's lib/build/libarchive.wasm at tag v2.0.2 (the same git blob), made by its lib/tools/docker/Dockerfile and build.sh: libarchive 3.7.2, liblzma from XZ Utils 5.2.11 and OpenSSL 1.0.2s's libcrypto built from source, zlib and bzip2 from Emscripten's ports (USE_ZLIB, USE_BZIP2: 1.2.13 and 1.0.6 in every Emscripten of that month), on the emscripten/emsdk image of January 2024. No zstd, lz4, nettle, lzo, xml or expat.",
+  "components": [
+    {
+      "name": "libarchive.js",
+      "version": "2.0.2",
+      "where": "libarchive.js, worker-bundle.js",
+      "license": "MIT",
+      "file": "LICENSE"
+    },
+    {
+      "name": "Comlink",
+      "version": "4.4.1",
+      "where": "libarchive.js, worker-bundle.js (built into both)",
+      "license": "Apache-2.0",
+      "file": "LICENSE-comlink.txt"
+    },
+    {
+      "name": "libarchive",
+      "version": "3.7.2",
+      "where": "libarchive.wasm",
+      "license": "BSD-2-Clause",
+      "file": "LICENSE-libarchive.txt"
+    },
+    {
+      "name": "zlib",
+      "version": "1.2.13",
+      "where": "libarchive.wasm",
+      "license": "Zlib",
+      "file": "LICENSE-zlib.txt"
+    },
+    {
+      "name": "bzip2",
+      "version": "1.0.6",
+      "where": "libarchive.wasm",
+      "license": "bzip2 (BSD-style)",
+      "file": "LICENSE-bzip2.txt"
+    },
+    {
+      "name": "liblzma (XZ Utils)",
+      "version": "5.2.11",
+      "where": "libarchive.wasm",
+      "license": "public domain",
+      "file": "LICENSE-xz.txt"
+    },
+    {
+      "name": "OpenSSL (libcrypto)",
+      "version": "1.0.2s",
+      "where": "libarchive.wasm",
+      "license": "OpenSSL and SSLeay (BSD-style)",
+      "file": "LICENSE-openssl.txt"
+    },
+    {
+      "name": "Emscripten's runtime",
+      "version": "",
+      "where": "libarchive.wasm, worker-bundle.js",
+      "license": "MIT or NCSA",
+      "file": "LICENSE-emscripten.txt"
+    },
+    {
+      "name": "musl, Emscripten's C library",
+      "version": "",
+      "where": "libarchive.wasm",
+      "license": "MIT",
+      "file": "LICENSE-musl.txt"
+    }
+  ]
+}

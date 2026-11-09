@@ -327,7 +327,7 @@ const READ_ONLY_ALLOWED = new Set([
 ]);
 const READ_ONLY_REFUSED = new Map(Object.entries({
   'changing the roster': ['/api/roster', '/api/build-order', '/api/max-matches', '/api/char-props', '/api/settings',
-    '/api/keys', '/api/button-style', '/api/local-config', '/api/board-art', '/api/host-setup', '/api/host-use', '/api/host-remove',
+    '/api/keys', '/api/button-style', '/api/game-only', '/api/local-config', '/api/board-art', '/api/host-setup', '/api/host-use', '/api/host-remove',
     '/api/online-setup/copy', '/api/leaderboard-rank-image', '/api/leaderboard-background'],
   'editing a character': ['/api/char-rename', '/api/char-variant', '/api/char-move-edit', '/api/char-move-add',
     '/api/char-edit-revert', '/api/char-air-edit', '/api/char-hit', '/api/char-scale', '/api/char-consts',
@@ -2532,6 +2532,9 @@ async function handleApi(req, res, pathname) {
       for (const k of ['hModule', 'hModuleSeen']) { if (onDisk && onDisk[k] !== undefined) roster[k] = onDisk[k]; else delete roster[k]; }
       // THE COMMAND LIST'S BUTTONS are /api/button-style's (Settings > Controls), on disk the same way.
       if (onDisk && onDisk.buttonStyle !== undefined) roster.buttonStyle = onDisk.buttonStyle; else delete roster.buttonStyle;
+      // THE GAME ONLY PAGE is /api/game-only's (Options > Game only page), on disk the same way:
+      // an older snapshot can neither drop it nor bring it back.
+      if (onDisk && onDisk.gameOnly !== undefined) roster.gameOnly = onDisk.gameOnly; else delete roster.gameOnly;
       if (Array.isArray(roster.chars)) {
         const disk = new Map(((onDisk && onDisk.chars) || []).map((c) => [(c.folder || '') + '|' + (c.select || ''), c]));
         for (const c of roster.chars) {
@@ -3039,6 +3042,22 @@ async function handleApi(req, res, pathname) {
         model: keylib.model(roster.keys, vfslib.playersOf(roster)),
         written: keylib.sectionsWritten(roster.keys, vfslib.playersOf(roster)),
       });
+    }
+
+    // THE GAME ONLY PAGE (Options > Game only page): roster.json "gameOnly",
+    // true or not there, which export.js copyBranded writes into the web
+    // game's brand block. Saved with the bundle, so every Website export of
+    // it uses it. POST { on }: true sets it, anything else removes the key.
+    if (pathname === '/api/game-only' && (req.method === 'GET' || req.method === 'POST')) {
+      let roster = vfslib.readRoster();
+      if (req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+        roster = vfslib.readRoster();
+        if (body && body.on === true) roster.gameOnly = true; else delete roster.gameOnly;
+        vfslib.writeRoster(roster);
+        invalidateVfs();
+      }
+      return json(res, 200, { ok: true, gameOnly: roster.gameOnly === true });
     }
 
     // THE COMMAND LIST'S BUTTONS - Settings > Controls (buttonstyle.js). The

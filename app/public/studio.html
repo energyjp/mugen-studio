@@ -2540,6 +2540,12 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
     <label class="pubchk bk-chk" title="Strip the private TURN relay (STUN-only) and bundle the self-hosting guide. Use this for a build you give to other people; leave it off for your own site.">
       <input type="checkbox" id="publicChk"><i></i> Public build
     </label>
+    <!-- roster.json gameOnly (/api/game-only): the web game's page as the
+         picture alone, its options behind a MENU button (export.js
+         copyBranded, public/ikemen/index.html). Website only, like Public build. -->
+    <label class="pubchk bk-chk" title="On: the web game's page shows only the game - a small loading box, then the picture filling the page, which suits an itch.io embed. Its options open from a MENU button that appears when the mouse moves.&#10;Off: the page as before, with the title, loading log and options above the game.&#10;Saved with this bundle; every Website export uses it.">
+      <input type="checkbox" id="gameOnlyChk"><i></i> Game only page
+    </label>
     <label class="pubchk bk-chk" id="owrapLbl" hidden title="On: keep one build folder and bring it up to date.&#10;Off: date each export so an earlier build you have handed out is left alone.">
       <input type="checkbox" id="overwriteChk" checked><i></i> Overwrite the build folder
     </label>
@@ -2908,14 +2914,14 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
           <img class="body" alt="" draggable="false">
           <img class="shade" alt="" draggable="false">
         </div>
-        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.2</span></h2>
+        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.3</span></h2>
         <div class="cv-foot"><span class="with">with</span><span class="ab-chip wb" translate="no">WB</span><span class="ab-chip ar" translate="no">DJ AR</span><span class="ab-chip sz" translate="no">SHiZUKA</span><span class="cv-pub" translate="no">energy.jp</span></div>
       </div>
       <div class="bk-fold" aria-hidden="true"></div>
       <div class="ab-staff">
         <div class="bk-secband">
           <h2 class="bk-secband-t"><span class="t">Staff</span><span class="k" lang="ja">スタッフ</span></h2>
-          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.2</span>
+          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.3</span>
             <button class="bk-btn sm" id="aboutNotices" type="button" title="Everything the Studio ships from others, with their terms">Credits &amp; licenses&hellip;</button></div>
         </div>
         <div class="pbody bk-pg r">
@@ -3109,6 +3115,8 @@ const RO_LOCK = [
   '#panel-settings input:not([type="search"])', '#panel-settings select', '#panel-settings textarea',
   '#statsDlg input', '#statsDlg select', '#statsDlg textarea',
   '#themeOptDlg input', '#themeOptDlg select', '#themeExtrasDlg input', '#themeExtrasDlg select',
+  // Options > Game only page: the build's own answer, shown, not changed
+  '#gameOnlyChk',
 ].join(', ');
 function roLock(root) {
   if (!root || root.nodeType !== 1) return;
@@ -9604,9 +9612,35 @@ function syncExportKind() {
   $('#exportBtn').textContent = web ? '\u2b06 Export Website' : '\u2b06 Export Desktop';
   const pub = $('#publicChk').closest('label');
   if (pub) pub.hidden = !web;
+  const gameOnly = $('#gameOnlyChk').closest('label');
+  if (gameOnly) gameOnly.hidden = !web;
   $('#owrapLbl').hidden = web;
 }
 $('#exportKind').onchange = syncExportKind;
+// THE GAME ONLY PAGE: the open bundle's roster.json gameOnly, read and
+// written through /api/game-only (never through a page's roster snapshot,
+// which /api/roster carries it past). Every Website export of the bundle
+// writes it into the web game's page (export.js copyBranded).
+(function wireGameOnly() {
+  const chk = $('#gameOnlyChk');
+  if (!chk) return;
+  fetch('/api/game-only').then((r) => r.json()).then((j) => { chk.checked = !!(j && j.gameOnly); }).catch(() => {});
+  chk.onchange = async () => {
+    const want = chk.checked;
+    chk.disabled = true;
+    try {
+      const r = await fetch('/api/game-only', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: want }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || String(r.status));
+      chk.checked = !!j.gameOnly;
+    } catch (e) {
+      chk.checked = !want;
+      toast(t('Could not save it: {error}', { error: e.message }), 'err');
+    } finally {
+      chk.disabled = !!READ_ONLY;
+    }
+  };
+})();
 // WHAT THIS PRODUCT IS FOR. In the app the main export is a desktop Ikemen GO
 // build - that is what a content manager is for, and the website is the
 // secondary thing you can also make. In a browser it is the other way round.
@@ -17188,7 +17222,7 @@ window.renderLifebar = async function renderLifebar(host) {
       <div class="xcolophon">
         <div class="xcolophon-row">
           <span class="bk-imprint" aria-hidden="true" translate="no">energy.jp</span>
-          <span class="xline2"><b translate="no">Mugen Studio 2.2</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
+          <span class="xline2"><b translate="no">Mugen Studio 2.3</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
         </div>
       </div>
     </section>

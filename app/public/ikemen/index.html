@@ -31,6 +31,117 @@
                 padding: 1px 7px; border-radius: 4px; vertical-align: middle;
                 border: 1px solid #3a3a44; background: #1c1c22; color: #778; }
   #chromehide:hover { border-color: #6a8; color: #cfd; }
+
+  /* GAME ONLY (roster.json gameOnly, or ?view=game): the page is the picture
+     and nothing else - what an itch.io embed wants. Every rule here hangs off
+     html.gameonly, which only the mode switch below sets, so the full page
+     above is untouched. The look is hard-edged on purpose: square corners,
+     solid fills at rest, hard shadows with no blur, in the title's blue. */
+  html.gameonly, html.gameonly body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+  html.gameonly body > #chrome, html.gameonly #chromeshow, html.gameonly #chromehide { display: none !important; }
+  html.gameonly body > canvas { border: 0; }
+  #goload, #gomenu, #gopanel, #gonotice { border-radius: 0; box-sizing: border-box; }
+  /* the loading box: centered over black until the first frames */
+  #goload { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 800;
+            width: min(440px, calc(100vw - 40px)); padding: 16px 18px 14px; background: #0b0d12;
+            border: 2px solid #6af; box-shadow: 6px 6px 0 #1b3358; font: 12px monospace; color: #9fb3cc;
+            font-variant-numeric: tabular-nums; transition: opacity .2s linear;
+            max-height: calc(100vh - 12px); overflow: hidden; }
+  #goload.out { opacity: 0; }
+  #goload .gl-title { font: bold 15px monospace; text-transform: uppercase; letter-spacing: .12em;
+                      color: #d6e6ff; margin: 0 0 12px; overflow-wrap: anywhere; }
+  #goload .gl-title .gl-ver { font-weight: normal; font-size: 12px; letter-spacing: .06em; text-transform: none; color: #6af; margin-left: 10px; }
+  #goload .gl-track { height: 12px; border: 2px solid #6af; background: #05070a; box-sizing: border-box; overflow: hidden; }
+  #goload .gl-fill { height: 100%; width: 0; background: #6af; }
+  #goload .gl-fill.unknown { width: 100% !important; background: repeating-linear-gradient(-45deg, #6af 0 5px, #24467a 5px 10px);
+                             background-size: 14.14px 14.14px; animation: gl-stripes .5s linear infinite; }
+  @keyframes gl-stripes { to { background-position: 14.14px 0; } }
+  #goload .gl-nums { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0 10px; }
+  #goload .gl-steps { border-top: 1px solid #1e2a3a; padding-top: 8px; line-height: 17px; min-height: 68px; }
+  #goload .gl-steps div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #5d6f86; }
+  #goload .gl-steps div::before { content: '\2713  '; color: #3d5a80; }
+  #goload .gl-steps div.cur { color: #d6e6ff; }
+  #goload .gl-steps div.cur::before { content: '\25B8  '; color: #6af; }
+  #goload .gl-steps .gl-time { color: #6af; margin-left: 8px; }
+  /* a short frame (an embed can be 180 px tall): a tighter box with the
+     current step alone, so the frame and its shadow stay whole */
+  @media (max-height: 220px) {
+    #goload { padding: 8px 12px; }
+    #goload .gl-title { margin-bottom: 6px; }
+    #goload .gl-nums { margin: 4px 0 6px; }
+    #goload .gl-steps { min-height: 17px; padding-top: 6px; }
+    #goload .gl-steps div:not(.cur) { display: none; }
+  }
+  /* the MENU button: hidden until the pointer moves */
+  #gomenu { position: fixed; top: 10px; left: 10px; z-index: 900; display: flex; align-items: center; gap: 8px;
+            margin: 0; padding: 7px 11px 7px 9px; cursor: pointer; background: #0b0d12; border: 2px solid #6af;
+            box-shadow: 3px 3px 0 #000; color: #d6e6ff; font: bold 11px monospace; text-transform: uppercase;
+            letter-spacing: .2em; opacity: 0; visibility: hidden;
+            transition: opacity .25s linear, visibility 0s linear .25s, transform .06s linear, box-shadow .06s linear; }
+  #gomenu.on { opacity: 1; visibility: visible; transition: opacity .12s linear, visibility 0s, transform .06s linear, box-shadow .06s linear; }
+  #gomenu .gm-bars { display: flex; flex-direction: column; gap: 3px; }
+  #gomenu .gm-bars i { display: block; width: 12px; height: 2px; background: #6af; }
+  #gomenu .gm-lbl { margin-right: -.2em; }
+  #gomenu:hover, #gomenu:focus-visible { background: #6af; color: #0b0d12; outline: none;
+            transform: translate(1px, 1px); box-shadow: 2px 2px 0 #000; }
+  #gomenu:hover .gm-bars i, #gomenu:focus-visible .gm-bars i { background: #0b0d12; }
+  /* the options panel: the boot strip's contents, in a frame */
+  #gopanel { position: fixed; top: 10px; left: 10px; z-index: 950; display: flex; flex-direction: column;
+             width: min(660px, calc(100vw - 26px)); max-height: calc(100vh - 26px); background: #0b0d12;
+             border: 2px solid #6af; box-shadow: 6px 6px 0 #000; color: #c7d3e3; font: 12px monospace; }
+  #gopanel[hidden] { display: none; }
+  #gopanel .gp-head { flex: none; display: flex; align-items: center; justify-content: space-between;
+                      background: #6af; color: #0b0d12; padding: 3px 3px 3px 10px; }
+  #gopanel .gp-t { font: bold 12px monospace; text-transform: uppercase; letter-spacing: .2em; }
+  #gopanel .gp-close { font: bold 11px monospace; text-transform: uppercase; letter-spacing: .15em; cursor: pointer;
+                       margin: 0; padding: 4px 9px 4px 11px; border-radius: 0; border: 2px solid #0b0d12;
+                       background: #0b0d12; color: #6af; }
+  #gopanel .gp-close:hover, #gopanel .gp-close:focus-visible { background: #6af; color: #0b0d12; outline: none; }
+  #gopanel .gp-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 12px 10px; }
+  #gopanel #chrome { max-height: none; opacity: 1; overflow: visible; transition: none; }
+  #gopanel #apptitle { display: block; font-size: 16px; margin: 0 0 6px; }
+  #gopanel #boot { font-size: 12px; color: #9fb3cc; max-height: 160px; overflow-y: auto; padding-bottom: 6px; }
+  #gopanel #compare, #gopanel #netcode, #gopanel #aspect, #gopanel #storage, #gopanel #netdiag-slot:not(:empty) {
+             border-top: 1px solid #1e2a3a; margin: 0 !important; padding: 6px 0; }
+  /* square corners inside the panel only: the full page keeps its look */
+  #gopanel #chrome button, #gopanel #chrome input { border-radius: 0 !important; }
+  #gopanel #netdiag-slot > div { border-radius: 0 !important; background: #05070a !important; max-width: none !important; margin: 0 !important; }
+  /* its scrollbars (a short frame scrolls it): square, in the panel's colors,
+     not the browser's light gray ones */
+  #gopanel ::-webkit-scrollbar { width: 10px; height: 10px; background: #05070a; }
+  #gopanel ::-webkit-scrollbar-thumb { background: #6af; border: 2px solid #05070a; border-radius: 0; }
+  #gopanel ::-webkit-scrollbar-thumb:hover { background: #d6e6ff; }
+  #gopanel ::-webkit-scrollbar-corner { background: #05070a; }
+  @supports not selector(::-webkit-scrollbar) { #gopanel, #gopanel * { scrollbar-color: #6af #05070a; } }
+  /* a short frame: one scroller, the panel's, not the log's own inside it */
+  @media (max-height: 420px) { #gopanel #boot { max-height: none; overflow: visible; } }
+  /* the software-rendering notice: the same frame in amber */
+  /* It never runs past the frame's bottom (an embed can be 180 px tall): the
+     lines scroll inside it, so the heading and DISMISS always show. */
+  #gonotice { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 960;
+              width: min(560px, calc(100vw - 32px)); background: #0b0d12; border: 2px solid #fc6;
+              box-shadow: 6px 6px 0 #000; color: #f3e2bd; font: 12px monospace;
+              display: flex; flex-direction: column; max-height: calc(100vh - 60px); }
+  #gonotice .gn-head { flex: none; background: #fc6; color: #0b0d12; padding: 4px 10px; font: bold 12px monospace;
+                       text-transform: uppercase; letter-spacing: .2em; }
+  #gonotice .gn-text { flex: 0 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; padding: 8px 12px 4px; line-height: 16px; }
+  #gonotice .gn-dismiss { flex: none; display: block; margin: 6px 12px 12px auto; padding: 4px 11px; cursor: pointer; border-radius: 0;
+                          border: 2px solid #fc6; background: #0b0d12; color: #fc6; font: bold 11px monospace;
+                          text-transform: uppercase; letter-spacing: .15em; }
+  #gonotice .gn-dismiss:hover, #gonotice .gn-dismiss:focus-visible { background: #fc6; color: #0b0d12; outline: none; }
+  #gonotice ::-webkit-scrollbar { width: 10px; height: 10px; background: #05070a; }
+  #gonotice ::-webkit-scrollbar-thumb { background: #fc6; border: 2px solid #05070a; border-radius: 0; }
+  @supports not selector(::-webkit-scrollbar) { #gonotice, #gonotice * { scrollbar-color: #fc6 #05070a; } }
+  /* a short frame: tighter, so more of the lines show */
+  @media (max-height: 300px) {
+    #gonotice .gn-head { padding: 2px 8px; }
+    #gonotice .gn-text { padding: 4px 8px 2px; line-height: 14px; }
+    #gonotice .gn-dismiss { margin: 4px 8px 6px auto; padding: 3px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #goload .gl-fill.unknown { animation: none; }
+    #gomenu, #gomenu.on, #goload { transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -48,12 +159,32 @@
 //   credit      optional small note beside it, e.g. 'by yourname'
 //   hideBootUI  seconds after the game starts drawing before the boot strip
 //               folds away. 0 = never fold.
+//   gameOnly    true = the Game only page: a loading box, then the picture
+//               filling the page, its options behind a MENU button (roster.json
+//               "gameOnly"; written only when it is on). ?view=game and
+//               ?view=full in the address override it either way.
 window.IKEMEN_BRAND = {
   title: 'WebMUGEN',
   version: '',
   credit: '',
   hideBootUI: 6,
 };
+</script>
+<script>
+// WHICH PAGE: the full page (title, loading log and options above the game)
+// or Game only. The address wins over the build: ?view=game forces Game only
+// (a preview of it from the Studio's live server), ?view=full forces the full
+// page. A reload keeps the address, so a Picture or netcode pick that reloads
+// comes back in the same mode. Decided here, before #chrome is parsed, so the
+// strip never flashes on a Game only page.
+(function () {
+  var b = window.IKEMEN_BRAND || {};
+  var view = '';
+  try { view = new URLSearchParams(location.search).get('view') || ''; } catch (e) { view = ''; }
+  var on = view === 'game' ? true : view === 'full' ? false : b.gameOnly === true;
+  window.ikemenGameOnly = on;
+  if (on) document.documentElement.classList.add('gameonly');
+})();
 </script>
 <button id="chromeshow" title="Show build info and boot options">&#9776; info</button>
 <div id="chrome">
@@ -64,6 +195,308 @@ window.IKEMEN_BRAND = {
 <div id="aspect"></div>
 <div id="storage"></div>
 </div>
+<script>
+// THE GAME ONLY PAGE (see the switch above): the full page's strip is still
+// built - the boot log keeps writing into #chrome and the rows below fill it
+// in - but it is moved into an options panel that a MENU button opens. On
+// top of the black page sit, at most: a loading box until the first frames,
+// the MENU button while the pointer moves, the panel while it is open, and a
+// notice for software rendering. A boot error or the engine exiting leaves
+// Game only for this page view (leave): the log is then the player's only
+// diagnostic, so the full page comes back with it open, as it always did.
+//
+// The boot script below reports to window.ikemenGameOnlyUI (progress, step,
+// notice, leave) and ikemenFitCanvas hands it the canvas (fit). It exists
+// only while Game only is on, and every caller checks for it, so the full
+// page runs exactly as before.
+(function () {
+  if (!window.ikemenGameOnly) return;
+  var chrome = document.getElementById('chrome');
+  var home = { parent: chrome.parentNode, next: chrome.nextSibling };
+  var b = window.IKEMEN_BRAND || {};
+  var mk = function (tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  };
+  // The engine listens for keys and the mouse on the whole document. Nothing
+  // pressed on these controls may reach it, the way the rows already stop
+  // their own events.
+  var STOP = ['mousedown', 'mouseup', 'click', 'dblclick', 'wheel', 'contextmenu', 'keydown', 'keyup', 'keypress',
+    'pointerdown', 'pointerup', 'touchstart', 'touchend'];
+  var shield = function (el) {
+    STOP.forEach(function (t) { el.addEventListener(t, function (e) { e.stopPropagation(); }); });
+  };
+  // Focus back on the page, so the game's keys work at once: a key stopped on
+  // its way up from a focused button never reaches the engine (the compare
+  // row's note), and a focused MENU would take Space and Enter for itself.
+  var unfocus = function () {
+    var a = document.activeElement;
+    if (a && a !== document.body && a.blur) a.blur();
+  };
+  // ...and a mouse press never puts focus on these buttons in the first
+  // place. Pressed, then released off the button, there is no click and so
+  // no unfocus: a focused MENU would never hide, and its shield would keep
+  // every game key from the engine until the player clicked the picture.
+  // Their click still comes; Tab still reaches them.
+  var noFocus = function (el) {
+    el.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  };
+
+  // ---- the loading box: title, progress, what it is doing now ----
+  var load = mk('div'); load.id = 'goload'; load.setAttribute('role', 'status');
+  var title = mk('div', 'gl-title', b.title || 'WebMUGEN');
+  if (b.version) title.appendChild(mk('span', 'gl-ver', b.version));
+  var track = mk('div', 'gl-track'), fill = mk('div', 'gl-fill');
+  track.appendChild(fill);
+  var nums = mk('div', 'gl-nums'), mb = mk('span', 'gl-mb', 'Waiting for the server...'), pct = mk('span', 'gl-pct', '');
+  nums.appendChild(mb); nums.appendChild(pct);
+  var steps = mk('div', 'gl-steps');
+  load.appendChild(title); load.appendChild(track); load.appendChild(nums); load.appendChild(steps);
+  shield(load);
+  document.body.appendChild(load);
+  var stepRows = [], stepAt = 0, ticker = null, downloaded = false, gotAny = false;
+  var addStep = function (text) {
+    if (!load) return;
+    if (stepRows.length && stepRows[stepRows.length - 1].text === text) return;
+    stepRows.forEach(function (r) { r.el.className = ''; var tm = r.el.querySelector('.gl-time'); if (tm) tm.remove(); });
+    var el = mk('div', 'cur', text);
+    stepRows.push({ text: text, el: el });
+    steps.appendChild(el);
+    while (stepRows.length > 4) steps.removeChild(stepRows.shift().el);
+    stepAt = Date.now();
+  };
+  // The engine can take 30-90 s to start after the download: the current
+  // step counts its seconds so the box never looks stuck.
+  ticker = setInterval(function () {
+    var r = stepRows[stepRows.length - 1];
+    if (!r) return;
+    var s = Math.floor((Date.now() - stepAt) / 1000);
+    if (s < 3) return;
+    var tm = r.el.querySelector('.gl-time') || r.el.appendChild(mk('span', 'gl-time'));
+    tm.textContent = s + ' s';
+  }, 500);
+  var dropLoad = function () {
+    if (!load) return;
+    var box = load; load = null;
+    clearInterval(ticker);
+    box.classList.add('out');
+    setTimeout(function () { if (box.parentNode) box.parentNode.removeChild(box); }, 220);
+  };
+  // Gone once the game draws: __ikemenEngineFrames rising, the signal the
+  // full page folds its strip on.
+  var seen = -1;
+  var watch = setInterval(function () {
+    var f = window.__ikemenEngineFrames;
+    if (typeof f !== 'number') return;
+    if (seen < 0) { seen = f; return; }
+    if (f > seen) { clearInterval(watch); dropLoad(); }
+  }, 250);
+
+  // ---- the MENU button and the options panel ----
+  var menu = mk('button'); menu.id = 'gomenu'; menu.type = 'button';
+  menu.title = 'Options: build info, compare with a friend, netcode, picture, browser data';
+  menu.setAttribute('aria-haspopup', 'dialog'); menu.setAttribute('aria-expanded', 'false');
+  var bars = mk('span', 'gm-bars');
+  bars.setAttribute('aria-hidden', 'true');
+  bars.appendChild(mk('i')); bars.appendChild(mk('i')); bars.appendChild(mk('i'));
+  menu.appendChild(bars); menu.appendChild(mk('span', 'gm-lbl', 'Menu'));
+  shield(menu); noFocus(menu);
+  var panel = mk('div'); panel.id = 'gopanel'; panel.hidden = true;
+  panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Options');
+  var head = mk('div', 'gp-head'), close = mk('button', 'gp-close', 'Close');
+  close.type = 'button'; close.title = 'Close (Esc)'; noFocus(close);
+  head.appendChild(mk('span', 'gp-t', 'Options')); head.appendChild(close);
+  var body = mk('div', 'gp-body');
+  // the netplay diagnostics line goes here (webrtc.js): under the canvas it
+  // would be off the page
+  var diagSlot = mk('div'); diagSlot.id = 'netdiag-slot';
+  body.appendChild(chrome); body.appendChild(diagSlot);
+  panel.appendChild(head); panel.appendChild(body);
+  shield(panel);
+  document.body.appendChild(menu);
+  document.body.appendChild(panel);
+
+  var hideTimer = null, hovered = false, focused = false;
+  var isOpen = function () { return !panel.hidden; };
+  // Where the mouse last was. The browser hit-tests a move before wake()
+  // shows the button, so a pointer that lands on the hidden button in one
+  // move, or rests where MENU is when the panel over it closes, is on it with
+  // no mouseenter and no :hover: the hide looks at that spot itself. A finger
+  // leaves no spot (it does not hover), and leaving the window clears it.
+  var px = -1, py = -1;
+  var over = function () {
+    if (px < 0) return false;
+    var r = menu.getBoundingClientRect();
+    return px >= r.left && px < r.right && py >= r.top && py < r.bottom;
+  };
+  var arm = function () {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function () {
+      // these re-arm when they end; a resting pointer, with its next move
+      if (hovered || focused || isOpen() || over()) return;
+      menu.classList.remove('on');
+    }, 2000);
+  };
+  var wake = function (e) {
+    if (!menu.isConnected) return;
+    if (e.type === 'touchstart' || e.pointerType === 'touch' || (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents)) { px = py = -1; }
+    else if (typeof e.clientX === 'number') { px = e.clientX; py = e.clientY; }
+    menu.classList.add('on'); arm();
+  };
+  ['mousemove', 'pointermove', 'pointerdown', 'touchstart'].forEach(function (t) {
+    window.addEventListener(t, wake, { capture: true, passive: true });
+  });
+  document.addEventListener('mouseout', function (e) {
+    if (e.relatedTarget || !menu.isConnected) return;
+    px = py = -1;
+    arm();
+  });
+  menu.addEventListener('mouseenter', function () { hovered = true; });
+  menu.addEventListener('mouseleave', function () { hovered = false; arm(); });
+  menu.addEventListener('focus', function () { focused = true; menu.classList.add('on'); });
+  menu.addEventListener('blur', function () { focused = false; arm(); });
+  var open = function () {
+    panel.hidden = false;
+    menu.setAttribute('aria-expanded', 'true');
+    menu.classList.add('on');
+    var boot = document.getElementById('boot');
+    if (boot) boot.scrollTop = boot.scrollHeight;
+    unfocus();
+  };
+  var shut = function () {
+    panel.hidden = true;
+    menu.setAttribute('aria-expanded', 'false');
+    unfocus();
+    arm();
+  };
+  menu.addEventListener('click', function () { if (isOpen()) shut(); else open(); });
+  close.addEventListener('click', shut);
+  // Esc closes it, and the engine never sees that Esc (it is the game's
+  // back key): taken on the way down, before any document listener. Held
+  // past the key repeat, the repeats come after the panel has shut: they are
+  // taken too, with the release, or the engine would get a fresh press
+  // whose release it never sees (Esc latched down in it).
+  var escDown = false;
+  window.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!escDown && !isOpen()) return;
+    e.preventDefault(); e.stopPropagation();
+    if (escDown) return;
+    escDown = true;
+    shut();
+  }, true);
+  window.addEventListener('keyup', function (e) {
+    if (e.key !== 'Escape' || !escDown) return;
+    escDown = false;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+  // a release the page never got (the window lost focus meanwhile)
+  window.addEventListener('blur', function (e) { if (e.target === window) escDown = false; });
+
+  // ---- the software-rendering notice ----
+  var notice = null;
+  var showNotice = function (lines) {
+    if (notice) notice.remove();
+    notice = mk('div'); notice.id = 'gonotice'; notice.setAttribute('role', 'alert');
+    notice.appendChild(mk('div', 'gn-head', 'Graphics warning'));
+    notice.appendChild(mk('div', 'gn-text', lines.join('\n')));
+    var ok = mk('button', 'gn-dismiss', 'Dismiss'); ok.type = 'button'; noFocus(ok);
+    ok.addEventListener('click', function () { if (notice) { notice.remove(); notice = null; } unfocus(); });
+    notice.appendChild(ok);
+    shield(notice);
+    document.body.appendChild(notice);
+  };
+
+  // ---- the picture: centered, as large as fits, black around it ----
+  // The real viewport is documentElement's: window.innerWidth/Height are
+  // pinned to 640x480 for glfw-js further down.
+  var fit = function (canvas) {
+    var de = document.documentElement;
+    var W = de.clientWidth, H = de.clientHeight;
+    var aspect = canvas.width / canvas.height;
+    var w = Math.min(W, H * aspect), h = w / aspect;
+    w = Math.round(w); h = Math.min(H, Math.round(h));
+    var s = canvas.style;
+    s.setProperty('position', 'fixed', 'important');
+    s.setProperty('left', Math.floor((W - w) / 2) + 'px', 'important');
+    s.setProperty('top', Math.floor((H - h) / 2) + 'px', 'important');
+    s.setProperty('width', w + 'px', 'important');
+    s.setProperty('height', h + 'px', 'important');
+    s.setProperty('margin', '0', 'important');
+    s.setProperty('border', '0', 'important');
+    s.imageRendering = 'pixelated';
+    s.display = 'block';
+  };
+
+  // ---- leaving Game only: the full page, as it would have been ----
+  var leave = function () {
+    window.ikemenGameOnly = false;
+    window.ikemenGameOnlyUI = null;
+    clearInterval(watch); clearInterval(ticker); clearTimeout(hideTimer);
+    document.documentElement.classList.remove('gameonly');
+    home.parent.insertBefore(chrome, home.next && home.next.parentNode === home.parent ? home.next : null);
+    var canvas = document.querySelector('body > canvas');
+    while (diagSlot.firstChild) {
+      var d = diagSlot.firstChild;
+      if (canvas) canvas.insertAdjacentElement('afterend', d); else document.body.appendChild(d);
+    }
+    [load, menu, panel, notice].forEach(function (el) { if (el && el.parentNode) el.parentNode.removeChild(el); });
+    load = null; notice = null;
+    // closed as it goes, or its Esc handler would take the full page's next
+    // Esc for a panel that is no longer there
+    panel.hidden = true;
+    if (canvas) {
+      ['position', 'left', 'top', 'width', 'height', 'margin', 'border'].forEach(function (p) { canvas.style.removeProperty(p); });
+      if (window.ikemenFitCanvas) window.ikemenFitCanvas();
+    }
+    // The line that says what happened was logged while the log had no box
+    // (inside the closed panel), so its scroll to the bottom did nothing, and
+    // the full page caps the log at 5 lines with the overflow hidden once the
+    // canvas exists: scroll it to that last line now.
+    var boot = document.getElementById('boot');
+    if (boot) boot.scrollTop = boot.scrollHeight;
+  };
+
+  window.ikemenGameOnlyUI = {
+    progress: function (got, total) {
+      // (a build of loose files keeps fetching in the background after "VFS
+      // ready"; the game starts without those, so the box has moved on)
+      if (!load || downloaded) return;
+      gotAny = true;
+      addStep('Downloading game data');
+      var known = total > 0;
+      fill.classList.toggle('unknown', !known);
+      var p = known ? Math.max(0, Math.min(100, got / total * 100)) : 0;
+      fill.style.width = known ? p.toFixed(1) + '%' : '';
+      mb.textContent = (got / 1e6).toFixed(1) + (known ? ' / ' + (total / 1e6).toFixed(1) : '') + ' MB';
+      pct.textContent = known ? Math.floor(p) + '%' : '';
+    },
+    step: function (msg) {
+      // The log's own words, cut at their aside: "Starting engine... (this
+      // can take a while; watch the console)" reads "Starting engine...".
+      // The Build ID and the indented lines stay in the panel's log.
+      var m = String(msg || '');
+      if (/^Build ID|^Engine ID|^\s/.test(m)) return;
+      if (/^VFS ready/.test(m) && load && !downloaded) {
+        // the game data is in: a striped (unknown size) bar ends solid
+        downloaded = true;
+        fill.classList.remove('unknown');
+        fill.style.width = '100%';
+        pct.textContent = '100%';
+        if (!gotAny) mb.textContent = 'Game data ready';
+      }
+      addStep(m.replace(/\s+\(.*$/, ''));
+    },
+    notice: showNotice,
+    leave: leave,
+    fit: fit,
+    open: open,
+    close: shut,
+  };
+})();
+</script>
 <script>
 // Apply branding. textContent throughout: the title is author-supplied and
 // must never be able to inject markup into the page.
@@ -475,6 +908,8 @@ var __reserveBottom = 0;
 function ikemenFitCanvas() {
   var canvas = document.querySelector('body > canvas');
   if (!canvas || !canvas.width || !canvas.height) return;
+  // Game only: the picture is the page (no strip to measure).
+  if (window.ikemenGameOnlyUI) { window.ikemenGameOnlyUI.fit(canvas); return; }
   var aspect = canvas.width / canvas.height;
   var chrome = document.getElementById('chrome');
   var chromeH = chrome ? chrome.getBoundingClientRect().height : 0;
@@ -540,7 +975,9 @@ window.ikemenReserveBottom = function (px) { __reserveBottom = px | 0; ikemenFit
     if (folded) setFolded(false);
   };
 
-  if (delay > 0) {
+  // Game only never folds (the strip is inside the options panel); leaving
+  // it - a boot error, the engine exiting - also cancels the fold for good.
+  if (delay > 0 && !window.ikemenGameOnly) {
     // __ikemenEngineFrames is stamped by the engine's frame pump, so a rising
     // value means real frames are being presented.
     var seen = -1;
@@ -582,7 +1019,10 @@ window.__panics = [];
   const boot = document.getElementById('boot');
   // The boot div is height-capped once the game starts; keep it pinned to
   // the newest line so progress never looks frozen behind the fold.
-  const log = (m) => { boot.textContent += '\n' + m; boot.scrollTop = boot.scrollHeight; console.log('[boot]', m); };
+  const log = (m) => {
+    boot.textContent += '\n' + m; boot.scrollTop = boot.scrollHeight; console.log('[boot]', m);
+    if (window.ikemenGameOnlyUI) window.ikemenGameOnlyUI.step(m);   // the Game only loading box
+  };
   try {
     log('Loading virtual filesystem manifest...');
     const nFiles = await ikemenVfsInit('./ikemen-fs/manifest.json', [
@@ -598,6 +1038,7 @@ window.__panics = [];
         (done ? '\nDownloading game data: complete.'
               : `\nDownloading game data: ${(got / 1e6).toFixed(1)}${total ? ' / ' + (total / 1e6).toFixed(1) : ''} MB`);
       boot.scrollTop = boot.scrollHeight;
+      if (window.ikemenGameOnlyUI) window.ikemenGameOnlyUI.progress(got, total);
     });
     log(`VFS ready: ${nFiles} files.`);
 
@@ -672,12 +1113,17 @@ window.__panics = [];
       if (hw) {
         log('Graphics: GPU' + (short ? ' - ' + short : ''));
       } else {
-        log('Graphics: SOFTWARE RENDERING - your GPU is not being used.');
-        log('  Turn on "Use graphics acceleration when available" in your');
-        log('  browser settings, then FULLY QUIT and reopen the browser.');
+        const softLines = [
+          'Graphics: SOFTWARE RENDERING - your GPU is not being used.',
+          '  Turn on "Use graphics acceleration when available" in your',
+          '  browser settings, then FULLY QUIT and reopen the browser.',
+        ];
+        softLines.forEach(log);
         // Never fold the strip away on a bad result: this is the one message
-        // that has to survive until the player actually reads it.
+        // that has to survive until the player actually reads it. Game only
+        // has no strip: the same lines go over the picture until dismissed.
         if (window.ikemenCancelBootFold) window.ikemenCancelBootFold();
+        if (window.ikemenGameOnlyUI) window.ikemenGameOnlyUI.notice(softLines);
       }
       for (const ctx of [hw, soft]) {
         const lose = ctx && ctx.getExtension('WEBGL_lose_context');
@@ -820,11 +1266,14 @@ window.__panics = [];
     await go.run(result.instance);
     log('Engine exited.');
     // The engine is gone; this log is now the player's only diagnostic, so
-    // unfold the strip and keep it open.
+    // unfold the strip and keep it open (and a Game only page becomes the
+    // full page for this view, to show it).
+    if (window.ikemenGameOnlyUI) window.ikemenGameOnlyUI.leave();
     if (window.ikemenCancelBootFold) window.ikemenCancelBootFold();
   } catch (e) {
     log('BOOT ERROR: ' + (e && e.message || e));
     console.error(e);
+    if (window.ikemenGameOnlyUI) window.ikemenGameOnlyUI.leave();
     if (window.ikemenCancelBootFold) window.ikemenCancelBootFold();
   }
 })();

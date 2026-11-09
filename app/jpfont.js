@@ -54,7 +54,9 @@ const VPATHS = { def: 'font/' + DEF_FILE, ttf: 'font/' + TTF, license: 'font/Dot
 const DEFAULT_KEY = ['Open_Sans.def', '0', '1', '255', '255', '255', '255', '-1'];
 const DEFAULT_SIZE = { size: [13, 27], spacing: [1, 1] };
 
-const stockDraws = (s) => /^[\x20-\x7e]*$/.test(String(s == null ? '' : s));
+// The stock fonts' test (printable ASCII) is the Command List writer's own
+// (public/ikemen/cmdlist-core.js), so one rule says which name prints.
+const { stockDraws } = require('./public/ikemen/cmdlist-core.js');
 
 // ---- the font's own character map ---------------------------------------------------
 let COVER = null;

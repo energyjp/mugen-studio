@@ -108,8 +108,13 @@
       for (const t of ['mousedown', 'mouseup', 'click', 'dblclick', 'keydown', 'keyup', 'wheel']) {
         diag.addEventListener(t, function (e) { e.stopPropagation(); });
       }
+      // The Game only page (index.html) fills the window with the picture,
+      // so under it would be off the page: it has a place for this line in
+      // its options panel instead.
+      const slot = globalThis.ikemenGameOnly && document.getElementById('netdiag-slot');
       const canvas = document.querySelector('body > canvas');
-      if (canvas) canvas.insertAdjacentElement('afterend', diag);
+      if (slot) slot.appendChild(diag);
+      else if (canvas) canvas.insertAdjacentElement('afterend', diag);
       else document.body.appendChild(diag);
     }
     diag.textContent = (diagOpen ? '▼ ' : '▶ ') +

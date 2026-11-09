@@ -63,6 +63,21 @@ function selfCheck(dist, { requireContent = true } = {}) {
                 problems.push(page + ' loads ' + m[1] + ' but the file was not shipped');
             }
         }
+        // ...and every library it loads later by itself, from a folder it
+        // names (./vendor/<name>/<version>/, studio-lite's .rar and .7z
+        // unpacker): the folder, with each file and license its VENDOR.json
+        // lists. A missing one is an unpacker that fails the first time
+        // somebody drops a .rar, long after this build was uploaded.
+        for (const d of new Set([...html.matchAll(/['"]\.\/(vendor\/[\w.-]+\/[\w.-]+)\/['"]/g)].map((x) => x[1]))) {
+            const dir = path.join(dist, ...d.split('/'));
+            let rec = null;
+            try { rec = JSON.parse(fs.readFileSync(path.join(dir, 'VENDOR.json'), 'utf8')); } catch (e) { /* below */ }
+            if (!rec) { problems.push(page + ' loads ' + d + '/ but the folder (or its VENDOR.json) was not shipped'); continue; }
+            const need = new Set([...Object.keys(rec.files || {}), ...(rec.components || []).map((c) => c.file)]);
+            for (const f of need) {
+                if (!fs.existsSync(path.join(dir, f))) problems.push(page + ' loads ' + d + '/ but its ' + f + ' was not shipped');
+            }
+        }
     }
 
     // The engine's authoring source (data/work/, data/<motif>/work/) must not
