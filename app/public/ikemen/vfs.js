@@ -120,6 +120,40 @@
   }
   globalThis.__ikemenIniSectionOf = iniSectionOf;
 
+  // KEYS A WEBSITE NEVER RUNS WITH ON, whatever a config says. Netplay
+  // Rollback.LogsEnabled makes the engine write a rollback log (ggpo logs
+  // several lines a frame and a packet) into save/logs/, which in a browser is
+  // memory nobody can open, and the writing itself slowed online matches. The
+  // Studio no longer writes it into a website build (settings-schema.js,
+  // applies 'desktop', webOff), but a returning player's saved config.ini is
+  // loaded over the shipped one whole, so a value that reached a browser once
+  // would stay. Each key here is set to its value, inside its section, every
+  // boot; a config that does not name the key is left alone (the engine's own
+  // default is off). It is sync:"host" in the engine, so the host's value
+  // decides for both players: forcing it on every page covers both.
+  const WEB_FORCED = [['Netplay', 'Rollback.LogsEnabled', '0']];
+  // Line by line, so a file comes back byte for byte apart from the value:
+  // its line endings, spacing, comments and final newline stay.
+  function forceWebKeys(text) {
+    const src = String(text);
+    const lines = src.split(String.fromCharCode(10));
+    let sec = null, changed = false;
+    for (let i = 0; i < lines.length; i++) {
+      const cr = /\r$/.test(lines[i]);
+      const line = cr ? lines[i].slice(0, -1) : lines[i];
+      if (/^\s*\[/.test(line)) { const h = /^\s*\[\s*([^\]]*?)\s*\]/.exec(line); sec = h ? h[1].toLowerCase() : ''; continue; }
+      for (const [s, key, val] of WEB_FORCED) {
+        if (sec !== s.toLowerCase()) continue;
+        const m = new RegExp('^([ \\t]*' + key.replace(/[.]/g, '\\.') + '[ \\t]*=[ \\t]*)([^;]*?)([ \\t]*;.*)?$', 'i').exec(line);
+        if (!m || m[2].trim() === val) continue;
+        lines[i] = m[1] + val + (m[3] || '') + (cr ? String.fromCharCode(13) : '');
+        changed = true;
+      }
+    }
+    return changed ? lines.join(String.fromCharCode(10)) : src;
+  }
+  globalThis.__ikemenWebForced = { keys: WEB_FORCED.map(([s, k, v]) => [s, k, v]), apply: forceWebKeys };
+
   // THE PAK, READ INTO ONE BUFFER. The whole build arrives as one file and
   // stays in memory while the game runs. Collected as chunks and then copied
   // into one array, it briefly needed TWICE its size - 1.4 GB of tab for a
@@ -296,6 +330,39 @@
     return p;
   }
 
+  // A FILE GROWS IN STEPS, NOT ONE WRITE AT A TIME. Every write past the end
+  // used to make a new array of exactly the new size and copy the whole file
+  // into it, so a file built from many small appends cost the square of its
+  // size: the engine's rollback log (Netplay Rollback.LogsEnabled) writes a
+  // line or more per frame and per packet, and a minute of it made every
+  // frame copy megabytes. Now the bytes live in a larger backing array with
+  // room to spare (twice the old size, at most 64 MB more), and contents
+  // holds a VIEW of exactly the file's length: every reader (read, stat,
+  // fstat, readdir sizes, persistence, the Build ID, __vfsDebug) sees the
+  // file and never the spare room.
+  //
+  // Only an array made HERE is extended in place. A packed file is a view
+  // into game.pak, and the bytes past its end are the next file's: writing
+  // there would corrupt the build. So a view we did not make is copied out
+  // first, as before.
+  const growable = new WeakSet();
+  function grownTo(data, pos, end) {
+    const old = data.length;
+    let out;
+    if (growable.has(data) && data.byteOffset + end <= data.buffer.byteLength) {
+      out = new Uint8Array(data.buffer, data.byteOffset, end);
+    } else {
+      const back = new Uint8Array(Math.max(end, Math.min(old * 2, old + (64 << 20))));
+      back.set(data);
+      out = back.subarray(0, end);
+    }
+    // A write that starts past the end leaves a hole, and a hole reads as
+    // zeros (the spare room is never written, but say so rather than trust it).
+    if (pos > old) out.fill(0, old, pos);
+    growable.add(out);
+    return out;
+  }
+
   // ---- fd table ----
   // fds 0/1/2 = stdin/stdout/stderr
   let nextFd = 3;
@@ -377,11 +444,8 @@
       let pos;
       if (f.flags & O_APPEND) pos = data.length;
       else pos = (position === null || position === undefined) ? (f.pos || 0) : position;
-      if (pos + length > data.length) {
-        const grown = new Uint8Array(pos + length);
-        grown.set(data);
-        data = grown;
-      }
+      const end = pos + length;
+      if (end > data.length) data = grownTo(data, pos, end);
       data.set(buf.subarray(offset, offset + length), pos);
       contents.set(f.vpath, data);
       manifest.delete(f.vpath);
@@ -787,6 +851,20 @@
         if (patched !== text) contents.set('save/config.ini', new TextEncoder().encode(patched));
       }
     } catch (e) { /* leave config as shipped */ }
+
+    // The keys a website never runs with on (WEB_FORCED above): put back over
+    // the saved config, like the theme and the match shape.
+    try {
+      const cfg = contents.get('save/config.ini');
+      if (cfg) {
+        const text = new TextDecoder().decode(cfg);
+        const patched = forceWebKeys(text);
+        if (patched !== text) {
+          contents.set('save/config.ini', new TextEncoder().encode(patched));
+          console.log('[vfs] turned off for the website: ' + WEB_FORCED.map((k) => k[1]).join(', '));
+        }
+      }
+    } catch (e) { /* leave config as restored */ }
 
   // Write match-rule values into a config.ini's [Options] section.
   // Exported so it can be tested directly - the failure mode here is silent

@@ -755,8 +755,10 @@ function exportSite({ pack = false, v2 = false, public: isPublic = false, dest }
   assertNoHostSecrets(DIST, (isPublic ? 'public ' : '') + 'Website export ' + DIST, pack ? generated : null);
 
   // Refuse to report success on a build that cannot be played. See
-  // tools/export-selfcheck.js for why each check exists.
-  require('./tools/export-selfcheck').selfCheck(DIST);
+  // tools/export-selfcheck.js for why each check exists. The files the build
+  // read from the user's own folders are theirs, a screenpack's own work/
+  // folder included (vfslib build().userWork).
+  require('./tools/export-selfcheck').selfCheck(DIST, { userWork: built.userWork || [] });
 
   // charFixes: what the build did to its copy of each character (vfslib
   // build, the same shape as the desktop export's), for the result page's

@@ -79,6 +79,7 @@
   // = engine wedged; both stuck = peer went silent.
   let bytesRecv = 0, bytesReadByEngine = 0, bytesSent = 0;
   let pingMs = -1; // rollback round-trip, fed by the engine via setPing
+  let nd = null;   // the ping diagnostics (makePingDiag), live only during a session
 
   // Always-visible on-screen diagnostic log - the game canvas can freeze
   // with F12 unavailable, but this DOM overlay keeps updating and can be
@@ -125,7 +126,8 @@
       else document.body.appendChild(diag);
     }
     diag.textContent = (diagOpen ? '▼ ' : '▶ ') +
-      'NETPLAY' + (pingMs >= 0 ? ' [ping ' + pingMs + 'ms]' : '') +
+      'NETPLAY' + (pingMs >= 0 ? ' [ping ' + pingMs + 'ms' + (nd ? nd.header(pingMs) : '') + ']'
+        : nd && nd.net() >= 0 ? ' [net ' + nd.net() + 'ms]' : '') +
       ' (recv ' + bytesRecv + 'B / engine-read ' + bytesReadByEngine + 'B / sent ' + bytesSent + 'B)' +
       (watchCount === null ? '' : ' | ' + watchCount + ' watching') + '\n' +
       diagLines.join('\n');
@@ -355,27 +357,164 @@
   // Periodically report the send-buffer depth and which network path ICE
   // chose (direct vs TURN relay). bufferedAmount growing = our data is NOT
   // leaving this machine.
+  //
+  //
+  // exactly as long as the session's channel is open: it ticks once a second
+  // for the network round trip, and the path line keeps its 3 s cadence.
   let watchTimer = null;
   function watchTransport() {
     clearInterval(watchTimer);
+    ndStop();
+    const mine = nd = makePingDiag(ndEnv);
     let lastLine = '';
+    let tick = 0, busy = false;
     watchTimer = setInterval(async () => {
-      if (!pc || !dc || dc.readyState !== 'open') { clearInterval(watchTimer); return; }
+      if (!pc || !dc || dc.readyState !== 'open') { clearInterval(watchTimer); if (nd === mine) ndStop(); return; }
+      if (busy) return; // a slow getStats: skip this second rather than pile up
+      busy = true;
+      const pathTick = ++tick % 3 === 0;
       let path = '?';
       try {
         const stats = await pc.getStats();
         let pair = null;
         stats.forEach((s) => { if (s.type === 'transport' && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId); });
         if (!pair) stats.forEach((s) => { if (s.type === 'candidate-pair' && (s.selected || s.nominated) && s.state === 'succeeded') pair = pair || s; });
+        if (nd === mine) mine.netFromPair(pair);
         if (pair) {
           const loc = stats.get(pair.localCandidateId), rem = stats.get(pair.remoteCandidateId);
           path = (loc ? loc.candidateType : '?') + '->' + (rem ? rem.candidateType : '?');
         }
       } catch { /* stats unavailable */ }
+      busy = false;
+      if (!pathTick || !dc) return;
       const line = 'path ' + path + ', send-buffer ' + dc.bufferedAmount + 'B' + (pingSeen ? '' : ', NO peer ping yet');
       if (line !== lastLine) { lastLine = line; netLog(line); }
-    }, 3000);
+    }, 1000);
   }
+
+  // ---- PING DIAGNOSTICS (2.4.1) ----
+  // The rollback ping in the header is ONE GGPO quality-report round trip,
+  // sampled about once a second, and the other engine answers it only from
+  // inside its frame loop (requestAnimationFrame). So a ~1 s freeze of EITHER
+  // page (a hidden window, a garbage-collection pause, a heavy round
+  // transition) reads as a ~900 ms ping on a perfect network. While a session
+  // is live this page watches what it can see for itself: its own window
+  // hidden and shown, its own frame gaps, and the network-only round trip from
+  // getStats (the selected candidate pair's currentRoundTripTime); the header
+  // shows that next to the game ping with the peak of the last 5 s, and a
+  // spike gets one line naming the likely side. Page only: it sends nothing
+  // to the other player and never touches the engine's channels.
+  //
+  // tools/test-netdiag-ping.js runs the block between the two marker lines
+  // under a fake clock, so keep it self-contained (everything through env).
+  // --- netdiag block begin ---
+  function makePingDiag(env) {
+    const SPIKE_MS = 250;   // a ping at or above this gets a verdict line
+    const GAP_MS = 250;     // a frame gap at or above this is logged
+    const RECENT_MS = 2500; // a pause that ended this recently explains a spike
+    const PEAK_MS = 5000;   // the header's peak covers this long
+    const SAME_MS = 3000;   // GGPO repeats its last reading until a new reply
+    const QUIET_MS = 15000; // one verdict line per kind this often, so a steady
+                            // high-ping pairing cannot push the bar's 12 lines off
+    const N = 8;            // ping samples kept (about one a second)
+    const pT = new Float64Array(N).fill(-1e12), pV = new Float64Array(N);
+    let pI = 0;
+    let netMs = -1;         // -1 = this browser or path gives none
+    let lastTs = 0, visSeq = 0, seenVis = 0;
+    let hiddenAt = env.doc.visibilityState === 'hidden' ? env.now() : -1;
+    let pauseEnd = -1e12, pauseMs = 0, pauseHidden = false;
+    let spikeMs = -1, spikeAt = -1e12;
+    const said = { self: -1e12, net: -1e12, peer: -1e12 };
+    let rafId = 0, live = true;
+    const fmt = (ms) => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
+
+    // One callback per browser frame: compare numbers, write nothing. A
+    // hidden window stops frames altogether; that gap is the hidden line's,
+    // so a frame that sees a visibility change since the last one starts over.
+    function frame(ts) {
+      if (!live) return;
+      rafId = env.raf(frame);
+      if (visSeq !== seenVis) { seenVis = visSeq; lastTs = ts; return; }
+      const gap = ts - lastTs;
+      if (lastTs > 0 && gap >= GAP_MS) {
+        pauseEnd = ts; pauseMs = gap; pauseHidden = false;
+        env.log('frame gap ' + fmt(gap) + ' on this side - the game paused that long');
+      }
+      lastTs = ts;
+    }
+    function onVis() {
+      if (!live) return;
+      visSeq++;
+      const now = env.now();
+      if (env.doc.visibilityState === 'hidden') {
+        if (hiddenAt < 0) {
+          hiddenAt = now;
+          env.log('window hidden - the game pauses until it is shown again');
+        }
+      } else if (hiddenAt >= 0) {
+        const d = now - hiddenAt;
+        hiddenAt = -1;
+        pauseEnd = now; pauseMs = d; pauseHidden = true;
+        env.log('window hidden ' + fmt(d) + ' - the game pauses while its window is hidden');
+      }
+    }
+    env.doc.addEventListener('visibilitychange', onVis);
+    rafId = env.raf(frame);
+
+    return {
+      net() { return netMs; },
+      // The selected candidate pair from getStats (or null): seconds -> ms.
+      netFromPair(pair) {
+        const r = pair && pair.currentRoundTripTime;
+        netMs = typeof r === 'number' && isFinite(r) && r >= 0 ? Math.round(r * 1000) : -1;
+      },
+      // Each game ping sample (setPing): keep it for the peak, and name the
+      // likely side of a spike in one line.
+      ping(ms) {
+        const now = env.now();
+        pT[pI] = now; pV[pI] = ms; pI = (pI + 1) % N;
+        if (!(ms >= SPIKE_MS)) return;
+        if (ms === spikeMs && now - spikeAt < SAME_MS) return; // the same reading again
+        spikeMs = ms; spikeAt = now;
+        // "This side" only when our own pause is big enough to explain the
+        // spike (at least half of it): the short gap every match load logs
+        // must not pin the other player's freeze on us.
+        let why, kind;
+        if (hiddenAt >= 0) { why = 'our window is hidden -> this side'; kind = 'self'; }
+        else if (now - pauseEnd <= RECENT_MS && pauseMs * 2 >= ms) { why = 'our game paused ' + fmt(pauseMs) + (pauseHidden ? ' (window hidden)' : ' (frame gap)') + ' -> this side'; kind = 'self'; }
+        else if (netMs >= SPIKE_MS || (netMs >= 0 && netMs * 2 >= ms)) { why = 'the network itself was slow'; kind = 'net'; }
+        else { why = 'we ran steady -> their game paused or the path stalled'; kind = 'peer'; }
+        if (now - said[kind] < QUIET_MS) return;
+        said[kind] = now;
+        env.log('ping ' + ms + ' ms, ' + (netMs >= 0 ? 'network ' + netMs + ' ms' : 'no network time') + ': ' + why);
+      },
+      // What the header adds after "ping Nms": the network time, and the
+      // peak of the last 5 s when it is higher than the current ping.
+      header(cur) {
+        const now = env.now();
+        let peak = -1;
+        for (let i = 0; i < N; i++) if (now - pT[i] <= PEAK_MS && pV[i] > peak) peak = pV[i];
+        // Compact: the Game only bar is about 100 characters wide and cuts the
+        // tail (the byte counters, watchers) of anything longer.
+        return (netMs >= 0 ? ' net ' + netMs : '') + (peak > cur ? ' peak ' + peak : '');
+      },
+      stop() {
+        live = false;
+        env.doc.removeEventListener('visibilitychange', onVis);
+        if (rafId) env.caf(rafId);
+        rafId = 0;
+      },
+    };
+  }
+  // --- netdiag block end ---
+  const ndEnv = {
+    now: () => performance.now(),
+    log: (m) => netLog(m),
+    raf: (f) => requestAnimationFrame(f),
+    caf: (id) => cancelAnimationFrame(id),
+    doc: document,
+  };
+  function ndStop() { if (nd) { nd.stop(); nd = null; } }
 
   async function makePeer() {
     const conn = pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
@@ -3010,6 +3149,7 @@
     // header like any fighting game's ping counter).
     setPing(ms) {
       pingMs = ms;
+      if (nd) nd.ping(ms);
       renderDiag();
     },
     // Engine-side diagnostic line onto the on-screen overlay (so handshake
@@ -3027,6 +3167,7 @@
       watchCount = null;
       isClosed = true; isConnected = false;
       if (lobby) lobby.inMatch = false;
+      ndStop(); // the ping diagnostics end with the session
       netLog('session closed');
       hidePanel();
       setTimeout(hideDiag, 8000); // leave the log up briefly after teardown

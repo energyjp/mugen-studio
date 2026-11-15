@@ -2,7 +2,7 @@
  "lang": "es-419",
  "name": "Español",
  "english": "Spanish (Latin America)",
- "studio": "2.4",
+ "studio": "2.4.1",
  "strings": {
   "Energy's Mugen Studio": "Mugen Studio de Energy",
   "About Mugen Studio": "Acerca de Mugen Studio",
@@ -166,7 +166,7 @@
   "Changed": "Cambiado",
   "Changed from the engine default, so it is written into the build. <b>reset</b> puts it back.": "Cambiado respecto al valor predeterminado del motor, así que se escribe en el juego. <b>restablecer</b> lo devuelve.",
   "Instruction booklet": "Manual de instrucciones",
-  "Version 2.4": "Versión 2.4",
+  "Version 2.4.1": "Versión 2.4.1",
   "with": "con",
   "Staff": "Equipo",
   "Everything the Studio ships from others, with their terms": "Todo lo que el Studio incluye de terceros, con sus términos",
@@ -6810,6 +6810,7 @@
   "Versus, Terminal and Booklet draw their own header; this applies to Flat.": "Versus, Terminal y Manual dibujan su propio encabezado; esto aplica a Plano.",
   "Making art for the panel? Use {size} with Fill (keep ratio): twice the panel’s 300-pixel width and a full-screen 1080p height, so it stays sharp on high-resolution screens. The panel is as tall as the browser window, so on shorter windows Fill trims the top and bottom evenly. Keep faces and logos in the middle, below the header and above the chat, which covers the lower third.": "¿Vas a hacer arte para el panel? Usa {size} con Llenar (mantener proporción): el doble del ancho de 300 píxeles del panel y una altura de 1080p en pantalla completa, para que se vea nítido en pantallas de alta resolución. El panel mide lo mismo que la ventana del navegador, así que en ventanas más bajas Llenar recorta arriba y abajo por igual. Deja caras y logos en el centro, debajo del encabezado y arriba del chat, que cubre el tercio inferior.",
   "From server version 1.2.0 the lobby relay also runs <b>lobbies</b> of up to 8 players (the winner stays on, the others watch), lets people <b>watch a match</b> with its room code, and keeps the <b>list of open lobbies</b> the game shows.": "Desde la versión 1.2.0 del servidor, el relay de lobby también arma <b>lobbies</b> de hasta 8 jugadores (el que gana se queda, los demás miran), deja <b>ver una partida</b> con su código de sala y lleva la <b>lista de lobbies abiertos</b> que muestra el juego.",
-  "Your servers run version {old}; this Studio carries version {new}, which adds lobbies, watching matches and the list of open lobbies. Press <b>Update my servers</b> to get them: every name and rating is kept. Until then your players’ game does not show <b>LOBBY</b> or <b>WATCH A MATCH</b>.": "Tus servidores tienen la versión {old}; este Studio trae la versión {new}, que agrega lobbies, ver partidas y la lista de lobbies abiertos. Presiona <b>Actualizar mis servidores</b> para tenerlos: se conservan todos los nombres y puntuaciones. Hasta entonces, el juego de tus jugadores no muestra <b>LOBBY</b> ni <b>WATCH A MATCH</b>."
+  "Your servers run version {old}; this Studio carries version {new}, which adds lobbies, watching matches and the list of open lobbies. Press <b>Update my servers</b> to get them: every name and rating is kept. Until then your players’ game does not show <b>LOBBY</b> or <b>WATCH A MATCH</b>.": "Tus servidores tienen la versión {old}; este Studio trae la versión {new}, que agrega lobbies, ver partidas y la lista de lobbies abiertos. Presiona <b>Actualizar mis servidores</b> para tenerlos: se conservan todos los nombres y puntuaciones. Hasta entonces, el juego de tus jugadores no muestra <b>LOBBY</b> ni <b>WATCH A MATCH</b>.",
+  "Written into a Desktop build only. A website always runs with it off, even for a player whose saved settings turned it on: in a browser the log only fills memory nobody can open, and writing it slows online matches.": "Se escribe solo en un juego de Escritorio. Un sitio web siempre lo mantiene desactivado, incluso para un jugador cuya configuración guardada lo activó: en un navegador el registro solo llena memoria que nadie puede abrir, y escribirlo vuelve más lentos los combates en línea."
  }
 }

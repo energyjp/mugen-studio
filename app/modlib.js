@@ -5059,8 +5059,13 @@ function collectSceneCommands(folder, select) {
   } catch { return []; }
 }
 
-function buildSceneViewerLua() {
-  const roster = readRoster();
+// `roster`: the BUILD's roster - for a public export, only the characters it
+// ships (vfslib assemble trims roster.chars to publicChars before calling).
+// Reading the whole roster here put a private H giver's name and scene
+// commands into every public web zip from v2.0 to v2.4 (svCmds), though the
+// character itself never shipped. With no argument (tools, the desktop sandbox
+// test) it still reads the roster as it stands.
+function buildSceneViewerLua(roster = readRoster()) {
   const db = {};
   // Only the giver answer is read here, and vfslib's scannedH keeps it per
   // character under a stamp of the files hScan reads, so every build and

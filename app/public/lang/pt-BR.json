@@ -2,7 +2,7 @@
  "lang": "pt-BR",
  "name": "Português",
  "english": "Portuguese (Brazil)",
- "studio": "2.4",
+ "studio": "2.4.1",
  "strings": {
   "Energy's Mugen Studio": "Mugen Studio da Energy",
   "About Mugen Studio": "Sobre o Mugen Studio",
@@ -166,7 +166,7 @@
   "Changed": "Alterado",
   "Changed from the engine default, so it is written into the build. <b>reset</b> puts it back.": "Alterado em relação ao padrão da engine, então é escrito na build. <b>redefinir</b> o devolve.",
   "Instruction booklet": "Manual de instruções",
-  "Version 2.4": "Versão 2.4",
+  "Version 2.4.1": "Versão 2.4.1",
   "with": "com",
   "Staff": "Equipe",
   "Everything the Studio ships from others, with their terms": "Tudo o que o Studio traz de terceiros, com seus termos",
@@ -6810,6 +6810,7 @@
   "Versus, Terminal and Booklet draw their own header; this applies to Flat.": "Versus, Terminal e Manual desenham o próprio cabeçalho; isto vale para Plano.",
   "Making art for the panel? Use {size} with Fill (keep ratio): twice the panel’s 300-pixel width and a full-screen 1080p height, so it stays sharp on high-resolution screens. The panel is as tall as the browser window, so on shorter windows Fill trims the top and bottom evenly. Keep faces and logos in the middle, below the header and above the chat, which covers the lower third.": "Vai fazer arte para o painel? Use {size} com Preencher (manter proporção): o dobro da largura de 300 pixels do painel e uma altura de 1080p em tela cheia, para ficar nítido em telas de alta resolução. O painel tem a altura da janela do navegador, então em janelas mais baixas Preencher corta em cima e embaixo por igual. Deixe rostos e logos no meio, abaixo do cabeçalho e acima do chat, que cobre o terço de baixo.",
   "From server version 1.2.0 the lobby relay also runs <b>lobbies</b> of up to 8 players (the winner stays on, the others watch), lets people <b>watch a match</b> with its room code, and keeps the <b>list of open lobbies</b> the game shows.": "A partir da versão 1.2.0 do servidor, o relay do lobby também roda <b>lobbies</b> de até 8 jogadores (quem vence fica, os outros assistem), deixa <b>assistir a uma partida</b> pelo código da sala e mantém a <b>lista de lobbies abertos</b> que o jogo mostra.",
-  "Your servers run version {old}; this Studio carries version {new}, which adds lobbies, watching matches and the list of open lobbies. Press <b>Update my servers</b> to get them: every name and rating is kept. Until then your players’ game does not show <b>LOBBY</b> or <b>WATCH A MATCH</b>.": "Seus servidores estão na versão {old}; este Studio traz a versão {new}, que adiciona lobbies, assistir a partidas e a lista de lobbies abertos. Aperte <b>Atualizar meus servidores</b> para tê-los: todo nome e pontuação são mantidos. Até lá, o jogo dos seus jogadores não mostra <b>LOBBY</b> nem <b>WATCH A MATCH</b>."
+  "Your servers run version {old}; this Studio carries version {new}, which adds lobbies, watching matches and the list of open lobbies. Press <b>Update my servers</b> to get them: every name and rating is kept. Until then your players’ game does not show <b>LOBBY</b> or <b>WATCH A MATCH</b>.": "Seus servidores estão na versão {old}; este Studio traz a versão {new}, que adiciona lobbies, assistir a partidas e a lista de lobbies abertos. Aperte <b>Atualizar meus servidores</b> para tê-los: todo nome e pontuação são mantidos. Até lá, o jogo dos seus jogadores não mostra <b>LOBBY</b> nem <b>WATCH A MATCH</b>.",
+  "Written into a Desktop build only. A website always runs with it off, even for a player whose saved settings turned it on: in a browser the log only fills memory nobody can open, and writing it slows online matches.": "Escrito só em uma build de Desktop. Um site sempre o mantém desligado, mesmo para um jogador cujas configurações salvas o ligaram: no navegador o log só enche uma memória que ninguém pode abrir, e escrevê-lo deixa as partidas online mais lentas."
  }
 }

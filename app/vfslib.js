@@ -683,8 +683,17 @@ const BACKUP_FILE = /\.(orig|bak|preSquare)$/i;
 // carries 1006 of them (7.4 MB), and because that layer was walked unfiltered
 // they made up 1006 of the pak's ~1670 index entries in every web export from
 // v1.0 to v1.8 - none of it playable. Filtered at the engine-layer walks only
-// (a user's themes are theirs) and refused by tools/export-selfcheck.js so it
-// cannot creep back in through a new layer.
+// (release, release-v2, engine repo) and refused by tools/export-selfcheck.js
+// so it cannot creep back in through a new layer.
+//
+// A USER'S THEME KEEPS ITS work/. Content/<bundle>/themes/<Name>/ mounts at
+// data/<Name>/, so a screenpack that carries its own work/ folder lands at
+// data/<Name>/work/ - the same shape - and is left alone on purpose: a user's
+// themes are theirs. build() returns those files (userWork), picked by where
+// each was read from, so the self-check can tell them from the engine's.
+// Refusing the theme's copy made every export of such a pack fail (2.4: a
+// user's Street_Fighter_One pack with 1006 work/ files in it - by the count,
+// most likely a copy of the release pack's; not checked).
 const WORK_DIR = /^data\/(?:[^/]+\/)?work\//i;
 const notWork = (vpath) => !WORK_DIR.test(vpath);
 function walkDir(absDir, virtualPrefix, out, filter) {
@@ -1369,7 +1378,10 @@ function assemble(opts, roster, view) {
   try {
     if (addOnOn(roster, 'training')) {
       const { buildSceneViewerLua } = require('./modlib');
-      generated[modmgr().VPATHS.sceneViewer] = Buffer.from(buildSceneViewerLua());
+      // This build's roster (a public export's is already trimmed to the
+      // characters it ships): never the whole one, or a private giver's name
+      // and scene commands ride into a public build (v2.0-v2.4 did).
+      generated[modmgr().VPATHS.sceneViewer] = Buffer.from(buildSceneViewerLua(roster));
     }
   } catch (e) {
     console.warn('scene viewer mod generation failed:', e.message);
@@ -2861,10 +2873,30 @@ end
     console.warn('the bundle\'s mods were not added:', e.message);
   }
 
+  // The data/work-shaped files that came from the USER'S OWN folders (their
+  // themes, logo, lifebars and mods, or the external build open read-only),
+  // by where each file was read from - not by folder name, which a theme can
+  // share with an engine motif (or be called "work"). Taken BEFORE the
+  // generated layer, and every generated file is added after it: the engine's
+  // authoring source only ever arrives through a WALK of an engine folder,
+  // never from a generator (add004 round-call copies, the motif copy, the
+  // Command List button art beside a motif folder called "work"...).
+  // tools/export-selfcheck.js leaves exactly these alone and refuses every
+  // other one (WORK_DIR above).
+  const userRoots = [layout.dir('themes'), layout.dir('logo'), layout.dir('lifebars'), layout.dir('mods'), view && view.root]
+    .filter(Boolean).map((d) => path.resolve(d).replace(/[\\/]+$/, '').toLowerCase() + path.sep);
+  const userWork = [];
+  for (const [v, a] of map) {
+    if (a && WORK_DIR.test(v) && userRoots.some((r) => path.resolve(a).toLowerCase().startsWith(r))) userWork.push(v);
+  }
+
   // Layer 1: generated files override everything
   for (const vpath of Object.keys(generated)) map.set(vpath, null);
+  for (const vpath of Object.keys(generated)) {
+    if (WORK_DIR.test(vpath) && !userWork.includes(vpath)) userWork.push(vpath);
+  }
 
-  return { roster, generated, index: map, charFixes, commandListFont, commandListButtons };
+  return { roster, generated, index: map, charFixes, commandListFont, commandListButtons, userWork };
 }
 
 module.exports = { buildRulesLine, mountNames, ownsMount, selectPathFor, ROOT, IKEMEN_SRC, ROSTER_PATH, readRoster, rosterInView, writeRoster, backupRoster, build, walkDir, buildSelectDef, buildConfigIni, playersOf, stageKeepFilter, gltfFiles, charKeepFilter, rosteredDefNames,

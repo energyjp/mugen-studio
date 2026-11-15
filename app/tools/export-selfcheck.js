@@ -36,7 +36,9 @@ function sectionEntries(text, name) {
 
 // Throws with every problem found, rather than the first - one run should tell
 // you everything that is wrong.
-function selfCheck(dist, { requireContent = true } = {}) {
+// `userWork`: the data/work-shaped files the build read from the user's own
+// folders (vfslib build().userWork); see the data/work check.
+function selfCheck(dist, { requireContent = true, userWork = [] } = {}) {
     const problems = [];
 
     for (const f of ['index.html', 'play.html', 'ikemen.wasm', 'vfs.js', 'webrtc.js', 'wasm_exec.js']) {
@@ -82,18 +84,32 @@ function selfCheck(dist, { requireContent = true } = {}) {
 
     // The engine's authoring source (data/work/, data/<motif>/work/) must not
     // ship: nothing loads it, and it was 1006 entries / 7.4 MB of every pak up
-    // to v1.8. vfslib filters it at the walk; this refuses a build where that
-    // filter was bypassed or a new layer reintroduced it. Pack builds are
-    // checked through the manifest, loose builds through the directory.
+    // to v1.8. vfslib filters it at the ENGINE-LAYER walks (WORK_DIR); this
+    // refuses a build where that filter was bypassed or a new layer
+    // reintroduced it. Pack builds are checked through the manifest, loose
+    // builds through the directory.
+    //
+    // A USER'S THEME IS NOT CHECKED. Content/<bundle>/themes/<Name>/ mounts at
+    // data/<Name>/, and vfslib ships a theme whole, a work/ folder of its own
+    // included (a user's themes are theirs). `userWork` lists the files of that
+    // shape the build read from the user's own folders (vfslib build().userWork,
+    // chosen by where each file came from, passed by export.js); exactly those
+    // are not refused. Refusing them made every export of a screenpack that
+    // carries its own work/ fail (2.4), with an error that blamed the engine
+    // files. Per file, not per folder: a theme can share its folder name with
+    // an engine motif (or be called "work") and must not hide an engine leak.
+    // Without the list every match is refused, as before.
     const WORK = /^data\/(?:[^/]+\/)?work\//i;
+    const mine = new Set((userWork || []).map((v) => String(v).toLowerCase()));
     const manifest = path.join(dist, 'ikemen-fs', 'manifest.json');
     if (fs.existsSync(manifest)) {
         let files = {};
         try { files = JSON.parse(fs.readFileSync(manifest, 'utf8')).files || {}; }
         catch (e) { problems.push('ikemen-fs/manifest.json is not valid JSON: ' + e.message); }
-        const work = Object.keys(files).filter((v) => WORK.test(v));
+        const work = Object.keys(files).filter((v) => WORK.test(v) && !mine.has(v.toLowerCase()));
         if (work.length) {
-            problems.push(work.length + ' engine authoring files (data/work) in the pak, e.g. ' + work[0]);
+            problems.push(work.length + ' of the Studio\'s own engine authoring files (data/work) in the pak, e.g. '
+                + work[0] + ' - they did not come from your screenpacks');
         }
     } else if (fs.existsSync(path.join(dist, 'ikemen-fs', 'data', 'work'))) {
         problems.push('engine authoring source shipped at ikemen-fs/data/work');
