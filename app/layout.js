@@ -388,6 +388,11 @@ const LEADERBOARD_RANKS = ACTIVE_BUNDLE.main && ACTIVE_BUNDLE.mode === 'checkout
 // background), by the same rule and for the same reasons.
 const LEADERBOARD_BG = ACTIVE_BUNDLE.main && ACTIVE_BUNDLE.mode === 'checkout'
   ? path.resolve(APP, '..', 'leaderboard-bg') : path.join(CONTENT, 'leaderboard-bg');
+// ...and the lobby's background picture or video (Settings > Online > Lobby
+// look, lobbylook.js), by the same rule: the Website export copies it into
+// lobby-bg/ beside the game page.
+const LOBBY_BG = ACTIVE_BUNDLE.main && ACTIVE_BUNDLE.mode === 'checkout'
+  ? path.resolve(APP, '..', 'lobby-bg') : path.join(CONTENT, 'lobby-bg');
 
 // Whether `dir` is SOME OTHER bundle's leaderboard art: the checkout Main's
 // folder beside the program, or leaderboard-art/ inside any bundle folder that
@@ -546,6 +551,7 @@ function dir(name) {
   if (name === 'leaderboard-art') return LEADERBOARD_ART;
   if (name === 'leaderboard-ranks') return LEADERBOARD_RANKS;
   if (name === 'leaderboard-bg') return LEADERBOARD_BG;
+  if (name === 'lobby-bg') return LOBBY_BG;
   if (EXTERNAL_ROOT && EXTERNAL_FOLDERS[name]) return path.join(EXTERNAL_ROOT, EXTERNAL.folders[name]);
   const base = WHERE[name];
   if (!base) throw new Error('layout.dir: unknown location "' + name + '"');
@@ -615,7 +621,7 @@ function writeLayoutKeys(patch) {
 module.exports = {
   APP, CONTENT_ROOT, BUNDLE, CONTENT, DEPS, DESKTOP_EXPORT, WEBSITE_EXPORT, IKEMEN_SRC,
   LAYOUT_FILE, ACTIVE_BUNDLE, EXPORT_SUFFIX, bundleSlug, readLayoutFile, writeLayoutKeys,
-  LEADERBOARD_ART, isOtherBundleArt, LEADERBOARD_RANKS, LEADERBOARD_BG,
+  LEADERBOARD_ART, isOtherBundleArt, LEADERBOARD_RANKS, LEADERBOARD_BG, LOBBY_BG,
   // The user's own files (see the top): '' / beside the program without a
   // "settings" key, in Settings/ with one.
   SETTINGS_DIR, USER_FILE, USER_KEYS, LOCAL_CONFIG_FILE, LOGS_DIR, LANGUAGES_DIR, STARTER_DIR, STARTUP_NOTES,

@@ -142,6 +142,49 @@
     #goload .gl-fill.unknown { animation: none; }
     #gomenu, #gomenu.on, #goload { transition: none; }
   }
+  /* IN A LOBBY (html.inlobby: lobby-look.js sets it while the lobby sidebar
+     of webrtc.js is on the page): the page around the game takes the
+     lobby's look, the --lob-* tokens (the host's, Settings > Online > Lobby
+     look, or the sidebar's own), so the full page's rounded gray chrome
+     does not sit beside the square sidebar. Square, solid, hard borders.
+     html.lob-bg: the look has a background, drawn behind the whole page by
+     lobby-look.js; the body lets it through. Nothing here applies outside a
+     lobby, so the page there is exactly as before (Game only included). */
+  html.inlobby, html.inlobby body { background: var(--lob-bg, #0b0d12); color: var(--lob-text, #d6e6ff); }
+  html.inlobby.lob-bg body { background: transparent; }
+  html.inlobby body > canvas { border-color: var(--lob-border, #6af); }
+  html.inlobby #apptitle { color: var(--lob-accent, #6af); }
+  html.inlobby #apptitle .ver, html.inlobby #apptitle .credit { color: var(--lob-dim, #9fb3cc); }
+  html.inlobby #boot { color: var(--lob-text, #d6e6ff); }
+  html.inlobby #chromeshow, html.inlobby #chromehide { border-radius: 0; border: 2px solid var(--lob-rule, #1e2a3a);
+              background: var(--lob-bg, #0b0d12); color: var(--lob-faint, #5d6f86); opacity: 1; }
+  html.inlobby #chromeshow:hover, html.inlobby #chromehide:hover, html.inlobby #chromeshow:focus-visible, html.inlobby #chromehide:focus-visible {
+              border-color: var(--lob-accent, #6af); background: var(--lob-accent, #6af); color: var(--lob-accent-text, #0b0d12); outline: none; }
+  /* The strip's own rows (Compare with a friend, Online netcode, Picture,
+     Browser data) style their controls inline in the old gray and green, so
+     these need !important: square, 2px borders, the look's colors; the
+     chosen netcode and picture size (aria-pressed) filled with the accent,
+     Reset in the warning color. */
+  html.inlobby #compare, html.inlobby #netcode, html.inlobby #aspect, html.inlobby #storage { color: var(--lob-dim, #9fb3cc) !important; }
+  html.inlobby #compare > span[style], html.inlobby #netcode > span[style], html.inlobby #aspect > span[style], html.inlobby #storage > span[style] {
+              color: var(--lob-faint, #5d6f86) !important; }
+  html.inlobby :is(#compare, #netcode, #aspect, #storage) button, html.inlobby #compare input {
+              border-radius: 0 !important; border: 2px solid var(--lob-rule, #1e2a3a) !important;
+              background: var(--lob-bg, #0b0d12) !important; color: var(--lob-dim, #9fb3cc) !important; }
+  html.inlobby #compare input { background: var(--lob-chat-bg, #05070a) !important; color: var(--lob-text, #d6e6ff) !important; outline: none; }
+  html.inlobby #compare input::placeholder { color: var(--lob-faint, #5d6f86); }
+  html.inlobby #compare input:focus { border-color: var(--lob-accent, #6af) !important; }
+  html.inlobby :is(#compare, #netcode, #aspect, #storage) button:hover, html.inlobby :is(#compare, #netcode, #aspect, #storage) button:focus-visible {
+              border-color: var(--lob-accent, #6af) !important; color: var(--lob-accent, #6af) !important; outline: none; }
+  html.inlobby :is(#netcode, #aspect) button[aria-pressed="true"] {
+              border-color: var(--lob-accent, #6af) !important; background: var(--lob-accent, #6af) !important; color: var(--lob-accent-text, #0b0d12) !important; }
+  html.inlobby #storage button { border-color: var(--lob-warn, #fc6) !important; color: var(--lob-warn, #fc6) !important; }
+  html.inlobby #storage button:hover, html.inlobby #storage button:focus-visible {
+              background: var(--lob-warn, #fc6) !important; color: var(--lob-bg, #0b0d12) !important; }
+  /* the netplay line under the game (webrtc.js styles it inline, translucent
+     black with green letters): square and solid in the chat's colors */
+  html.inlobby body > div[title^="Netplay diagnostics"] { border-radius: 0 !important; background: var(--lob-chat-bg, #05070a) !important;
+              border-color: var(--lob-rule, #1e2a3a) !important; color: var(--lob-dim, #9fb3cc) !important; }
 </style>
 </head>
 <body>
@@ -163,6 +206,9 @@
 //               filling the page, its options behind a MENU button (roster.json
 //               "gameOnly"; written only when it is on). ?view=game and
 //               ?view=full in the address override it either way.
+//   lobbyLook   the lobby's look (Settings > Online > Lobby look, roster.json
+//               "lobbyLook", lobby-look.js); written only when the bundle has
+//               one, with the folders its fonts and background are in.
 window.IKEMEN_BRAND = {
   title: 'WebMUGEN',
   version: '',
@@ -414,7 +460,8 @@ window.IKEMEN_BRAND = {
   // pinned to 640x480 for glfw-js further down.
   var fit = function (canvas) {
     var de = document.documentElement;
-    var W = de.clientWidth, H = de.clientHeight;
+    // minus the lobby sidebar's width while it is open (webrtc.js)
+    var W = Math.max(1, de.clientWidth - (window.ikemenReservedRight || 0)), H = de.clientHeight;
     var aspect = canvas.width / canvas.height;
     var w = Math.min(W, H * aspect), h = w / aspect;
     w = Math.round(w); h = Math.min(H, Math.round(h));
@@ -535,7 +582,7 @@ window.IKEMEN_BRAND = {
   var box = document.getElementById('aspect');
   box.style.cssText = 'font:12px monospace;margin:2px 0 4px;color:#9ab;';
   function btn(v, label, on, title) {
-    return '<button data-ar="' + v + '" title="' + title + '" style="'
+    return '<button data-ar="' + v + '" aria-pressed="' + on + '" title="' + title + '" style="'
       + 'font:12px monospace;cursor:pointer;margin:0 2px;padding:2px 8px;border-radius:4px;'
       + 'border:1px solid ' + (on ? '#6a8' : '#555') + ';background:' + (on ? '#254' : '#222')
       + ';color:' + (on ? '#cfd' : '#999') + ';">' + label + (on ? ' ✓' : '') + '</button>';
@@ -579,7 +626,7 @@ window.IKEMEN_BRAND = {
   var box = document.getElementById('netcode');
   box.style.cssText = 'font:12px monospace;margin:2px 0 4px;color:#9ab;';
   function btn(v, label, on, title) {
-    return '<button data-nc="' + v + '" title="' + title + '" style="'
+    return '<button data-nc="' + v + '" aria-pressed="' + on + '" title="' + title + '" style="'
       + 'font:12px monospace;cursor:pointer;margin:0 2px;padding:2px 8px;border-radius:4px;'
       + 'border:1px solid ' + (on ? '#6a8' : '#555') + ';background:' + (on ? '#254' : '#222')
       + ';color:' + (on ? '#cfd' : '#999') + ';">' + label + (on ? ' ✓' : '') + '</button>';
@@ -905,6 +952,10 @@ Object.defineProperty(window, 'innerHeight', { get: () => GLFW_H });
 // boot strip rather than hardcoded, so when the strip folds away the picture
 // grows into it; __reserveBottom lets the netplay panel dock below the game.
 var __reserveBottom = 0;
+// The lobby sidebar (webrtc.js) docks at the right edge; the picture shrinks,
+// keeping its aspect, to the width left of it (0 when it is folded or the
+// window is narrow, then it overlays the edge).
+var __reserveRight = 0;
 function ikemenFitCanvas() {
   var canvas = document.querySelector('body > canvas');
   if (!canvas || !canvas.width || !canvas.height) return;
@@ -915,7 +966,7 @@ function ikemenFitCanvas() {
   var chromeH = chrome ? chrome.getBoundingClientRect().height : 0;
   var reserve = Math.round(chromeH) + 26 + __reserveBottom;
   canvas.style.setProperty('width',
-    'min(calc(100vw - 26px), calc((100vh - ' + reserve + 'px) * ' + aspect + '))', 'important');
+    'min(calc(100vw - 26px - ' + __reserveRight + 'px), calc((100vh - ' + reserve + 'px) * ' + aspect + '))', 'important');
   canvas.style.setProperty('height', 'auto', 'important');
   canvas.style.setProperty('aspect-ratio', canvas.width + ' / ' + canvas.height, 'important');
   canvas.style.imageRendering = 'pixelated';
@@ -929,6 +980,14 @@ function ikemenFitCanvas() {
 // The netplay overlay calls this to reserve a strip below the game so it
 // docks under the picture instead of over it.
 window.ikemenReserveBottom = function (px) { __reserveBottom = px | 0; ikemenFitCanvas(); };
+window.ikemenReserveRight = function (px) {
+  __reserveRight = Math.max(0, px | 0);
+  window.ikemenReservedRight = __reserveRight;
+  // the full page centers the picture in the body: its padding keeps the
+  // picture (and the boot strip) clear of the sidebar
+  if (!window.ikemenGameOnly) document.body.style.paddingRight = __reserveRight ? (12 + __reserveRight) + 'px' : '';
+  ikemenFitCanvas();
+};
 
 // Fold the boot strip away once the game is actually DRAWING - not merely
 // once the page loaded, because the download can take minutes and the log is
@@ -1011,6 +1070,7 @@ window.__panics = [];
 <script src="./build-id.js"></script>
 <script src="./build-compare.js"></script>
 <script src="./vfs.js"></script>
+<script src="./lobby-look.js"></script>
 <script src="./webrtc.js"></script>
 <script src="./identity.js"></script>
 <script src="./wasm_exec.js"></script>
@@ -1174,6 +1234,16 @@ window.__panics = [];
       // the build's own (a read-only build's match, vfslib matchFor).
       if (params.get('loadmotif')) go.argv.push('-loadmotif');
     }
+    // NETPLAY DEV SWITCH (?devnet=1, off by default; webrtc.js documents it
+    // under "watching", and players use the menus and the netplay panel):
+    // ?nethost=1 makes this quick match the host of a rollback netplay match
+    // (-ip with no address), ?netjoin=CODE its guest, and ?watch=CODE starts
+    // the engine as a watcher.
+    if (params.get('devnet') === '1') {
+      if (params.get('p1') && params.get('nethost')) go.argv.push('-ip', '');
+      else if (params.get('p1') && params.get('netjoin')) go.argv.push('-ip', 'webrtc');
+      if (params.get('watch')) go.argv.push('-watch');
+    }
     // instantiateStreaming needs the server to send Content-Type:
     // application/wasm; fall back to buffered compile for hosts that don't.
     // The ?v= stamp (set by vfs.js from the manifest, which is fetched
@@ -1265,6 +1335,9 @@ window.__panics = [];
     log('Starting engine... (this can take a while; watch the console)');
     await go.run(result.instance);
     log('Engine exited.');
+    // A lobby member whose engine stopped leaves the lobby (webrtc.js), so
+    // the lobby does not pair a page that can no longer play or watch.
+    if (window.ikemenNet && window.ikemenNet.engineExited) window.ikemenNet.engineExited();
     // The engine is gone; this log is now the player's only diagnostic, so
     // unfold the strip and keep it open (and a Game only page becomes the
     // full page for this view, to show it).

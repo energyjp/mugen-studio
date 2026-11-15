@@ -74,7 +74,7 @@ function copy(src, dest) {
 // build carries the name of whoever made it instead of whoever wrote the
 // tooling. Fields are all optional; anything absent keeps the neutral default
 // baked into the page.
-function copyBranded(src, dest, roster, { isPublic = false } = {}) {
+function copyBranded(src, dest, roster, { isPublic = false, lobbyLook = null } = {}) {
   let html = fs.readFileSync(src, 'utf8');
   const brand = {
     title: roster.siteTitle || 'WebMUGEN',
@@ -92,6 +92,10 @@ function copyBranded(src, dest, roster, { isPublic = false } = {}) {
   // else, its options behind a MENU button. Written only when it is on, so a
   // build without it gets the very block it always did.
   if (roster.gameOnly === true) brand.gameOnly = true;
+  // THE LOBBY'S LOOK (Settings > Online > Lobby look): the page's form of it
+  // (lobbylook.forExport), written only when the bundle has one, so a build
+  // without it gets the very block it always did.
+  if (lobbyLook) brand.lobbyLook = lobbyLook;
   //
   // $' and $$ are patterns, and a title holding one broke the block and the
   // page. '<' is escaped so a title cannot close the <script> the block is in.
@@ -410,12 +414,31 @@ function exportSite({ pack = false, v2 = false, public: isPublic = false, dest }
       for (const f of names) copy(path.join(srcDir, f), path.join(DIST, ...d.split('/'), f));
     }
   }
-  copyBranded(path.join(webDir, 'index.html'), path.join(DIST, 'index.html'), roster, { isPublic });
+  // THE LOBBY'S LOOK (lobbylook.js), for a build that can reach a lobby: a
+  // public build carries no lobby server, so it gets none. Its fonts go
+  //
+  // its note) and its background in lobby-bg/; a background that is not in
+  // the bundle's folder, or is over its cap or not what its name says, is
+  // left out and said, and the page keeps the look's color.
+  const lobby = isPublic ? null : require('./lobbylook').forExport(roster.lobbyLook, layout.LOBBY_BG);
+  for (const x of lobby ? lobby.left : []) {
+    console.warn('export: the lobby background ' + x.file + (x.why === 'missing' ? ' is not in ' + layout.LOBBY_BG
+      : x.why === 'size' ? ' is over its size cap' : ' is not the file its name says') + ' - the lobby keeps its own color');
+  }
+  if (lobby && lobby.look) {
+    const LL = require('./lobbylook');
+    for (const fnt of lobby.fonts) copy(path.join(ROOT, 'public', 'ranking', LL.FONT_DIR, fnt), path.join(DIST, LL.FONT_DIR, fnt));
+    if (lobby.fonts.length) copy(path.join(ROOT, 'public', 'ranking', LL.FONT_DIR, 'FONTS.txt'), path.join(DIST, LL.FONT_DIR, 'FONTS.txt'));
+    if (lobby.background) copy(path.join(layout.LOBBY_BG, lobby.background), path.join(DIST, LL.BG_DIR, lobby.background));
+    if (lobby.panelBg && lobby.panelBg !== lobby.background) copy(path.join(layout.LOBBY_BG, lobby.panelBg), path.join(DIST, LL.BG_DIR, lobby.panelBg));
+  }
+  const lobbyLook = lobby && lobby.look;
+  copyBranded(path.join(webDir, 'index.html'), path.join(DIST, 'index.html'), roster, { isPublic, lobbyLook });
   // The game boot page is always reachable at play.html. On public builds the
   // Mod Studio front page (studio-lite) becomes the landing index.html, so an
   // itch.io visitor opens on the Studio and clicks "Build & Play" (-> play.html)
   // to launch the game. Private builds keep index.html = straight to the game.
-  copyBranded(path.join(webDir, 'index.html'), path.join(DIST, 'play.html'), roster, { isPublic });
+  copyBranded(path.join(webDir, 'index.html'), path.join(DIST, 'play.html'), roster, { isPublic, lobbyLook });
   //
   //
   // a host's own from a shareable copy): the plain standings unless Settings >

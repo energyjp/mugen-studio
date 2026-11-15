@@ -306,7 +306,7 @@ body.picking-stage #panel-stages #stages .card.picked { background: var(--plate)
   min-height: 36px; margin: 0; padding: 0; gap: 0; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0;
   background: transparent; box-shadow: none; color: var(--ink);
 }
-#panel-music #music > .card[data-id]:nth-child(odd):not(:first-child) { background: var(--plate); }
+#panel-music #music > .card[data-id]:nth-child(even of .card[data-id]:not([hidden])) { background: var(--plate); }
 #panel-music #music > .card[data-id] > * { min-width: 0; padding: 4px 10px; margin: 0; }
 #panel-music #music > .card[data-id] > .no {
   color: var(--mark); font: italic 800 var(--t-13)/1 var(--f-disp); font-stretch: 110%; font-variant-numeric: tabular-nums;

@@ -116,6 +116,12 @@ https://<server name>.<your workers.dev name>.workers.dev
 - The lobby relay is the same address, starting with `wss://` instead of
   `https://`, with `/ws` on the end. You never type either one: the Studio fills
   them in.
+- Since server version 1.2.0 the relay also runs **lobbies** (up to 8 players,
+  the winner stays on and the others watch), lets players **watch a match** by
+  its room code, and keeps the **list of open lobbies** the game shows (every
+  lobby without a password). The game's online menu shows **LOBBY** and **WATCH
+  A MATCH** only when its relay has them, so a server set up before 1.2.0 needs
+  **Update my servers** (below) for them to appear.
 
 **What it costs:** nothing, on Cloudflare's free Workers plan, for a
 friends-and-regulars community. The free plan has daily limits, and the servers
@@ -236,7 +242,10 @@ The group then shows:
   uses your servers shares one set of names and one leaderboard.
 - **Token:** saved or not, and **Forget token**.
 - **Update my servers:** after you update the Studio, this puts its version of
-  the servers on Cloudflare. Every name and rating is kept.
+  the servers on Cloudflare. Every name and rating is kept. The row shows the
+  server version you run, and when this Studio carries a newer one it says so
+  under the button: a server on 1.1.0 or older gets lobbies, watching and the
+  list of open lobbies this way.
 - **Save a copy of the leaderboard:** every player name and rating, as a `.json`
   file on this computer, in your servers' own backup format. **Save a copy**
   under **Players** saves the same names and records in another layout,
@@ -499,6 +508,21 @@ Then:    {"t":"sdp", ...}   relayed VERBATIM both ways — do not rewrite it
          {"t":"bye"}        to the other player when one leaves
 ```
 
+Watching, lobbies and the list (the Studio's servers since version 1.2.0):
+
+```
+Watch room:  wss://<host>/ws?create=1&watchers=1[&pass=<password>]
+Watch:       wss://<host>/ws?watch=<code>[&pass=<password>]
+Lobby:       wss://<host>/ws?lobby=new|<code>&build=<hex16>&nc=1&name=<name>[&pass=][&streak=N][&bid=]
+The list:    GET https://<host>/lobbies  ->  {"t":"lobbies","list":[...]}
+```
+
+The game asks `GET /lobbies` once when its page loads: a `200` answer with
+`{"t":"lobbies"}` is what makes it show **LOBBY** and **WATCH A MATCH**. A relay
+without that route (a plain room relay, or the Studio's servers before 1.2.0)
+keeps both hidden and plays room codes as before. The full message lists are in
+the comments at the top of `hostkit/relay.js`.
+
 - **The room code is yours to generate**; the client just displays what you send.
   The Studio's servers make codes like `spicy-tiger-42`.
 - **Codes are lowercase, and so is the lookup.** Players type what they see, often
@@ -682,6 +706,14 @@ If you used **Set up my servers**, these rules are already running:
   ignored.
 - **At most 3 results per pairing** (`seq` 1 to 3): a first-to-2 set.
 - **Casual is never rated**, and room-code matches are never reported.
+- **Lobbies** (server version 1.2.0 and later): at most 8 members, the server
+  alone decides who plays, results need the two players (and, in a dispute, the
+  members told to watch that match) to agree, the lobby's host can kick (the
+  name and the browser stay out while the lobby lives), and a lobby closes after
+  an hour with nothing happening or 12 hours in all. One internet address may
+  open 5 lobbies in 10 minutes, have 3 of them listed at once, read the list 30
+  times a minute and try 30 lobby codes a minute; a wrong-password storm slows
+  the guesser, not the lobby. Watch rooms take 8 watchers.
 - **Wait limits.** 10 minutes in the queue and 30 minutes for a room nobody
   joined. Players who are already connecting are never cut off. This is what
   keeps the servers inside Cloudflare's free daily allowance.

@@ -135,14 +135,16 @@
   border: 0; border-top: 1px solid var(--rule); background: none; box-shadow: none;
 }
 #panel-settings #settings details.grp > summary + .row, #panel-settings #settings details.grp > summary + .note + .row { border-top: 2px solid var(--ink); }
-#panel-settings #settings .row:nth-of-type(even) { background: var(--plate); }
+/* zebra rows: counted among the rows only ("of .row"), so a hint or note
+   between two rows never puts two shades of the same kind next to each other */
+#panel-settings #settings .row:nth-child(even of .row:not([hidden])) { background: var(--plate); }
 #panel-settings #settings .row .k { flex: 0 0 210px; min-width: 210px; font: 400 var(--t-13)/1.25 var(--f-body); color: var(--ink); }
 #panel-settings #settings .row .k b { font-weight: 700; }
 #panel-settings #settings .row .k .sec { font: 400 var(--t-11)/1 var(--f-data); color: var(--ink2); letter-spacing: 0; }
 #panel-settings #settings .row .d { flex: 1 1 140px; min-width: 120px; color: var(--ink2); font-size: var(--t-12); }
 /* a changed setting: the band's mark down its edge and its name in the mark ink */
 #panel-settings #settings .row.changed { background: none; box-shadow: inset 4px 0 0 var(--mark); }
-#panel-settings #settings .row.changed:nth-of-type(even) { background: var(--plate); }
+#panel-settings #settings .row.changed:nth-child(even of .row:not([hidden])) { background: var(--plate); }
 #panel-settings #settings .row.changed .k b { color: var(--mark); }
 /* which product a key reaches, and the other small marks */
 #panel-settings #settings .only, #panel-settings #settings .offlabel {
@@ -224,8 +226,14 @@
 #panel-settings #settings .guidebtn { margin: -4px 0 16px; align-self: flex-start; }
 #panel-settings #settings ol.steps { color: var(--ink2); font-size: var(--t-13); line-height: 1.5; margin: 0; padding: 2px 4px 8px 40px; }
 #panel-settings #settings ol.steps li::marker { font: italic 800 var(--t-13)/1 var(--f-disp); color: var(--mark); }
-#panel-settings #settings .fhint { color: var(--ink2); font-size: var(--t-12); margin: -2px 4px 8px 240px; }
-@media (max-width: 1100px) { #panel-settings #settings .fhint { margin-left: 20px; } }
+/* a field's hint, indented under its value by padding (not margin) so a shaded
+   row's hints carry its shade down with them */
+#panel-settings #settings .fhint { color: var(--ink2); font-size: var(--t-12); margin: -2px 0 0; padding: 0 8px 8px 240px; }
+@media (max-width: 1100px) { #panel-settings #settings .fhint { padding-left: 20px; } }
+#panel-settings #settings .row:nth-child(even of .row:not([hidden])) + .fhint,
+#panel-settings #settings .row:nth-child(even of .row:not([hidden])) + .fhint + .fhint { background: var(--plate); }
+/* Your own servers: an older server version than this Studio carries. */
+#panel-settings #settings .fhint.hostold { color: var(--warn); font-weight: 700; }
 #panel-settings #settings .row .tres { font-size: var(--t-12); color: var(--ink2); }
 #panel-settings #settings :is(.row, .hostask) .tres.ok, #panel-settings #settings .hostlog .ok { color: var(--good); }
 #panel-settings #settings :is(.row, .hostask) .tres.bad, #panel-settings #settings .hostlog .bad, #panel-settings #settings .hostproblem { color: var(--bad); }
@@ -251,7 +259,7 @@
 }
 #panel-settings #settings .ptable th + th { border-left: 2px solid var(--paper); }
 #panel-settings #settings .ptable td { border-bottom: 1px solid var(--rule); }
-#panel-settings #settings .ptable tbody tr[data-name]:nth-of-type(even) td { background: var(--plate); }
+#panel-settings #settings .ptable tbody tr[data-name]:nth-child(even of [data-name]:not([hidden])) td { background: var(--plate); }
 #panel-settings #settings .ptable td.n { font: 400 var(--t-12)/1 var(--f-data); }
 #panel-settings #settings .ptable td.pname .sub, #panel-settings #settings .pedit label { color: var(--ink2); }
 #panel-settings #settings .pcode { font: 400 var(--t-20)/1.2 var(--f-data); color: var(--ink); }

@@ -98,6 +98,14 @@ const ONLINE_ITEMS = [
   { id: 'yourrank', label: 'YOUR RANK' },
   { id: 'serverhost', label: 'HOST GAME', lobby: true },
   { id: 'join', label: 'JOIN GAME' },
+  // A winner-stays lobby of up to 8 (the engine's main.t_itemname.lobby): the
+  // page's lobby sidebar to create or join one. Shown only where the page has
+  // a lobby server (netLobby 'avail'); like a queue, never started online.
+  { id: 'lobby', label: 'LOBBY', queue: true },
+  // Watching a room's matches by its code (spectating): the engine's
+  // main.t_itemname.watchmatch, shown only where the engine says it can watch
+  // (the browser build on a page with a lobby server: watchAvailable).
+  { id: 'watchmatch', label: 'WATCH A MATCH' },
   { id: 'playername', label: 'PLAYER NAME' },
   { id: 'back', label: 'BACK' },
 ];
@@ -514,6 +522,13 @@ function netMenuLua({ online = false, hint = HINT_TEXT } = {}) {
     '\t\t\tshow = true',
     '\t\telseif it.id == \'join\' then',
     '\t\t\tshow = webJoin() or (has(\'serverconnect\') and has(\'joinadd\'))',
+    // online rows only: the public text carries neither the row nor its id
+    ...(online ? [
+      '\t\telseif it.id == \'watchmatch\' then',
+      '\t\t\tshow = has(\'watchmatch\') and type(watchAvailable) == \'function\' and watchAvailable()',
+      '\t\telseif it.id == \'lobby\' then',
+      '\t\t\tshow = has(\'lobby\') and type(netLobby) == \'function\' and netLobby(\'avail\', \'\') == \'yes\'',
+    ] : []),
     '\t\telse',
     '\t\t\tshow = has(it.id)',
     '\t\tend',

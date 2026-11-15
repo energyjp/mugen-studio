@@ -249,8 +249,53 @@
     resize: both; overflow: hidden; border: 1px solid var(--line); background: #05040a; }
   #panel-settings #settings .lbprev .lbframe { border: 2px solid var(--ink); }
   #panel-settings #settings .lbprev .lbframe iframe { display: block; width: 100%; height: 100%; border: 0; }
+  /* the lobby look's preview: the game page beside the lobby panel needs room */
+  #settings .lobbyprev .lbframe { height: 420px; }
   #settings .lbprev .dims { color: var(--ink2, #8a8a8a); font-variant-numeric: tabular-nums; }
   #settings .lbprev .bar { display: flex; gap: 12px; align-items: center; margin: 0 0 8px; font-size: 12.5px; }
+  /* A LOOK EDITOR (the Lobby look, the leaderboard's board): its rows in tabs
+     on the left, the live preview pinned on the right while the tabs scroll.
+     Square tabs, the chosen one a solid block of the accent. Stacked, the
+     preview goes first, under narrow windows. */
+  #settings .lookui { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 46%); gap: 16px;
+    align-items: start; padding: 6px 14px 14px; border-top: 1px solid var(--line); }
+  #settings .lookui .lkmain { min-width: 0; }
+  #settings .lookui .lktabs { display: flex; flex-wrap: wrap; gap: 0; margin: 4px 0 10px; border-bottom: 2px solid var(--accent); }
+  #panel-settings #settings .lookui button.lktab { font: 600 12px var(--fd); text-transform: uppercase; letter-spacing: .1em;
+    padding: 8px 14px 7px; margin: 0 2px 0 0; border: 2px solid var(--line2); border-bottom: 0; border-radius: 0;
+    background: var(--sunk); color: var(--dim); cursor: pointer; box-shadow: none; }
+  #panel-settings #settings .lookui button.lktab:hover { color: var(--text); border-color: var(--accent); }
+  #panel-settings #settings .lookui button.lktab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #panel-settings #settings .lookui button.lktab:focus-visible { outline: 2px solid var(--text); outline-offset: -4px; }
+  #settings .lookui .lkpane > .row:first-child { border-top: 0; }
+  #settings .lookui .lkpane .row { padding: 8px 2px; }
+  #settings .lookui .lkpane .row .k { min-width: 150px; }
+  #settings .lookui .lkside { position: sticky; top: 8px; min-width: 0; }
+  #settings .lookui .lkside .lbprev { padding: 0; }
+  #settings .lookui .lkside .lobbyprev .lbframe { height: 470px; }
+  /* the hand-set colors as tiles: a wide swatch over its name */
+  #settings .lookui .lbcolors.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; flex: 1 1 100%; }
+  #settings .lookui .lbcolors.swatches label { display: flex; flex-direction: column; align-items: stretch; gap: 4px; white-space: normal;
+    padding: 6px; border: 1px solid var(--line2); background: var(--sunk); font-size: 12px; }
+  #panel-settings #settings .lookui .lbcolors.swatches input[type="color"] { width: 100%; height: 30px; padding: 0; border: 1px solid var(--line2); }
+  /* sliders drawn square in the accent, not the browser's round blue ones */
+  #panel-settings #settings .lookui input[type="range"] { -webkit-appearance: none; appearance: none; height: 18px; padding: 0;
+    background: transparent; border: 0; cursor: pointer; }
+  #panel-settings #settings .lookui input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: var(--line2); border: 0; border-radius: 0; }
+  #panel-settings #settings .lookui input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 18px;
+    margin-top: -7px; background: var(--accent); border: 2px solid var(--accent-ink); border-radius: 0; }
+  #panel-settings #settings .lookui input[type="range"]:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  #panel-settings #settings .lookui input[type="range"]::-moz-range-track { height: 4px; background: var(--line2); border: 0; border-radius: 0; }
+  #panel-settings #settings .lookui input[type="range"]::-moz-range-thumb { width: 10px; height: 16px; background: var(--accent); border: 2px solid var(--accent-ink); border-radius: 0; }
+  #settings .lookui .lbcolors.swatches > button { align-self: center; justify-self: start; }
+  /* the see-through sliders: one line each, name, slider, amount */
+  #settings .lbsee { display: grid; grid-template-columns: max-content minmax(120px, 220px) max-content; gap: 6px 10px; align-items: center; font-size: 12.5px; }
+  #settings .lbsee label { display: contents; }
+  #settings .lbsee .dims { color: var(--dim); font-variant-numeric: tabular-nums; }
+  @media (max-width: 1100px) {
+    #settings .lookui { grid-template-columns: minmax(0, 1fr); }
+    #settings .lookui .lkside { position: static; order: -1; }
+  }
   /* the board's six hand-set colors, each a swatch with its name */
   #settings .lbcolors { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 12.5px; }
   #settings .lbcolors label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -286,6 +331,8 @@
   /* the value a server refused, and its sentence */
   #settings input.bad { border-color: var(--bad); }
   #settings .fhint.bad { color: var(--bad); }
+  /* Your own servers: an older server version than this Studio carries. */
+  #settings .fhint.hostold { color: var(--warn); }
   /* "Your own servers": the step log in the Test-result colors, an address
      that selects whole, and the two panels that ask before anything is
      replaced or deleted. */
@@ -2914,14 +2961,14 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
           <img class="body" alt="" draggable="false">
           <img class="shade" alt="" draggable="false">
         </div>
-        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.3</span></h2>
+        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.4</span></h2>
         <div class="cv-foot"><span class="with">with</span><span class="ab-chip wb" translate="no">WB</span><span class="ab-chip ar" translate="no">DJ AR</span><span class="ab-chip sz" translate="no">SHiZUKA</span><span class="cv-pub" translate="no">energy.jp</span></div>
       </div>
       <div class="bk-fold" aria-hidden="true"></div>
       <div class="ab-staff">
         <div class="bk-secband">
           <h2 class="bk-secband-t"><span class="t">Staff</span><span class="k" lang="ja">スタッフ</span></h2>
-          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.3</span>
+          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.4</span>
             <button class="bk-btn sm" id="aboutNotices" type="button" title="Everything the Studio ships from others, with their terms">Credits &amp; licenses&hellip;</button></div>
         </div>
         <div class="pbody bk-pg r">
@@ -10228,6 +10275,8 @@ function hostSync(r) {
     if (r.leaderboardPage === 'board') state.roster.leaderboardPage = 'board'; else delete state.roster.leaderboardPage;
     if (r.leaderboardLookStored) state.roster.leaderboardLook = r.leaderboardLookStored;
     else delete state.roster.leaderboardLook;
+    if (r.lobbyLookStored) state.roster.lobbyLook = r.lobbyLookStored;
+    else delete state.roster.lobbyLook;
     if (r.queueMode && r.queueMode.mode !== 'single') state.roster.queueMode = { mode: r.queueMode.mode, size: r.queueMode.size };
     else delete state.roster.queueMode;
   }
@@ -10463,6 +10512,20 @@ async function hostUse(confirmed) {
     toast(e.message, 'err');
   }
   renderSettings();
+}
+
+// Is the deployed server version (the host record's kitVersion) older than
+// the one this Studio carries (hostKitVersion)? Plain dotted numbers compared
+// part by part; anything else (blank, unreadable) is never called older.
+function hostKitOlder(deployed, carried) {
+  const parts = (v) => (/^\d+(\.\d+){0,3}$/.test(String(v || '')) ? String(v).split('.').map(Number) : null);
+  const a = parts(deployed), b = parts(carried);
+  if (!a || !b) return false;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] || 0, y = b[i] || 0;
+    if (x !== y) return x < y;
+  }
+  return false;
 }
 
 // "Your own servers (Cloudflare)", the first group of the tab. `ui` is
@@ -10718,6 +10781,7 @@ function renderHostServers(host, H, ui) {
     : t('Your servers are running on your Cloudflare account. The lobby relay and the leaderboard both live at one address. Nothing here costs money on Cloudflare’s free plan.'));
   ui.row(det, 'Lobby relay', 'Saved for this computer: used by Test in browser and your Website exports.', code(hs.signalUrl));
   ui.row(det, t('Leaderboard'), 'Saved for the bundle: your Website export carries it (a Public build leaves it out).', code(hs.identityUrl));
+  ui.hint(det, t('From server version 1.2.0 the lobby relay also runs <b>lobbies</b> of up to 8 players (the winner stays on, the others watch), lets people <b>watch a match</b> with its room code, and keeps the <b>list of open lobbies</b> the game shows.'));
 
   const T = U.tested || (U.result && U.result.ok && U.result.probes) || null;
   const testOut = span('tres');
@@ -10775,6 +10839,15 @@ function renderHostServers(host, H, ui) {
   const ur = ui.row(det, t('Update'), 'Every name and rating is kept.', update);
   ur.appendChild(span('tres', (made && !isNaN(made) ? t('set up {date}', { date: made.toLocaleDateString() }) : '')
     + (hs.kitVersion ? ' · ' + t('server version {v}', { v: hs.kitVersion }) : '') + (hs.worker ? ' · ' + t('server name {name}', { name: hs.worker }) : '')));
+  // An older server than this Studio carries (the version saved when it was
+  // set up or last updated): offer the update. 1.1.0 and older have no
+  // lobbies, so their players' game shows no LOBBY or WATCH A MATCH.
+  if (hostKitOlder(hs.kitVersion, H.hostKitVersion)) {
+    ui.hint(det, t('Your servers run version {old}; this Studio carries version {new}, which adds lobbies, watching matches and the list of open lobbies. Press <b>Update my servers</b> to get them: every name and rating is kept. Until then your players’ game does not show <b>LOBBY</b> or <b>WATCH A MATCH</b>.',
+      { old: esc(hs.kitVersion), new: esc(H.hostKitVersion) }));
+    const last = det.lastElementChild;
+    if (last) last.classList.add('hostold');
+  }
   askPanel();
   logBox();
 
@@ -11815,6 +11888,8 @@ async function renderHosting(host) {
         if (r.leaderboardPage === 'board') state.roster.leaderboardPage = 'board'; else delete state.roster.leaderboardPage;
         if (r.leaderboardLookStored) state.roster.leaderboardLook = r.leaderboardLookStored;
         else delete state.roster.leaderboardLook;
+        if (r.lobbyLookStored) state.roster.lobbyLook = r.lobbyLookStored;
+        else delete state.roster.lobbyLook;
         if (r.queueMode && r.queueMode.mode !== 'single') state.roster.queueMode = { mode: r.queueMode.mode, size: r.queueMode.size };
         else delete state.roster.queueMode;
       }
@@ -11858,6 +11933,49 @@ async function renderHosting(host) {
     if (input) { input.title = tip; r.appendChild(input); }
     det.appendChild(r);
     return r;
+  };
+  // A LOOK EDITOR'S FRAME: tabs over panes on the left (row()/hint()/note()
+  // take a pane like a group), and a side column for the live preview pinned
+  // beside them. The tab shown is kept per editor across the redraw each save
+  // causes. Arrow keys move between tabs.
+  const lookTabs = (parent, id, tabs) => {
+    const wrap = document.createElement('div'); wrap.className = 'lookui';
+    const main = document.createElement('div'); main.className = 'lkmain';
+    const bar = document.createElement('div'); bar.className = 'lktabs'; bar.setAttribute('role', 'tablist');
+    const side = document.createElement('div'); side.className = 'lkside';
+    const KEEP = renderHosting.lookTab = renderHosting.lookTab || {};
+    const panes = {}, btns = {};
+    const keys = tabs.map(([k]) => k);
+    const show = (k, focus) => {
+      KEEP[id] = k;
+      for (const kk of keys) {
+        const on = kk === k;
+        btns[kk].setAttribute('aria-selected', String(on));
+        btns[kk].tabIndex = on ? 0 : -1;
+        panes[kk].hidden = !on;
+      }
+      if (focus) btns[k].focus();
+    };
+    for (const [k, label] of tabs) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'lktab'; b.setAttribute('role', 'tab'); b.textContent = label;
+      b.onclick = () => show(k);
+      b.onkeydown = (e) => {
+        const i = keys.indexOf(k);
+        const j = e.key === 'ArrowRight' ? (i + 1) % keys.length : e.key === 'ArrowLeft' ? (i + keys.length - 1) % keys.length : -1;
+        if (j >= 0) { e.preventDefault(); show(keys[j], true); }
+      };
+      btns[k] = b;
+      bar.appendChild(b);
+      const p = document.createElement('div'); p.className = 'lkpane'; p.setAttribute('role', 'tabpanel');
+      panes[k] = p;
+    }
+    main.appendChild(bar);
+    for (const k of keys) main.appendChild(panes[k]);
+    wrap.append(main, side);
+    parent.appendChild(wrap);
+    show(keys.includes(KEEP[id]) ? KEEP[id] : keys[0]);
+    return { panes, side };
   };
   const text = (value, placeholder, wide) => {
     const i = document.createElement('input');
@@ -11987,6 +12105,245 @@ async function renderHosting(host) {
     tester(r, 'lobby', () => ({ signalUrl: url.value }), (b) => b.signalUrl.trim(), V.signalUrl);
     hint(det, 'Starts with <code>wss://</code> - for example <code>wss://relay.example.com/ws</code>. '
       + 'Used the next time you press Test in browser or export the website.');
+  }
+
+  // ---- the lobby's look ----
+  // THE WINNER-STAYS LOBBY'S LOOK on the web game page (lobbylook.js, kept as
+  // roster.lobbyLook): the sidebar's colors, fonts and head band, and a
+  // background behind the page while players are in a lobby. Like the board's
+  // look: each change is one save of the whole look, the export writes it into
+  // the game page and copies its fonts and background beside it, and the
+  // preview below is the game's own sidebar (public/ikemen/lobby-preview.html,
+  // ?look=). Players cannot change it.
+  {
+    const LK = H.lobbyLook || { colors: { preset: 'classic' }, fonts: {}, header: 'band' };
+    const LT = H.lobbyTables || { keys: [], presets: {}, headers: [], fonts: {} };
+    const det = group('Lobby look', 'colors, fonts and pictures for your lobby', !!H.lobbyLookStored);
+    const saveLobby = (part) => commit({ lobbyLook: Object.assign({}, LK, part) });
+    note(det, 'How the winner-stays lobby looks on your site: the panel beside the game and the page around it while players are in a lobby. Players cannot change it. It needs the Lobby relay above.');
+    // THE EDITOR: the look's parts in tabs, the live preview pinned beside them.
+    const LKT = lookTabs(det, 'lobby', [['colors', t('Colors')], ['panel', t('Panel')], ['fonts', t('Fonts')], ['pictures', t('Pictures')]]);
+    const LP = LKT.panes;
+    const pickFrom = (sel, list) => {
+      for (const [v, label, raw] of list) {
+        const o = document.createElement('option'); o.value = v; o.textContent = label;
+        if (raw) o.translate = false;   // a font's or a Studio look's own name
+        sel.appendChild(o);
+      }
+    };
+    // COLORS: a preset, then any of the eight by hand; picking a preset
+    // starts over from its colors.
+    const colors = LK.colors || { preset: 'classic' };
+    const pre = document.createElement('select');
+    pickFrom(pre, [['classic', t('Classic')], ['energy', 'Energy', true], ['wb', 'WB', true], ['djar', 'DJ-AR', true], ['shizuka', 'SHiZUKA', true], ['contrast', t('High contrast')]]);
+    pre.value = LT.presets[colors.preset] ? colors.preset : 'classic';
+    pre.onchange = () => saveLobby({ colors: { preset: pre.value } });
+    row(LP.colors, t('Colors'), 'A set of colors to start from: the lobby’s own (Classic), or one of the Studio’s looks.', pre);
+    const base = LT.presets[pre.value] || {};
+    const sw = document.createElement('span');
+    sw.className = 'lbcolors swatches';
+    const LOBBY_COLOR = { bg: t('Background'), panel: t('Panels'), text: t('Text'), dim: t('Quiet text'), accent: t('Accent'),
+      accentText: t('Text on the accent'), border: t('Borders'), chatBg: t('Chat and boxes') };
+    for (const key of LT.keys) {
+      const lab = document.createElement('label');
+      const inp = document.createElement('input');
+      inp.type = 'color';
+      inp.value = colors[key] || base[key] || '#000000';
+      inp.dataset.key = key;
+      inp.onchange = () => saveLobby({ colors: Object.assign({}, colors, { [key]: inp.value }) });
+      lab.append(inp, document.createTextNode(' ' + LOBBY_COLOR[key]));
+      sw.appendChild(lab);
+    }
+    if (LT.keys.some((k) => colors[k])) {
+      const reset = document.createElement('button');
+      reset.type = 'button'; reset.className = 'tiny'; reset.textContent = t('Reset');
+      reset.title = 'Put the preset’s own colors back.';
+      reset.onclick = () => saveLobby({ colors: { preset: colors.preset } });
+      sw.appendChild(reset);
+    }
+    row(LP.colors, 'Custom colors', 'Change any of these eight; the rest come from the preset.', sw);
+
+    // SEE-THROUGH: the lines, the panel's own fill and the boxes, each from
+    // solid (0) to gone (100); buttons and tags stay solid.
+    {
+      const see = LK.see || {};
+      const cell = document.createElement('span');
+      cell.className = 'lbsee';
+      for (const [k, label] of [['lines', t('Lines and borders')], ['panel', t('Panel fill')], ['boxes', t('Chat and boxes')]]) {
+        const lab = document.createElement('label');
+        const name = document.createElement('span'); name.textContent = label;
+        const r = document.createElement('input');
+        r.type = 'range'; r.min = '0'; r.max = '100'; r.step = '5'; r.value = String(see[k] || 0);
+        r.dataset.see = k;
+        const shown = document.createElement('span'); shown.className = 'dims';
+        const say = () => { shown.textContent = t('{n}% see-through', { n: r.value }); };
+        say();
+        r.oninput = say;
+        r.onchange = () => {
+          const next = Object.assign({}, see);
+          if (Number(r.value)) next[k] = Number(r.value); else delete next[k];
+          saveLobby({ see: next });
+        };
+        lab.append(name, r, shown);
+        cell.appendChild(lab);
+      }
+      row(LP.colors, 'See-through', 'How much of what is behind shows through the lobby panel’s lines, its own fill and its boxes. Buttons and tags stay solid.', cell);
+      hint(LP.colors, t('0% is solid. Panel fill lets the page, or its picture, show through the whole panel; with a panel picture it shows where the picture does not cover.'));
+    }
+
+    // THE PANEL'S THEME: flat as always, or a whole restyle with the same
+    // words (lobby-look.js THEMES); square in every one.
+    const sty = document.createElement('select');
+    pickFrom(sty, [['flat', t('Flat')], ['versus', t('Versus')], ['terminal', t('Terminal')], ['booklet', t('Booklet')]]);
+    sty.value = LK.style || 'flat';
+    sty.onchange = () => saveLobby({ style: sty.value });
+    row(LP.panel, 'Panel theme', 'The lobby panel’s whole design. The words stay the same in every theme, and every theme keeps square corners.', sty);
+    hint(LP.panel, {
+      flat: t('The panel as it has always been: solid sections with divider lines.'),
+      versus: t('A fighting game’s versus card: the two players on slanted plates with a VS between them, everyone else as small tiles under a striped title band.'),
+      terminal: t('A CRT console: scan lines, bracketed buttons, dotted leaders from each name to its status. A panel picture shows faintly behind it, like a dark screen.'),
+      booklet: t('A page from a 2000s fighting game’s instruction booklet: a speed-cut chapter band, numbered chapters and roster, the match in a tip box, the chat as a ruled notes page.'),
+    }[sty.value]);
+
+    // THE HEAD BAND: flat looks only, square like the rest of the lobby.
+    const hdr = document.createElement('select');
+    pickFrom(hdr, [['band', t('Solid band')], ['panel', t('Panel band')], ['line', t('Underline')]]);
+    hdr.value = LK.header || 'band';
+    hdr.onchange = () => saveLobby({ header: hdr.value });
+    hdr.disabled = sty.value !== 'flat';   // a theme draws its own header
+    row(LP.panel, 'Header style', 'How the band across the top of the lobby panel is drawn.', hdr);
+    if (hdr.disabled) hint(LP.panel, t('Versus, Terminal and Booklet draw their own header; this applies to Flat.'));
+    else hint(LP.panel, {
+      band: t('A solid strip of the accent color with the title in the text-on-accent color.'),
+      panel: t('The panel color with the title in the accent color and a border-colored line under it.'),
+      line: t('The background color with a thick accent-colored line under the title.'),
+    }[hdr.value]);
+
+    // FONTS: the leaderboard's set; Monospace is the lobby's own.
+    const fontList = [['', t('Monospace (default)')]].concat(Object.keys(LT.fonts).map((id) => [id, LT.fonts[id], true]));
+    for (const [role, label, tip] of [
+      ['head', 'Heading font', 'The lobby panel’s title, its section headings and the folded tab.'],
+      ['body', 'Text font', 'Names, chat, buttons and everything else in the lobby panel.'],
+    ]) {
+      const fsel = document.createElement('select');
+      pickFrom(fsel, fontList);
+      fsel.value = (LK.fonts || {})[role] || '';
+      fsel.dataset.role = role;
+      fsel.onchange = () => {
+        const fonts = Object.assign({}, LK.fonts);
+        if (fsel.value) fonts[role] = fsel.value; else delete fonts[role];
+        saveLobby({ fonts });
+      };
+      row(LP.fonts, label, tip, fsel);
+    }
+    hint(LP.fonts, t('The fonts you pick go beside the game page in a leaderboard-fonts folder - upload it with the rest. Chat and lobby codes stay easiest to read in Monospace.'));
+
+    // THE PICTURES: one picture, animated picture or short video behind the
+    // page while in a lobby (background), and one behind the lobby panel
+    // itself (panelBg, like a speedrun timer's background image). Both kept
+    // in the bundle's lobby-bg folder, each with its fit and darkness.
+    const FIT_CHOICES = [['cover', t('Fill (keep ratio)')], ['contain', t('Fit (keep ratio)')], ['stretch', t('Stretch')],
+      ['tile', t('Tile it')], ['center', t('Actual size')]];
+    const pictureRow = (key, title, desc, removeTip, hintOn, hintOff) => {
+      const cur = LK[key] || null;
+      const cell = document.createElement('span');
+      cell.className = 'lbcolors';
+      const out = document.createElement('span');
+      out.className = 'tres';
+      const tinyBtn = (label, tip, onclick) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'tiny'; b.textContent = label; b.title = tip;
+        b.onclick = onclick;
+        return b;
+      };
+      const file = document.createElement('input');
+      file.type = 'file';
+      file.accept = (LT.bgTypes || ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'video/mp4', 'video/webm']).join(',');
+      file.hidden = true;
+      const use = tinyBtn(cur ? 'Another file…' : 'Use a picture or video…',
+        'A PNG, JPEG, WebP or GIF picture (animated ones play), or an MP4 or WebM video, which plays muted and loops.', () => file.click());
+      file.onchange = async () => {
+        const f = file.files && file.files[0];
+        file.value = '';
+        if (!f) return;
+        use.disabled = true;
+        out.className = 'tres';
+        out.textContent = t('saving…');
+        try {
+          const res = await api('/api/lobby-background', f, { 'Content-Type': f.type || 'application/octet-stream' });
+          saveLobby({ [key]: { file: res.file, fit: cur ? cur.fit : 'cover', dim: cur ? cur.dim : (LT.bgDimDefault != null ? LT.bgDimDefault : 60) } });
+        } catch (e) {
+          out.className = 'tres bad';
+          out.textContent = '✗ ' + I18n.server(e.message);
+          use.disabled = false;
+        }
+      };
+      cell.append(use, file);
+      if (cur) {
+        const fit = document.createElement('select');
+        pickFrom(fit, FIT_CHOICES);
+        fit.value = cur.fit;
+        fit.onchange = () => saveLobby({ [key]: Object.assign({}, cur, { fit: fit.value }) });
+        const dim = document.createElement('input');
+        dim.type = 'range'; dim.min = '0'; dim.max = String(LT.bgDimMax || 90); dim.step = '5';
+        dim.value = String(cur.dim);
+        const shown = document.createElement('span');
+        shown.className = 'dims';
+        const say = () => { shown.textContent = t('{n}% darker', { n: dim.value }); };
+        say();
+        dim.oninput = say;
+        dim.onchange = () => saveLobby({ [key]: Object.assign({}, cur, { dim: Number(dim.value) }) });
+        const dl = document.createElement('label');
+        dl.append(dim, ' ', shown);
+        const name = document.createElement('code');
+        name.translate = false;   // the file's name, as the Studio kept it
+        name.textContent = cur.file;
+        cell.append(fit, dl, tinyBtn('Remove', removeTip, () => saveLobby({ [key]: null })), name);
+      }
+      cell.appendChild(out);
+      row(LP.pictures, title, desc, cell);
+      hint(LP.pictures, cur ? hintOn : hintOff);
+    };
+    pictureRow('background', 'Page picture', 'A picture, an animated GIF or WebP, or a short video behind the page while players are in a lobby.',
+      'Back to the lobby’s own background color. The file stays in the bundle’s lobby-bg folder.',
+      t('It fills the window behind the game. Fill and Fit keep the picture’s shape (Fill crops it, Fit shows all of it); Stretch fills the window and ignores its shape. Darker lays more of the lobby’s background color over it.'),
+      t('A picture, an animated GIF or WebP, or a short MP4 or WebM loop (it plays muted). Up to 10 MB for a picture and 20 MB for a video. Your Website export puts it beside the game page in a lobby-bg folder - upload it with the rest.'));
+    pictureRow('panelBg', 'Panel picture', 'A picture, an animated GIF or WebP, or a short video behind the lobby panel itself, like a speedrun timer’s background.',
+      'Back to the panel’s own colors. The file stays in the bundle’s lobby-bg folder.',
+      t('It lies behind the panel’s names, statuses and chat; buttons, boxes and the code stay solid on top. The panel is tall and narrow: Fill crops a wide picture to its middle, Fit shows all of it, Stretch squeezes it to the panel. Darker lays more of the lobby’s background color over it.'),
+      t('Behind the lobby panel itself, like a speedrun timer’s background image. The same kinds and sizes as the page picture, kept in the same lobby-bg folder; you can use one, the other, or both.'));
+    // The size to make panel art at: the panel is 300 wide and as tall as the
+    // window (about 950 on a maximized 1080p browser, 1080 full screen), so
+    // twice 300 x 1080, shown with Fill, which trims top and bottom evenly.
+    hint(LP.pictures, t('Making art for the panel? Use {size} with Fill (keep ratio): twice the panel’s 300-pixel width and a full-screen 1080p height, so it stays sharp on high-resolution screens. The panel is as tall as the browser window, so on shorter windows Fill trims the top and bottom evenly. Keep faces and logos in the middle, below the header and above the chat, which covers the lower third.',
+      { size: '<b translate="no">600 × 2160</b>' }));
+
+    // THE PREVIEW: the game's own lobby panel, beside a stand-in for the game,
+    // with a made-up lobby. Its Fold button shows how the folded tab hides.
+    const box = document.createElement('div');
+    box.className = 'lbprev lobbyprev';
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const open = document.createElement('button'); open.type = 'button'; open.className = 'tiny'; open.textContent = 'Open in its own window';
+    const lobbyUrl = () => '/ikemen/lobby-preview.html?look=' + encodeURIComponent(JSON.stringify(H.lobbyLookStored || {}));
+    open.onclick = () => openToolWindow(lobbyUrl(), 'lobby-look', 'width=1100,height=640', 'The lobby preview window was blocked.');
+    const reset = H.lobbyLookStored ? (() => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'tiny';
+      b.textContent = 'Back to the default look';
+      b.title = 'Colors, fonts, header and background all back to the lobby’s own. A background file stays in the bundle’s lobby-bg folder.';
+      b.onclick = () => commit({ lobbyLook: {} });
+      return b;
+    })() : null;
+    bar.append(open);
+    if (reset) bar.append(reset);
+    const holder = document.createElement('div');
+    holder.className = 'lbframe';
+    const frame = document.createElement('iframe');
+    frame.title = 'Lobby look preview';
+    frame.src = lobbyUrl();
+    holder.appendChild(frame);
+    box.append(holder, bar);
+    LKT.side.appendChild(box);
+    note(LKT.side, 'The preview is the game’s own lobby panel with made-up players. Test in Browser shows the look in a real lobby, and the next Website export carries it (a Public build has no lobby, so it leaves the look out).');
   }
 
   // ---- TURN relay ----
@@ -12133,6 +12490,12 @@ async function renderHosting(host) {
           // draws the board without it, and only there is this said.
           + (H.boardArtTool || H.boardArt ? '' : ' ' + t('This copy makes no character art for it, so each row shows the place, tier, name, record and rating with no portrait, and 1st place opens without a win pose.'))
         : 'A simple table of the top 100: place, name, tier, rating, wins and losses.');
+      // THE EDITOR: the look's parts in tabs, the live preview pinned beside
+      // them (the plain standings take only a picture and their words).
+      const BKT = lookTabs(det, 'board-' + pick.value, pick.value === 'board'
+        ? [['layout', t('Layout')], ['colors', t('Colors')], ['fonts', t('Fonts')], ['pictures', t('Pictures')], ['text', t('Text')], ['ranks', t('Ranks')]]
+        : [['pictures', t('Pictures')], ['text', t('Text')]]);
+      const BP = BKT.panes;
       // THE BOARD'S LOOK (leaderboardlook.js): its format, header, fonts and
       // colors. Each change is one save of the whole look; the export writes
       // it into the page's RANKING block and the preview below passes it as
@@ -12150,17 +12513,17 @@ async function renderHosting(host) {
       // Folded parts of the look, closed until opened (the page's own words
       // and shields need nothing set) and kept open across the redraw each
       // save causes.
-      const fold = (label, count, flag) => {
+      const fold = (label, count, flag, into) => {
         const d = document.createElement('details');
         d.className = 'lbsub';
-        d.open = !!renderHosting[flag];
+        d.open = into ? true : !!renderHosting[flag];   // in its own tab: open
         d.addEventListener('toggle', () => { renderHosting[flag] = d.open; });
         const s = document.createElement('summary');
         const nm = document.createElement('span'); nm.textContent = label;
         const ct = document.createElement('span'); ct.className = 'gcount'; ct.textContent = count;
         s.append(nm, ct);
         d.appendChild(s);
-        det.appendChild(d);
+        (into || det).appendChild(d);
         return d;
       };
 
@@ -12188,10 +12551,10 @@ async function renderHosting(host) {
         offlineSub: ['Server not answering, second line', 'The smaller line under Server not answering.'],
       };
       const STANDINGS_WORDS = ['standingsTitle', 'emptyTitle', 'emptySub', 'offlineTitle', 'offlineSub'];
-      const wordsFold = (keys, label) => {
+      const wordsFold = (keys, label, into) => {
         const own = look.text || {};
         const nWords = keys.filter((k) => own[k]).length;
-        const words = fold(label, nWords === 1 ? t('1 line of your own') : nWords ? t('{n} lines of your own', { n: nWords }) : '', 'wordsOpen');
+        const words = fold(label, nWords === 1 ? t('1 line of your own') : nWords ? t('{n} lines of your own', { n: nWords }) : '', 'wordsOpen', into);
         hint(words, t('Each box shows the page’s own words: leave it blank to keep them. Put *stars* around words to draw them in the accent color, as in {example}. Up to {max} characters a line.',
           { example: '<code translate="no">PLAY A *RANKED MATCH* TO ENTER</code>', max: LT.textMax || 80 }));
         // The logo card's two big lines have no English of their own: their
@@ -12286,20 +12649,20 @@ async function renderHosting(host) {
           cell.append(fit, dl, tinyBtn('Remove', 'Back to the page’s own backdrop. The file stays in the bundle’s leaderboard-bg folder.', () => saveLook({ background: null })), name);
         }
         cell.appendChild(out);
-        row(det, 'Background picture', 'A picture, an animated GIF or WebP, or a short video behind the whole page.', cell);
-        hint(det, cur
+        row(BP.pictures, 'Background picture', 'A picture, an animated GIF or WebP, or a short video behind the whole page.', cell);
+        hint(BP.pictures, cur
           ? t('Fill the page crops it to cover the window; Show all of it keeps it whole with the page’s color around it. Darker lays more of the page’s color over it, so names stay readable.')
           : t('A picture, an animated GIF or WebP, or a short MP4 or WebM loop (it plays muted). Up to 10 MB for a picture and 20 MB for a video: a long animation is far smaller as a video. Your Website export puts it beside leaderboard.html in a leaderboard-bg folder - upload it with the rest.'));
       };
 
-      if (pick.value !== 'board') { backgroundRow(); wordsFold(STANDINGS_WORDS, t('Page text')); }
+      if (pick.value !== 'board') { backgroundRow(); wordsFold(STANDINGS_WORDS, t('Page text'), BP.text); }
       if (pick.value === 'board') {
         const fmt = document.createElement('select');
         options(fmt, [['classic', t('Classic board')], ['select', t('Select screen')], ['podium', t('Podium')], ['hiscore', t('Hi-score table')], ['broadcast', t('Broadcast')]]);
         fmt.value = look.format;
         fmt.onchange = () => saveLook({ format: fmt.value });
-        row(det, 'Board format', 'How the board lays out its top 8.', fmt);
-        hint(det, {
+        row(BP.layout, 'Board format', 'How the board lays out its top 8.', fmt);
+        hint(BP.layout, {
           classic: t('The places slide in, the board climbs and 1st place opens up with its win pose.'),
           select: t('A character-select screen: the cursor walks the top 8, and whoever it is on stands big beside the grid.'),
           podium: t('The top three do their win poses on stepped blocks; 4th to 8th are listed beside them.'),
@@ -12311,8 +12674,8 @@ async function renderHosting(host) {
         options(hdr, [['banner', t('Banner')], ['ruled', t('Ruled')], ['flat', t('Flat glow')], ['bar', t('Underline bar')]]);
         hdr.value = look.header;
         hdr.onchange = () => saveLook({ header: hdr.value });
-        row(det, 'Header style', 'How the board’s title and its logo card are drawn.', hdr);
-        hint(det, {
+        row(BP.layout, 'Header style', 'How the board’s title and its logo card are drawn.', hdr);
+        hint(BP.layout, {
           banner: t('Letters on a slanted strip of the accent color that fades out at both ends.'),
           ruled: t('Light letters between two accent-colored lines that fade out to the sides.'),
           flat: t('Letters in the accent color with a soft glow.'),
@@ -12335,9 +12698,9 @@ async function renderHosting(host) {
             if (fs.value) fonts[role] = fs.value; else delete fonts[role];
             saveLook({ fonts });
           };
-          row(det, label, tip, fs);
+          row(BP.fonts, label, tip, fs);
         }
-        hint(det, t('Default keeps each part in the system font the board has always used. The fonts you pick go beside leaderboard.html in a leaderboard-fonts folder - upload it with the rest.'));
+        hint(BP.fonts, t('Default keeps each part in the system font the board has always used. The fonts you pick go beside leaderboard.html in a leaderboard-fonts folder - upload it with the rest.'));
 
         // COLORS: a preset, then any of six by hand. Picking a preset starts
         // over from its colors.
@@ -12346,10 +12709,10 @@ async function renderHosting(host) {
         options(pre, [['classic', t('Classic')], ['energy', 'Energy', true], ['wb', 'WB', true], ['djar', 'DJ-AR', true], ['shizuka', 'SHiZUKA', true], ['contrast', t('High contrast')]]);
         pre.value = colors.preset;
         pre.onchange = () => saveLook({ colors: { preset: pre.value } });
-        row(det, 'Colors', 'A set of colors to start from: the classic board’s own, or one of the Studio’s looks.', pre);
+        row(BP.colors, 'Colors', 'A set of colors to start from: the classic board’s own, or one of the Studio’s looks.', pre);
         const base = LT.presets[colors.preset] || {};
         const sw = document.createElement('span');
-        sw.className = 'lbcolors';
+        sw.className = 'lbcolors swatches';
         const COLOR_LABEL = { bg: t('Background'), haze: t('Glow'), accent: t('Accent'), name: t('Names'), score: t('Ratings'), rank: t('Places') };
         for (const key of LT.customKeys) {
           const lab = document.createElement('label');
@@ -12368,11 +12731,11 @@ async function renderHosting(host) {
           reset.onclick = () => saveLook({ colors: { preset: colors.preset } });
           sw.appendChild(reset);
         }
-        row(det, 'Custom colors', 'Change any of these six; the rest come from the preset.', sw);
+        row(BP.colors, 'Custom colors', 'Change any of these six; the rest come from the preset.', sw);
         backgroundRow();
 
         // The board's words: every line but the plain standings' heading.
-        wordsFold(Object.keys(TK).filter((k) => k !== 'standingsTitle'), t('Board text'));
+        wordsFold(Object.keys(TK).filter((k) => k !== 'standingsTitle'), t('Board text'), BP.text);
 
         // THE RANKS' ICONS (look.ranks): per rank, the shield's two colors and
         // pips, or a picture of the host's own in its place. The ranks are the
@@ -12381,7 +12744,7 @@ async function renderHosting(host) {
         const R = rulesFor(H.identityUrl);
         const looks = look.ranks || {};
         const nIcons = Object.keys(looks).length;
-        const icons = fold(t('Rank icons'), nIcons === 1 ? t('1 rank of your own') : nIcons ? t('{n} ranks of your own', { n: nIcons }) : '', 'iconsOpen');
+        const icons = fold(t('Rank icons'), nIcons === 1 ? t('1 rank of your own') : nIcons ? t('{n} ranks of your own', { n: nIcons }) : '', 'iconsOpen', BP.ranks);
         const iconsBody = document.createElement('div');
         icons.appendChild(iconsBody);
         const saveRank = (name, patch) => {
@@ -12622,11 +12985,11 @@ async function renderHosting(host) {
       }).observe(holder);
       // The size above the frame; Sample data and the own window under it.
       box.append(bar2, holder, bar);
-      det.appendChild(box);
+      BKT.side.appendChild(box);
       const was = renderHosting.frameSize || { v: 'fit' };
       sizeSel.value = was.v;
       applySize(was.v, was.wh);
-      note(det, 'The preview reads your live leaderboard; tick Sample data to see it full. '
+      note(BKT.side, 'The preview reads your live leaderboard; tick Sample data to see it full. '
         + 'Players open it at your site\u2019s address followed by /leaderboard.html.');
       // Below the preview: the board's character art, made from this bundle.
       if (pick.value === 'board' && H.boardArtTool) {
@@ -17222,7 +17585,7 @@ window.renderLifebar = async function renderLifebar(host) {
       <div class="xcolophon">
         <div class="xcolophon-row">
           <span class="bk-imprint" aria-hidden="true" translate="no">energy.jp</span>
-          <span class="xline2"><b translate="no">Mugen Studio 2.3</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
+          <span class="xline2"><b translate="no">Mugen Studio 2.4</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
         </div>
       </div>
     </section>

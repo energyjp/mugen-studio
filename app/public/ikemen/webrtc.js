@@ -11,6 +11,13 @@
 (function () {
   'use strict';
 
+  // The page's netplay dev switch: ?devnet=1 (off by default) turns on the
+  //
+  const qp = new URLSearchParams(location.search);
+  const devnet = qp.get('devnet') === '1';
+  // Watchers in this room (see "watching"); null when not a room that takes them.
+  let watchCount = null;
+
   // metered.ca TURN relay (for router pairings that can't connect
   // directly). Fresh short-lived credentials are fetched per session from
   // their API. Set METERED_APP to the account's app subdomain (the
@@ -119,7 +126,8 @@
     }
     diag.textContent = (diagOpen ? '▼ ' : '▶ ') +
       'NETPLAY' + (pingMs >= 0 ? ' [ping ' + pingMs + 'ms]' : '') +
-      ' (recv ' + bytesRecv + 'B / engine-read ' + bytesReadByEngine + 'B / sent ' + bytesSent + 'B)\n' +
+      ' (recv ' + bytesRecv + 'B / engine-read ' + bytesReadByEngine + 'B / sent ' + bytesSent + 'B)' +
+      (watchCount === null ? '' : ' | ' + watchCount + ' watching') + '\n' +
       diagLines.join('\n');
   }
   function hideDiag() {
@@ -239,6 +247,16 @@
       for (let i = 0; i < eng.length; i++) mixed[localHash.length + 1 + i] = eng.charCodeAt(i) & 0xff;
       localHash = contentHash64(mixed);
       netLog('engine id ' + (eng || '(unavailable)'));
+      //
+      // page on a "different build" without a second build.
+      const salt = devnet ? qp.get('buildsalt') : '';
+      if (salt) {
+        const salted = new Uint8Array(localHash.length + salt.length);
+        salted.set(localHash, 0);
+        for (let i = 0; i < salt.length; i++) salted[localHash.length + i] = salt.charCodeAt(i) & 0xff;
+        localHash = contentHash64(salted);
+        netLog('build id salted (test hook)');
+      }
     } catch (e) {
       netLog('engine id not folded in: ' + e.message);
     }
@@ -267,11 +285,18 @@
     }
   }
 
+  // Every handler here acts only for the session's CURRENT channel or
+  // connection. A page runs sessions back to back in a winner-stays lobby, and
+  // a finished session's channels report their close later, sometimes after
+  // the next session wired its own: before this, that late close nulled the
+  // new 'ggpo' channel (gdc) and the next match never started (field: the
+  // player whose opponent's tab closed mid-match, in the following match).
   function wireChannel(channel) {
     dc = channel;
     dc.binaryType = 'arraybuffer';
     pingSeen = false; pingFilterArmed = true;
     dc.onopen = () => {
+      if (dc !== channel) return;
       isConnected = true;
       netLog('data channel OPEN');
       try { dc.send(PING); netLog('handshake ping sent'); } catch (e) { netLog('ping send FAILED: ' + e.message); }
@@ -296,6 +321,7 @@
       watchTransport();
     };
     dc.onmessage = (e) => {
+      if (dc !== channel) return;
       const u = new Uint8Array(e.data);
       if (pingFilterArmed && !pingSeen && u.length === PING.length && u.every((b, i) => b === PING[i])) {
         pingSeen = true;
@@ -314,16 +340,16 @@
       }
       bytesRecv += u.length; chunks.push(u); renderDiag();
     };
-    dc.onclose = () => { isClosed = true; isConnected = false; netLog('data channel CLOSED by peer'); };
-    dc.onerror = (e) => { isFailed = true; netLog('data channel ERROR: ' + (e && e.error && e.error.message || 'unknown')); };
+    dc.onclose = () => { if (dc !== channel) return; isClosed = true; isConnected = false; netLog('data channel CLOSED by peer'); };
+    dc.onerror = (e) => { if (dc !== channel) return; isFailed = true; netLog('data channel ERROR: ' + (e && e.error && e.error.message || 'unknown')); };
   }
 
   function wireGGPO(channel) {
     gdc = channel;
     gdc.binaryType = 'arraybuffer';
-    gdc.onmessage = (e) => { gQueue.push(new Uint8Array(e.data)); };
+    gdc.onmessage = (e) => { if (gdc === channel) gQueue.push(new Uint8Array(e.data)); };
     gdc.onopen = () => netLog('ggpo datagram channel OPEN');
-    gdc.onclose = () => { gdc = null; };
+    gdc.onclose = () => { if (gdc === channel) gdc = null; };
   }
 
   // Periodically report the send-buffer depth and which network path ICE
@@ -352,9 +378,10 @@
   }
 
   async function makePeer() {
-    pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+    const conn = pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
     let discTimer = null;
     pc.onconnectionstatechange = () => {
+      if (conn !== pc) return; // a finished session's connection
       const st = pc.connectionState;
       netLog('connectionState: ' + st);
       if (st === 'failed') {
@@ -367,7 +394,7 @@
         setStatus('Connection trouble - waiting for it to recover...');
         clearTimeout(discTimer);
         discTimer = setTimeout(() => {
-          if (pc && pc.connectionState === 'failed') {
+          if (pc === conn && pc.connectionState === 'failed') {
             isFailed = true; isClosed = true;
             setStatus('Connection failed. Both players should retry (a VPN or hotspot can help stubborn routers).');
           }
@@ -379,7 +406,7 @@
         setStatus('Connection unstable - waiting for it to recover...');
         clearTimeout(discTimer);
         discTimer = setTimeout(() => {
-          if (pc && pc.connectionState === 'disconnected') {
+          if (pc === conn && pc.connectionState === 'disconnected') {
             isFailed = true; isClosed = true;
             setStatus('Connection lost and did not recover. Both players should retry.');
           }
@@ -393,21 +420,22 @@
         if (isConnected) setStatus('Connected! Return to the game window.');
       }
     };
-    pc.oniceconnectionstatechange = () => netLog('iceConnectionState: ' + pc.iceConnectionState);
+    pc.oniceconnectionstatechange = () => { if (conn === pc) netLog('iceConnectionState: ' + pc.iceConnectionState); };
   }
 
   // Wait for ICE gathering so the offer/answer strings are complete
   // (avoids needing trickle-ICE signaling).
-  function gatherComplete() {
+  function gatherComplete(conn) {
+    const c = conn || pc; // a watcher's connection, or the players'
     return new Promise((resolve) => {
-      if (pc.iceGatheringState === 'complete') return resolve();
+      if (c.iceGatheringState === 'complete') return resolve();
       const check = () => {
-        if (pc.iceGatheringState === 'complete') {
-          pc.removeEventListener('icegatheringstatechange', check);
+        if (c.iceGatheringState === 'complete') {
+          c.removeEventListener('icegatheringstatechange', check);
           resolve();
         }
       };
-      pc.addEventListener('icegatheringstatechange', check);
+      c.addEventListener('icegatheringstatechange', check);
       setTimeout(resolve, 4000); // fallback: use whatever gathered
     });
   }
@@ -440,6 +468,7 @@
       // and the heading was never updated. startQueue() sets queueMode before
       // it calls showPanel(), so the value is already correct here.
       mode === 'host' ? 'NETPLAY - You are hosting'
+        : mode === 'watch' ? 'NETPLAY - Watching a match'
         : mode === 'queue'
           ? 'NETPLAY - ' + (queueMode === 'casual' ? 'Casual match' : 'Ranked match')
           : 'NETPLAY - Joining a host'));
@@ -603,22 +632,54 @@
     if (note) setStatus(note);
   }
 
+  // The host's "Allow watchers" switch and watcher count: a square box and a
+  // plain line (no pill), one click, live while the room waits. The switch
+  // goes to the lobby ({t:'allow'}); the count comes back from it.
+  function watchControls(ui) {
+    //
+    // to allow or count, so no switch.
+    if (lobbyCan.state === 'no') return null;
+    const row = el('label', 'display:flex;align-items:center;gap:8px;margin-top:8px;color:#ddd;cursor:pointer;user-select:none');
+    const box = el('input', 'width:16px;height:16px;margin:0;accent-color:#5a5;cursor:pointer');
+    box.type = 'checkbox';
+    box.checked = watchAllow;
+    box.title = 'Let people with the room code watch your matches';
+    box.onchange = () => setWatchAllow(box.checked);
+    row.appendChild(box);
+    row.appendChild(el('span', '', 'Allow watchers'));
+    const count = el('span', 'margin-left:auto;padding:1px 6px;background:#223;border:1px solid #446;color:#9cf;font:12px monospace',
+      (watchCount || 0) + ' watching');
+    row.appendChild(count);
+    panel.appendChild(row);
+    panel.__wcount = count;
+    panel.__wallow = box;
+    return box;
+  }
+
   function roomHost(ui, url) {
     const mine = panel;   // the panel this room draws on (see the deny below)
     const passInp = ui.mkInput('Optional room password:', 'leave blank for none');
+    watchControls(ui);
     let ws = null;
     const createBtn = ui.mkBtn('Create room', () => {
       createBtn.disabled = true;
       setStatus('Creating room...');
       let gotRoom = false;
+      // Every room made here can take watchers (the switch says whether it
+      // does now): the lobby keeps the room while this socket is open.
       ws = new WebSocket(url + (url.includes('?') ? '&' : '?') +
-        'create=1&pass=' + encodeURIComponent(passInp.value.trim()));
+        'create=1&watchers=1&pass=' + encodeURIComponent(passInp.value.trim()));
+      hostWs = ws;
       ws.onmessage = async (e) => {
         let m; try { m = JSON.parse(e.data); } catch { return; }
         try {
+          if (hostWs === ws && wLobby(m)) return; // a watcher's handshake
           if (m.t === 'room') {
             gotRoom = true;
+            if (globalThis.ikemenTest) globalThis.ikemenTest.room = m.code;
             netLog('room created: ' + m.code);
+            if (!watchAllow) lobbySend({ t: 'allow', on: false });
+            setWatchCount(0);
             ui.clearBody();
             panel.appendChild(el('div', 'margin-top:8px;color:#aaa', 'Give this room code to your friend:'));
             const codeEl = el('div',
@@ -632,6 +693,8 @@
               setStatus('Code copied.');
             });
             if (passInp.value.trim()) panel.appendChild(el('div', 'margin-top:6px;color:#886', "Don't forget to tell them the password too."));
+            watchControls(ui);
+            if (lobbyCan.state !== 'no') panel.appendChild(el('div', 'margin-top:4px;color:#888;font-size:11px', 'Watchers use the same code (and password) with "Watch a match".'));
             setStatus('Waiting for your friend to join...');
           } else if (m.t === 'peer') {
             setStatus('Friend joined! Connecting...');
@@ -645,8 +708,11 @@
           } else if (m.t === 'sdp') {
             await pc.setRemoteDescription(m.sdp);
             setStatus('Connecting...');
-            releaseSignal(ws);
+            // The lobby socket stays open for the session: watchers reach the
+            // host through it for their own handshake, and closing it ends
+            // the room (ikemenNet.close).
           } else if (m.t === 'deny') {
+            if (ws === hostWs && m.reason === 'timeout' && isConnected) { ws.__done = true; hostWs = null; return; }
             ws.__done = true;
             // A deny after the room was made (the host kit closes a room
             // nobody joined) ends that room: the code shown is dead and the
@@ -660,7 +726,17 @@
             else createBtn.disabled = false;
             setStatus(friendlyDeny(m.reason));
           } else if (m.t === 'bye') {
-            if (!isConnected) setStatus('Your friend left the room. Waiting...');
+            // The guest's lobby socket closed. Once connected that is normal;
+            // before, the guest left, and its seat stays taken (the lobby
+            // lets one guest in per room), so the room starts over.
+            if (!isConnected && panel === mine) {
+              ws.__done = true;
+              if (hostWs === ws) endHosting();
+              try { if (pc) pc.close(); } catch { /* fresh one later */ }
+              ui.clearBody();
+              roomHost(ui, url);
+              setStatus('Your friend left before the connection was made. Create a new room.');
+            }
           }
         } catch (err) {
           netLog('room host error: ' + err.message);
@@ -678,6 +754,7 @@
       switchToManual(ui, 'host');
     });
     setStatus('Create a room and read the short code to your friend.');
+    if (devnet && qp.get('nethost')) createBtn.click(); // dev switch, see "watching"
   }
 
   function roomJoin(ui, url) {
@@ -697,6 +774,9 @@
         try {
           if (m.t === 'joined') {
             joined = true;
+            // A room that takes watchers says so: this socket then stays
+            // open for the count ({t:'wcount'}), and closes with the session.
+            if (Number.isInteger(m.watchers)) { guestWs = ws; setWatchCount(m.watchers); }
             netLog('joined room ' + code);
             setStatus('In the room - waiting for the host to connect...');
             await makePeer();
@@ -710,7 +790,9 @@
             await gatherComplete();
             ws.send(JSON.stringify({ t: 'sdp', sdp: pc.localDescription }));
             setStatus('Connecting...');
-            releaseSignal(ws);
+            if (guestWs !== ws) releaseSignal(ws);
+          } else if (m.t === 'wcount') {
+            setWatchCount(m.n);
           } else if (m.t === 'deny') {
             ws.__done = true;
             joinBtn.disabled = false;
@@ -735,9 +817,12 @@
       switchToManual(ui, 'join');
     });
     setStatus('Type the room code your friend gave you.');
+    if (devnet && qp.get('netjoin')) { codeInp.value = qp.get('netjoin'); joinBtn.click(); } // dev switch
   }
+  let guestWs = null; // a guest's lobby socket kept for the watcher count
 
   function startHost() {
+    installHostWatchBridge(); // watchers are on by default; the switch turns them off
     const ui = showPanel('host');
     const url = signalUrl();
     if (url) roomHost(ui, url); else manualHostUI(ui);
@@ -1131,9 +1216,1624 @@
   // number to a player who just went to look at it.
   globalThis.addEventListener('ikemen-rank-dirty', function () { rankRefresh(true); });
 
+  // ---------- watching (spectating) ----------
+  // A watcher runs the players' match from the host's confirmed inputs (the
+  // engine half is src/watch.go). The host's page holds one RTCPeerConnection
+  // per watcher, separate from the players' `pc`, with two channels: 'ggpo'
+  // (unordered, the watcher's GGPO datagrams, addressed by slot) and 'ctl'
+  // (ordered: the build check and the engine's select/start/drop/end
+  // messages). Match setup never goes through the lobby, which only swaps the
+  // watcher's SDP with the host. A watcher's connection failing, closing or
+  // lagging touches nothing of the players' (no shared state with `pc`, `dc`,
+  // `gdc` or their flags), and the engine drops a watcher on its own.
+  //
+  // THE UI. Host: the room panel's "Allow watchers" switch (on by default; one
+  // click, changeable while waiting; off refuses new watchers and lets go of
+  // the ones there) and the watcher count, in the panel while waiting and on
+  // the NETPLAY line during the match. The guest sees the count on its NETPLAY
+  // line. Watcher: the online menu's WATCH A MATCH calls ikemenNet.start('watch'),
+  // which shows the watch panel (room code, password, Watch, Leave) and the
+  // engine's waiting screen until the host's next match starts.
+  //
+  //
+  // &watchers=1 takes watchers. ?watch=CODE[&pass=] -> watcher {t:'watching'},
+  // host {t:'watcher', id}; host {t:'sdp', to:id, sdp} -> watcher {t:'sdp',
+  // sdp}; watcher {t:'sdp', sdp} -> host {t:'sdp', from:id, sdp}; host {t:'wdeny',
+  // to:id, reason} -> watcher {t:'deny', reason}; host {t:'allow', on}; a
+  // watcher leaving -> host {t:'wbye', id}; both players {t:'wcount', n}.
+  //
+  // DEV SWITCH (?devnet=1, off by default; the tests use it). Only with it:
+  //   ?nethost=1               index.html starts a quick match (?p1=) as the
+  //                            netplay host and this page creates its room
+  //                            without a click
+  //   ?netjoin=CODE            the quick match's guest; joins room CODE
+  //   ?watch=CODE              the engine starts with -watch and this page
+  //                            watches room CODE without the panel's click
+  //   ?crctrail=1              records the per-frame checksum trail, read with
+  //                            globalThis.ikemenTest.trail(): a player's from the
+  //                            GGPO input datagrams it sends (each carries the
+  //                            checksum of its frame - 16), a watcher's from the
+  //                            engine (ikemenWatch.trail)
+  //   ?buildsalt=TEXT          mixes TEXT into this page's Build ID (a watcher on
+  //                            a "different build", to see it refused)
+  //   globalThis.ikemenTest    what a test driver reads (room, trail, slots,
+  //                            refused, closed, count)
+  // Watchers per room: hard cap 32 (GGPO's MaxSpectators), 8 by default (the
+  // lobby's cap too).
+  const WATCH_CAP = 32, WATCH_DEFAULT = 8;
+  const WATCH_MAX = Math.min(WATCH_CAP, WATCH_DEFAULT);
+  // The only ctl messages each side accepts; anything else is dropped, and a
+  // watcher that keeps sending junk is cut off.
+  const CTL_FROM_WATCHER = ['hello'];
+  const CTL_FROM_HOST = ['verified', 'refused', 'select', 'nowatch', 'start', 'drop', 'end'];
+  const CTL_MAX_BYTES = 64 * 1024; // an end message carries 256 frames of input
+  const GGPO_MAX_BYTES = 1024;     // no GGPO message is bigger
+  // What one watcher may send on its GGPO channel. An honest watcher sent
+  // about 200 datagrams a second in a full match, with or without a 500 ms
+  // round trip (an ack per frame it takes in, its own input packet every
+  // poll, keep-alives, quality reports); the budget is twice that, spent
+  // first and refilled continuously. Past it a datagram is dropped unread, and a
+  // watcher that keeps going past it (more than WATCH_RATE drops within a
+  // second) is cut off: each datagram costs the host's page an event, so it
+  // must not get to send many.
+  const WATCH_RATE = 400, WATCH_BURST = 800;            // datagrams/s, burst
+  const WATCH_BYTES = 64 * 1024, WATCH_BYTES_BURST = 128 * 1024;
+  const WATCH_QUEUE = 256;         // datagrams held per watcher for the engine
+  const hex8 = (u8) => Array.from(u8 || [], (b) => b.toString(16).padStart(2, '0')).join('');
+
+  // ---- checksum trail (dev switch) ----
+  const crcTrail = new Map();
+  const trailOn = devnet && !!qp.get('crctrail');
+  function trailFromDatagram(u) {
+    // An outgoing GGPO input message (internal/messages InputPacket.ToBytes):
+    // header 5 (type at [4] = 3), status count n at [5], n x 5 bytes, start
+    // frame 4, disconnect 1, ack 4, checksum 4, bit count 2, input size 1,
+    // byte count 1, inputs. The checksum is that of (last frame - 16).
+    if (u.length < 23 || u[4] !== 3) return;
+    const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
+    let o = 6 + 5 * u[5];
+    if (u.length < o + 17) return;
+    const start = dv.getUint32(o), crc = dv.getUint32(o + 9), size = u[o + 15], bytes = u[o + 16];
+    if (!size || !bytes) return;
+    const f = start + bytes / size - 1 - 16;
+    if (f >= 0) trailMap().set(f, crc >>> 0);
+  }
+
+  // ---- what the players see: the watcher count ----
+  // null: not a room that takes watchers (nothing shown). Set from the
+  // lobby's {t:'wcount', n}, which reaches the host and a guest that keeps its
+  // lobby socket (a guest of a watch room does).
+  function setWatchCount(n) {
+    watchCount = Number.isInteger(n) && n >= 0 ? n : 0;
+    if (panel && panel.__wcount) panel.__wcount.textContent = watchCount + ' watching';
+    if (diag) renderDiag();
+  }
+  function watchCountLabel() { return watchCount === null ? '' : ' | ' + watchCount + ' watching'; }
+
+  // ---- host side ----
+  // slot -> the watcher in it now: { id, pc, ctl, g, verified, closed,
+  // offered, bad, q (its datagrams for the engine), budget state }. A slot is
+  // reused once its watcher closes, so everything the engine does for a match
+  // goes by the watcher OBJECT the match registered (wReg), never by whoever
+  // holds the slot now: a newcomer in a reused slot can neither speak for the
+  // watcher the match registered nor make the engine think it closed.
+  const wslots = [];
+  let wOffer = null, wOfferMatch = 0, wStarted = 0;
+  let wReg = [], wRegList = [], wRR = 0; // this match's watchers: by slot, in order; round-robin
+  let hostWs = null;      // the host's lobby socket (watchers reach the host through it)
+  let watchAllow = true;  // the host's "Allow watchers" switch
+
+  function lobbySend(obj) {
+    // In a winner-stays lobby the match host's watcher handshakes go through
+    // the lobby socket (same messages: {t:'sdp', to}, {t:'wdeny', to}).
+    const ws = lobbyOn() ? lobby.ws : hostWs;
+    try { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); } catch { /* gone */ }
+  }
+  function wCtlSend(s, obj) {
+    const raw = typeof obj === 'string' ? obj : JSON.stringify(obj);
+    if (!s || s.closed || !s.ctl || s.ctl.readyState !== 'open') return false;
+    try { s.ctl.send(raw); return true; } catch { return false; }
+  }
+  function wClose(slot, why) {
+    const s = wslots[slot];
+    if (!s || s.closed) return;
+    s.closed = true;
+    s.q.length = 0;
+    netLog('watcher ' + slot + ' closed: ' + why);
+    // The engine learns it from readAny (its match registration says closed).
+    try { s.pc.close(); } catch { /* gone */ }
+  }
+  // The host's switch. Off: the lobby refuses new watchers, and the ones in
+  // the room are let go with the reason.
+  function setWatchAllow(on) {
+    watchAllow = !!on;
+    lobbySend({ t: 'allow', on: watchAllow });
+    netLog('watchers ' + (watchAllow ? 'allowed' : 'not allowed'));
+    if (!watchAllow) {
+      wslots.forEach((s, i) => {
+        if (!s || s.closed) return;
+        wCtlSend(s, { t: 'refused', why: 'off' });
+        lobbySend({ t: 'wdeny', to: s.id, reason: 'nowatch' });
+        setTimeout(() => wClose(i, 'the host turned watching off'), 500);
+      });
+    }
+  }
+  // Spends one datagram of a watcher's budget; false when it is over (the
+  // datagram is dropped), and a watcher that stays over is cut off.
+  function wBudget(slot, s, bytes) {
+    const now = performance.now();
+    const dt = Math.max(0, now - s.bAt) / 1000;
+    s.bAt = now;
+    s.tok = Math.min(WATCH_BURST, s.tok + dt * WATCH_RATE);
+    s.btok = Math.min(WATCH_BYTES_BURST, s.btok + dt * WATCH_BYTES);
+    if (s.tok >= 1 && s.btok >= bytes) { s.tok -= 1; s.btok -= bytes; return true; }
+    if (now - s.overAt > 1000) { s.overAt = now; s.over = 0; }
+    s.dropped++;
+    if (++s.over > WATCH_RATE) wClose(slot, 'sent too much (over its datagram budget)');
+    return false;
+  }
+  function wOfferTo(s, slot) {
+    // A watcher that verifies during a match waits for the next one.
+    if (!wOffer || wStarted >= wOfferMatch) return;
+    if (wCtlSend(s, wOffer)) s.offered = wOfferMatch;
+  }
+  function wOnCtl(slot, e) {
+    const s = wslots[slot];
+    if (!s || s.closed) return;
+    let m = null;
+    if (typeof e.data === 'string' && e.data.length <= 4096) {
+      try { m = JSON.parse(e.data); } catch { m = null; }
+    }
+    if (!m || typeof m !== 'object' || !CTL_FROM_WATCHER.includes(m.t)) {
+      if (++s.bad > 20) wClose(slot, 'too many invalid messages');
+      return;
+    }
+    if (m.t === 'hello') {
+      if (s.verified || s.helloSeen) { // one hello per watcher
+        if (++s.bad > 20) wClose(slot, 'too many invalid messages');
+        return;
+      }
+      s.helloSeen = true;
+      const judge = () => {
+        if (!localHash) { setTimeout(judge, 100); return; }
+        const build = typeof m.build === 'string' ? m.build : '';
+        if (build !== hex8(localHash)) {
+          netLog('watcher ' + slot + ': BUILD MISMATCH, refused');
+          wCtlSend(s, { t: 'refused', why: 'build' });
+          setTimeout(() => wClose(slot, 'different build'), 1500);
+          return;
+        }
+        if (m.nc !== 1 || localNetcode() !== 1) {
+          wCtlSend(s, { t: 'refused', why: 'netcode' });
+          setTimeout(() => wClose(slot, 'not rollback'), 1500);
+          return;
+        }
+        s.verified = true;
+        netLog('watcher ' + slot + ': build check OK');
+        wCtlSend(s, { t: 'verified' });
+        wOfferTo(s, slot);
+      };
+      judge();
+    }
+  }
+  async function wAdd(id, lmatch) {
+    let slot = -1;
+    for (let i = 0; i < WATCH_MAX; i++) if (!wslots[i] || wslots[i].closed) { slot = i; break; }
+    if (slot < 0) { lobbySend({ t: 'wdeny', to: id, reason: 'watchfull' }); return; }
+    const s = { id, pc: null, ctl: null, g: null, verified: false, closed: false, offered: 0, bad: 0,
+      q: [], reg: 0, out: 0, bAt: performance.now(), tok: WATCH_BURST, btok: WATCH_BYTES_BURST,
+      over: 0, overAt: 0, rx: 0, dropped: 0, lmatch: lmatch || 0 };
+    wslots[slot] = s;
+    s.pc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+    s.ctl = s.pc.createDataChannel('ctl', { ordered: true });
+    s.g = s.pc.createDataChannel('ggpo', { ordered: false, maxRetransmits: 0 });
+    s.g.binaryType = 'arraybuffer';
+    s.ctl.onmessage = (e) => wOnCtl(slot, e);
+    s.ctl.onclose = () => wClose(slot, 'control channel closed');
+    s.g.onclose = () => wClose(slot, 'ggpo channel closed');
+    s.g.onmessage = (e) => {
+      if (s.closed) return;
+      const d = e.data;
+      s.rx++;
+      if (!wBudget(slot, s, typeof d === 'string' ? d.length : (d && d.byteLength) || 0)) return;
+      // Forwarded only while this watcher is registered in the running match
+      // and the engine has not dropped it from it.
+      if (!s.verified || s.reg !== wStarted || s.out === wStarted || !(d instanceof ArrayBuffer)) return;
+      if (d.byteLength < 5 || d.byteLength > GGPO_MAX_BYTES || s.q.length >= WATCH_QUEUE) return;
+      const out = new Uint8Array(d.byteLength + 1);
+      out[0] = slot; out.set(new Uint8Array(d), 1);
+      s.q.push(out);
+    };
+    s.pc.onconnectionstatechange = () => {
+      const st = s.pc.connectionState;
+      if (st === 'failed' || st === 'closed') wClose(slot, 'connection ' + st);
+    };
+    await s.pc.setLocalDescription(await s.pc.createOffer());
+    await gatherComplete(s.pc);
+    lobbySend({ t: 'sdp', to: id, sdp: s.pc.localDescription });
+    netLog('watcher ' + slot + ' joining (lobby id ' + id + ')');
+  }
+  // Lobby messages about watchers, on the host's socket. True when handled.
+  function wLobby(m) {
+    if (m.t === 'watcher' && Number.isInteger(m.id)) {
+      if (!watchAllow) { lobbySend({ t: 'wdeny', to: m.id, reason: 'nowatch' }); return true; }
+      wAdd(m.id).catch((e) => netLog('watcher setup failed: ' + e.message));
+      return true;
+    }
+    if (m.t === 'sdp' && m.from !== undefined) {
+      const s = wslots.find((x) => x && !x.closed && x.id === m.from);
+      if (s) s.pc.setRemoteDescription(m.sdp).catch((e) => netLog('watcher answer refused: ' + e.message));
+      return true;
+    }
+    if (m.t === 'wbye') {
+      const i = wslots.findIndex((x) => x && !x.closed && x.id === m.id);
+      if (i >= 0) wClose(i, 'left the room');
+      return true;
+    }
+    if (m.t === 'wcount') { setWatchCount(m.n); return true; }
+    return false;
+  }
+  function installHostWatchBridge() {
+    if (globalThis.ikemenWatch && globalThis.ikemenWatch.role === 'host') return;
+    globalThis.ikemenWatch = {
+      role: 'host',
+      offer(match, raw) {
+        wOffer = String(raw); wOfferMatch = match;
+        wslots.forEach((s, i) => { if (s && s.verified && !s.closed) wOfferTo(s, i); });
+      },
+      start(match) {
+        wStarted = match;
+        wReg = []; wRegList = []; wRR = 0;
+        const out = [];
+        wslots.forEach((s, i) => {
+          if (!s || !s.verified || s.closed || s.offered !== match) return;
+          s.reg = match; s.q.length = 0;
+          wReg[i] = s; wRegList.push({ slot: i, s, goneSent: false });
+          out.push(i);
+        });
+        return out;
+      },
+      // To the watcher this match registered in that slot (the start, drop
+      // and end messages), else to the slot's watcher.
+      ctl(slot, raw) {
+        const s = wReg[slot] || wslots[slot];
+        raw = String(raw);
+        // Dropped from this match: its datagrams are no longer forwarded. It
+        // keeps its connection and may watch the next match.
+        if (s && raw.startsWith('{"t":"drop"')) { s.out = wStarted; s.q.length = 0; }
+        wCtlSend(s, raw);
+      },
+      sendTo(slot, u8) {
+        const s = wReg[slot];
+        if (!s || s.closed || s.out === wStarted || !s.g || s.g.readyState !== 'open') return false;
+        try { s.g.send(u8); return true; } catch { return false; }
+      },
+      // One datagram from this match's watchers, taking turns; [slot] alone
+      // when the watcher registered in that slot has closed (said once).
+      readAny() {
+        const n = wRegList.length;
+        for (let k = 0; k < n; k++) {
+          const i = (wRR + k) % n, r = wRegList[i];
+          if (r.s.q.length) { wRR = (i + 1) % n; return r.s.q.shift(); }
+          if (r.s.closed && !r.goneSent) { r.goneSent = true; wRR = (i + 1) % n; return new Uint8Array([r.slot]); }
+        }
+        return new Uint8Array(0);
+      },
+      log(msg) { netLog('watch: ' + msg); },
+      slots() {
+        return wslots.map((s, i) => s && { slot: i, verified: s.verified, closed: s.closed, offered: s.offered,
+          reg: s.reg, out: s.out, rx: s.rx, dropped: s.dropped, queued: s.q.length });
+      },
+    };
+  }
+  // The room is over (the netplay session closed): the lobby socket goes, so
+  // the room ends there too, and every watcher's connection with it.
+  function endHosting() {
+    if (hostWs) { hostWs.__done = true; try { hostWs.close(); } catch { /* gone */ } }
+    hostWs = null;
+    // A lobby page that already has its next match to host keeps that match's
+    // watchers (they arrived while this one was ending).
+    const keep = lobby && lobby.assign && lobby.assign.kind === 'play' && lobby.assign.role === 'host' &&
+      lobby.assign.match !== lobby.playing ? lobby.assign.match : -1;
+    wslots.forEach((s, i) => { if (s && !s.closed && !(keep > 0 && s.lmatch === keep)) wClose(i, 'the session ended'); });
+    watchAllow = true;
+  }
+
+  // ---- watcher side ----
+  const wq = [], wg = [];
+  let wpc = null, wctl = null, wgdc = null, wClosed = false, wWs = null, wSeen = false;
+  function watchStatus(msg) { setStatus(msg); netLog('watch: ' + msg); }
+  function installWatcherBridge() {
+    wq.length = 0; wg.length = 0; wClosed = false;
+    globalThis.ikemenWatch = {
+      role: 'watcher',
+      next() { return wq.length ? wq.shift() : (wClosed ? null : ''); },
+      sendGGPO(u8) {
+        if (!wgdc || wgdc.readyState !== 'open') return false;
+        try { wgdc.send(u8); return true; } catch { return false; }
+      },
+      readGGPO() { return wg.length ? wg.shift() : (wClosed ? null : new Uint8Array(0)); },
+      log(msg) { netLog('watch: ' + msg); },
+      leave() { leaveWatch('You left.'); },
+    };
+    if (trailOn) globalThis.ikemenWatch.trail = (f, crc) => { trailMap().set(f, crc >>> 0); };
+  }
+  function dropWatchConn() {
+    try { if (wWs) { wWs.__done = true; wWs.close(); } } catch { /* gone */ }
+    try { if (wpc) wpc.close(); } catch { /* gone */ }
+    wWs = null; wpc = null; wctl = null; wgdc = null;
+  }
+  // The end of watching: the engine goes back to its menu (next() says the
+  // host is gone), and the panel says why (or goes, when the watcher left).
+  function leaveWatch(why, keepPanel) {
+    if (wClosed && !keepPanel) { hidePanel(); return; }
+    wClosed = true;
+    dropWatchConn();
+    if (keepPanel) {
+      watchStatus(why);
+      if (panel && panel.__leave) panel.__leave.textContent = 'Close';
+    } else {
+      netLog('watch: ' + why);
+      hidePanel();
+    }
+  }
+  function friendlyWatchDeny(reason) {
+    return reason === 'badcode' ? 'No room with that code. Check the spelling, or ask the host for a fresh one.'
+      : reason === 'badpass' ? 'Wrong password (this room has one: ask the host).'
+        : reason === 'nowatch' ? 'The host is not taking watchers in this room.'
+          : reason === 'watchfull' ? 'This room already has as many watchers as it takes (' + WATCH_MAX + ').'
+            : reason === 'slowdown' ? 'Too many people tried to watch this room in the last minute. Try again shortly.'
+              : reason === 'timeout' ? 'The room closed.'
+                : reason === 'build' ? 'Game contents differ from the host\'s, so this match cannot be watched. Both sides need the same build (and the same engine).'
+                  : reason === 'netcode' ? 'The host is not on rollback netcode, so this match cannot be watched.'
+                    : 'Refused: ' + reason;
+  }
+  // What the host's engine said about a match, on the panel.
+  function watchNote(mm) {
+    if (mm.t === 'select') { watchStatus('A match is starting - watching.'); setTimeout(() => { if (!wClosed) hidePanel(); }, 2500); }
+    else if (mm.t === 'nowatch') { watchStatus('This match cannot be watched: ' + (mm.why || '') + '. Waiting for the next match.'); showWatchPanelAgain(); }
+    else if (mm.t === 'drop') { watchStatus('Dropped from this match: ' + (mm.why || 'no reason given') + '. Waiting for the next match.'); showWatchPanelAgain(); }
+    else if (mm.t === 'end') { watchStatus('Match over. Waiting for the next match.'); }
+  }
+  function showWatchPanelAgain() { if (!panel && !wClosed && !(lobby && lobby.watch)) watchPanel(true); }
+  function startWatch(code, pass) {
+    dropWatchConn();
+    wq.length = 0; wg.length = 0; wSeen = false;
+    const url = signalUrl();
+    if (!url) { watchStatus('Watching needs the lobby server, and this build has none.'); return false; }
+    watchStatus('Looking for room ' + code + '...');
+    const ws = wWs = new WebSocket(url + (url.includes('?') ? '&' : '?') + 'watch=' + encodeURIComponent(code) +
+      (pass ? '&pass=' + encodeURIComponent(pass) : ''));
+    ws.onmessage = async (e) => {
+      if (ws !== wWs) return;
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      try {
+        if (m.t === 'deny') {
+          ws.__done = true;
+          if (wSeen) leaveWatch(friendlyWatchDeny(m.reason), true);
+          else { watchStatus(friendlyWatchDeny(m.reason)); if (panel && panel.__watchBtn) panel.__watchBtn.disabled = false; }
+          return;
+        }
+        if (m.t === 'bye') { leaveWatch('The host closed the room.', true); return; }
+        if (m.t === 'watching') { wSeen = true; watchStatus('In the room - connecting to the host...'); return; }
+        if (m.t !== 'sdp' || wpc) return;
+        await watchAnswer(m.sdp, (sdp) => ws.send(JSON.stringify({ t: 'sdp', sdp })));
+      } catch (err) { netLog('watch setup failed: ' + err.message); }
+    };
+    ws.onclose = () => {
+      if (ws === wWs && !ws.__done && !wpc) {
+        watchStatus('The lobby server could not be reached.');
+        if (panel && panel.__watchBtn) panel.__watchBtn.disabled = false;
+      }
+    };
+    return true;
+  }
+  // The watcher's side of the host's offer: its connection, the build check
+  // (hello), the host's control messages for the engine; the answer goes back
+  // through `send` (the watch socket, or a lobby's).
+  async function watchAnswer(offer, send) {
+    const conn = wpc = new RTCPeerConnection({ iceServers: await fetchIceServers() });
+    conn.onconnectionstatechange = () => {
+      const st = conn.connectionState;
+      netLog('watch connectionState: ' + st);
+      if (conn === wpc && (st === 'failed' || st === 'closed')) leaveWatch('The connection to the host was lost.', true);
+    };
+    conn.ondatachannel = (ev) => {
+      const ch = ev.channel;
+      if (ch.label === 'ggpo') {
+        wgdc = ch; ch.binaryType = 'arraybuffer';
+        ch.onmessage = (x) => {
+          if (!(x.data instanceof ArrayBuffer) || x.data.byteLength > GGPO_MAX_BYTES) return;
+          wg.push(new Uint8Array(x.data));
+        };
+        ch.onclose = () => { if (conn === wpc) leaveWatch('The host closed the connection.', true); };
+      } else if (ch.label === 'ctl') {
+        wctl = ch;
+        ch.onopen = () => {
+          const hello = () => {
+            if (!localHash) { setTimeout(hello, 100); return; }
+            ch.send(JSON.stringify({ t: 'hello', build: hex8(localHash), nc: localNetcode() }));
+            watchStatus('Connected - checking the build...');
+          };
+          hello();
+        };
+        ch.onmessage = (x) => {
+          if (typeof x.data !== 'string' || x.data.length > CTL_MAX_BYTES) return;
+          let mm; try { mm = JSON.parse(x.data); } catch { return; }
+          if (!mm || !CTL_FROM_HOST.includes(mm.t)) return;
+          if (mm.t === 'verified') { watchStatus('Waiting for the next match.'); return; }
+          if (mm.t === 'refused') {
+            const why = mm.why === 'off' ? 'The host turned watching off.' : friendlyWatchDeny(mm.why === 'build' ? 'build' : 'netcode');
+            globalThis.ikemenWatchRefused = why;
+            leaveWatch(why, true);
+            return;
+          }
+          if (mm.t === 'select' && lobby && lobby.watch) lobby.watch.started = true;
+          watchNote(mm);
+          wq.push(x.data);
+        };
+        ch.onclose = () => { if (conn === wpc) leaveWatch('The host closed the connection.', true); };
+      }
+    };
+    await conn.setRemoteDescription(offer);
+    await conn.setLocalDescription(await conn.createAnswer());
+    await gatherComplete(conn);
+    send(conn.localDescription);
+  }
+  // The watch panel (ikemenNet.start('watch')): room code, password, Watch,
+  // Leave. `again`: redrawn during a session to show a status (no inputs).
+  function watchPanel(again) {
+    const ui = showPanel('watch');
+    if (!again) {
+      const codeInp = ui.mkInput('Room code of the match to watch:', 'e.g. spicy-tiger-42');
+      const passInp = ui.mkInput('Room password (if it has one):', '');
+      const watchBtn = ui.mkBtn('Watch', () => {
+        const code = codeInp.value.trim().toLowerCase();
+        if (!code) { watchStatus('Enter the room code first.'); return; }
+        watchBtn.disabled = true;
+        startWatch(code, passInp.value.trim());
+      });
+      panel.__watchBtn = watchBtn;
+      panel.__code = codeInp;
+      setStatus('Type the room code of the match you want to watch.');
+    }
+    panel.__leave = ui.mkBtn('Leave', () => leaveWatch('You left.'));
+    return ui;
+  }
+  function startWatchFlow() {
+    installWatcherBridge();
+    watchPanel(false);
+  }
+
+  // ---------- winner-stays lobby ----------
+  //
+  // CORE has the rules): two play, the winner stays, the loser goes to the
+  // back of the line, everyone else watches the match live. The SERVER decides
+  // every match; this page carries out what it is told:
+  //   {t:'match', role, opp}  this page plays the match, as its netplay host
+  //                           (engine side 1, it carries the watchers) or guest:
+  //                           the same connection as a room's (makePeer, the
+  //                           two channels, the build and netcode checks), with
+  //                           the SDP going through the lobby socket;
+  //   {t:'watch', host}       this page watches it: P1's watcher (the watcher
+  //                           bridge, its own connection to the match host),
+  //                           the handshake through the lobby socket;
+  //   {t:'watcher', id}       (match host) a member to carry: P1's wAdd.
+  // The engine runs the lobby loop (main.lua main.f_lobby) and asks through
+  // ikemenNet.lobby(cmd, arg): 'avail', 'open', 'next', 'text', 'stale',
+  // 'result', 'leave', 'rounds'. An assignment reaches the engine only when it
+  // is free (between matches), so the page never swaps a bridge under a match
+  // that is still running; a watch that has not started is let go when a newer
+  // assignment comes (the engine goes back to the lobby screen and takes it).
+  //
+  // THE SIDEBAR. The lobby lives beside the game, never over it: the picture
+  // keeps its aspect and shrinks to make room (index.html ikemenReserveRight);
+  // narrower than LOBBY_NARROW px it overlays the right edge and starts
+  // folded to a tab. It exists only from the moment LOBBY is picked until the
+  // lobby is left. Style (the owner's rule): no rounded corners on anything,
+  // no translucency, no soft shadows; solid fills, 2px hard borders, the Game
+  // only page's palette and type. Chat: plain text (textContent, so markup and
+  // links are inert), 200 characters, the server's rate limit, nothing kept
+  // (a member sees what is said after it joins); MUTE hides a member's lines on
+  // this page only; the lobby host can KICK.
+  //
+  // DEV SWITCH (?devnet=1): &lobbyrounds=N makes every lobby match first to N
+  // rounds (short test matches; both players' pages need the same value), and
+  // ikemenTest.lobby() / trail(match) read the state and each match's trail.
+  const LOBBY_W = 300, LOBBY_NARROW = 760;
+  const LOBBY_CONNECT_MS = 90 * 1000; // a lobby match's players must connect within this
+  let lobby = null;
+  const lobbyTrails = new Map(); // lobby match -> (frame -> checksum), dev switch
+  function lobbyOn() { return !!(lobby && lobby.code && lobby.ws && lobby.ws.readyState === 1); }
+  function lobbyTrailKey() {
+    if (!lobby) return 0;
+    if (lobby.inMatch && lobby.playing) return lobby.playing;
+    if (lobby.watch) return lobby.watch.match;
+    return 0;
+  }
+  function trailMap() {
+    const k = lobbyTrailKey();
+    if (!k) return crcTrail;
+    if (!lobbyTrails.has(k)) lobbyTrails.set(k, new Map());
+    return lobbyTrails.get(k);
+  }
+  function lobbyRaw(obj) {
+    try { if (lobby && lobby.ws && lobby.ws.readyState === 1) lobby.ws.send(JSON.stringify(obj)); } catch { /* gone */ }
+  }
+  function lobbyName(id) {
+    const v = lobby && lobby.view;
+    const m = v && v.members.find((x) => x.id === id);
+    return m ? m.name : (lobby && lobby.names[id]) || '?';
+  }
+  // The engine draws printable ASCII only.
+  const asciiName = (s) => String(s || '').replace(/[^\x20-\x7e]/g, '?').slice(0, 24);
+  function lobbyStatusOf(id) {
+    const v = lobby.view;
+    if (!v) return '';
+    if (v.match && v.match.a === id) return 'PLAYING P1';
+    if (v.match && v.match.b === id) return 'PLAYING P2';
+    if (v.stay === id) return 'WINNER, WAITING';
+    const me = v.members.find((x) => x.id === id);
+    if (me && me.spec) return 'SPECTATING ONLY';
+    const i = v.line.indexOf(id);
+    if (i >= 0) return 'IN LINE #' + (i + 1) + (v.match ? ', WATCHING' : '');
+    return 'WATCHING';
+  }
+  function lobbyNowNext(ascii) {
+    const v = lobby.view;
+    const nm = (id) => ascii ? asciiName(lobbyName(id)) : lobbyName(id);
+    const out = [];
+    if (v.match) out.push('NOW: ' + nm(v.match.a) + ' vs ' + nm(v.match.b));
+    const n = v.next;
+    if (n) {
+      out.push('NEXT: ' + (n.a ? nm(n.a) : 'WINNER') + ' vs ' + nm(n.b) +
+        (n.rotate ? ' (' + nm(n.rotate) + ' rotates out on a win)' : ''));
+    } else if (!v.match) {
+      out.push('NEXT: waiting for players');
+    }
+    return out;
+  }
+  function lobbyReason(r) {
+    return r === 'badcode' ? 'No lobby with that code. Check the spelling.'
+      : r === 'badpass' ? 'Wrong password.'
+        : r === 'build' ? 'Your game differs from this lobby\'s (Build ID): everyone needs the same build and engine.'
+          : r === 'netcode' ? 'Lobbies are rollback only: pick Rollback as the online netcode on the start screen.'
+            : r === 'full' ? 'This lobby is full (8).'
+              : r === 'name' ? 'Type a name first.'
+                : r === 'kicked' ? 'The lobby host removed you from this lobby.'
+                  : r === 'slowdown' ? 'Too many tries on this lobby in the last minute. Try again shortly.'
+                    : r === 'timeout' ? 'The lobby closed (an hour with nothing happening).'
+                      : r === 'busy' ? 'The lobby server hiccuped. Try again.'
+                        : 'Refused: ' + r;
+  }
+
+  // ---- the sidebar ----
+  //
+  // today's look as their defaults. The defaults sit at :where(:root), which
+  // weighs nothing, so the host's look (Settings > Online > Lobby look,
+  // public/ikemen/lobby-look.js, a :root rule of its own) always wins over
+  // them whichever style sheet comes first. The last six are not chosen by
+  // anyone: lobby-look.js mixes them from the eight colors when a look sets
+  // them (lines, faint text, a disabled button, the warning line). New lobby
+  // UI uses these tokens and nothing else for its colors and fonts.
+  const LOBBY_CSS = [
+    ':where(:root) { --lob-bg: #0b0d12; --lob-panel: #10141c; --lob-text: #d6e6ff; --lob-dim: #9fb3cc; --lob-accent: #6af;',
+    '  --lob-accent-text: #0b0d12; --lob-border: #6af; --lob-chat-bg: #05070a; --lob-font: monospace; --lob-head-font: monospace;',
+    '  --lob-rule: #1e2a3a; --lob-rule-soft: #141c28; --lob-faint: #5d6f86; --lob-off-border: #2a3a52; --lob-off-text: #3d5a80; --lob-warn: #fc6; }',
+    '#lobbybar, #lobbybar *, #lobbytab { border-radius: 0 !important; box-shadow: none !important; box-sizing: border-box; }',
+    '#lobbybar { position: fixed; top: 0; right: 0; bottom: 0; z-index: 940; width: ' + LOBBY_W + 'px; max-width: 100vw;',
+    '  display: flex; flex-direction: column; background: var(--lob-bg); border-left: 2px solid var(--lob-border); color: var(--lob-text);',
+    '  font: 12px var(--lob-font); }',
+    '#lobbybar[hidden], #lobbytab[hidden], #lobbybar [hidden] { display: none !important; }',
+    '#lobbybar .lb-head { flex: none; display: flex; align-items: center; gap: 6px; background: var(--lob-accent); color: var(--lob-accent-text); padding: 3px 3px 3px 10px; }',
+    '#lobbybar .lb-t { font: bold 12px var(--lob-head-font); text-transform: uppercase; letter-spacing: .2em; margin-right: auto; }',
+    '#lobbybar button { font: bold 11px var(--lob-font); text-transform: uppercase; letter-spacing: .12em; cursor: pointer; margin: 0;',
+    '  padding: 4px 8px; border: 2px solid var(--lob-accent); background: var(--lob-bg); color: var(--lob-accent); }',
+    '#lobbybar button:hover, #lobbybar button:focus-visible { background: var(--lob-accent); color: var(--lob-accent-text); outline: none; }',
+    '#lobbybar button:disabled { border-color: var(--lob-off-border); color: var(--lob-off-text); background: var(--lob-bg); cursor: default; }',
+    '#lobbybar .lb-head button { border-color: var(--lob-accent-text); background: var(--lob-accent-text); color: var(--lob-accent); padding: 3px 8px; }',
+    '#lobbybar .lb-head button:hover { background: var(--lob-text); color: var(--lob-bg); }',
+    '#lobbybar .lb-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 10px; }',
+    '#lobbybar .lb-sec { font: bold 11px var(--lob-head-font); text-transform: uppercase; letter-spacing: .16em; color: var(--lob-accent);',
+    '  border-bottom: 2px solid var(--lob-rule); padding: 8px 0 3px; margin-bottom: 4px; }',
+    '#lobbybar .lb-code { display: flex; align-items: center; gap: 6px; }',
+    '#lobbybar .lb-code b { flex: 1; font: bold 15px var(--lob-font); color: var(--lob-text); background: var(--lob-chat-bg); border: 2px solid var(--lob-rule);',
+    '  padding: 4px 6px; user-select: all; overflow-wrap: anywhere; }',
+    '#lobbybar .lb-line { color: var(--lob-dim); padding: 1px 0; overflow-wrap: anywhere; }',
+    '#lobbybar .lb-now { color: var(--lob-text); font-weight: bold; }',
+    '#lobbybar .lb-mem { display: flex; align-items: center; gap: 4px; padding: 3px 0; border-bottom: 1px solid var(--lob-rule-soft); }',
+    '#lobbybar .lb-mem .lb-who { flex: 1; min-width: 0; }',
+    '#lobbybar .lb-mem .lb-nm { color: var(--lob-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }',
+    '#lobbybar .lb-mem .lb-st { color: var(--lob-faint); font-size: 11px; display: block; }',
+    '#lobbybar .lb-mem.lb-play .lb-st { color: var(--lob-accent); }',
+    '#lobbybar .lb-tag { font: bold 10px var(--lob-font); letter-spacing: .1em; padding: 0 3px; margin-left: 4px; background: var(--lob-accent); color: var(--lob-accent-text); }',
+    '#lobbybar .lb-tag.lb-you { background: var(--lob-text); color: var(--lob-bg); }',
+    '#lobbybar .lb-mem button { padding: 2px 5px; font-size: 10px; letter-spacing: .06em; }',
+    '#lobbybar .lb-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }',
+    '#lobbybar .lb-check { display: inline-flex; align-items: center; gap: 7px; }',
+    '#lobbybar .lb-check i { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; background: var(--lob-bg); }',
+    '#lobbybar .lb-check[aria-pressed="true"] i { background: currentColor; box-shadow: inset 0 0 0 2px var(--lob-bg) !important; }',
+    '#lobbybar .lb-check:hover i { background: var(--lob-bg); }',
+    '#lobbybar .lb-check[aria-pressed="true"]:hover i { background: var(--lob-bg); box-shadow: inset 0 0 0 2px var(--lob-bg), inset 0 0 0 6px var(--lob-bg) !important; }',
+    '#lobbybar .lb-step b { display: inline-block; min-width: 34px; text-align: center; color: var(--lob-text); border-top: 2px solid var(--lob-rule);',
+    '  border-bottom: 2px solid var(--lob-rule); padding: 3px 0; }',
+    '#lobbybar label.lb-f { display: block; margin-top: 6px; color: var(--lob-dim); text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }',
+    '#lobbybar input { display: block; width: 100%; margin-top: 2px; padding: 4px 6px; font: 13px var(--lob-font); color: var(--lob-text);',
+    '  background: var(--lob-chat-bg); border: 2px solid var(--lob-rule); outline: none; }',
+    '#lobbybar input:focus { border-color: var(--lob-accent); }',
+    '#lobbybar .lb-tabs { display: flex; margin-bottom: 4px; }',
+    '#lobbybar .lb-tabs button { flex: 1; }',
+    '#lobbybar .lb-tabs button[aria-selected="true"] { background: var(--lob-accent); color: var(--lob-accent-text); }',
+    '#lobbybar .lb-msg { color: var(--lob-warn); margin-top: 6px; white-space: pre-line; min-height: 14px; }',
+    '#lobbybar .lb-chat { flex: none; display: flex; flex-direction: column; height: 38%; min-height: 150px; border-top: 2px solid var(--lob-border); }',
+    '#lobbybar .lb-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 10px; background: var(--lob-chat-bg); line-height: 15px; }',
+    '#lobbybar .lb-log div { overflow-wrap: anywhere; white-space: pre-wrap; }',
+    '#lobbybar .lb-log .lb-sys { color: var(--lob-faint); }',
+    '#lobbybar .lb-log .lb-cn { color: var(--lob-accent); font-weight: bold; }',
+    '#lobbybar .lb-say { flex: none; display: flex; gap: 0; border-top: 2px solid var(--lob-rule); }',
+    '#lobbybar .lb-say input { margin: 0; border: 0; flex: 1; }',
+    '#lobbybar .lb-say button { border-width: 0 0 0 2px; }',
+    '#lobbybar ::-webkit-scrollbar { width: 10px; height: 10px; background: var(--lob-chat-bg); }',
+    '#lobbybar ::-webkit-scrollbar-thumb { background: var(--lob-accent); border: 2px solid var(--lob-chat-bg); border-radius: 0; }',
+    '#lobbybar ::-webkit-scrollbar-button { display: none; }',
+    '#lobbybar ::-webkit-scrollbar-corner { background: var(--lob-chat-bg); }',
+    '@supports not selector(::-webkit-scrollbar) { #lobbybar, #lobbybar * { scrollbar-color: var(--lob-accent) var(--lob-chat-bg); } }',
+    // The folded tab: invisible at rest, square and solid when shown (lb-on,
+    //
+    '#lobbytab { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 940; cursor: pointer; margin: 0;',
+    '  writing-mode: vertical-rl; padding: 10px 4px; font: bold 11px var(--lob-head-font); letter-spacing: .25em; text-transform: uppercase;',
+    '  background: var(--lob-bg); color: var(--lob-accent); border: 2px solid var(--lob-border); border-right: 0;',
+    '  opacity: 0; transition: opacity .25s linear; }',
+    '#lobbytab.lb-on, #lobbytab:hover, #lobbytab:focus-visible { opacity: 1; transition: opacity .12s linear; }',
+    '#lobbytab:hover, #lobbytab:focus-visible { background: var(--lob-accent); color: var(--lob-accent-text); outline: none; }',
+    '@media (prefers-reduced-motion: reduce) { #lobbytab, #lobbytab.lb-on { transition: none; } }',
+  ].join('\n');
+
+  function lbEl(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
+    return e;
+  }
+  function lbButton(label, fn, cls) {
+    const b = lbEl('button', cls || '', label);
+    b.type = 'button';
+    b.addEventListener('mousedown', (e) => e.preventDefault()); // never keep focus from the game
+    b.addEventListener('click', (e) => { fn(e); });
+    return b;
+  }
+  function lbShield(el) {
+    for (const t of ['mousedown', 'mouseup', 'click', 'dblclick', 'keydown', 'keyup', 'keypress', 'wheel', 'contextmenu',
+      'pointerdown', 'pointerup', 'touchstart', 'touchend']) el.addEventListener(t, (e) => e.stopPropagation());
+  }
+  function lbFocusGame() {
+    const a = document.activeElement;
+    if (a && a !== document.body && a.blur) a.blur();
+  }
+
+  function lobbyUiMake() {
+    if (lobby.ui) return lobby.ui;
+    if (!document.getElementById('lobbybar-style')) {
+      const st = lbEl('style'); st.id = 'lobbybar-style'; st.textContent = LOBBY_CSS;
+      document.head.appendChild(st);
+    }
+    const bar = lbEl('aside'); bar.id = 'lobbybar'; bar.setAttribute('aria-label', 'Lobby');
+    const head = lbEl('div', 'lb-head');
+    const title = lbEl('span', 'lb-t', 'Lobby');
+    const fold = lbButton('Fold', () => lobbyFold(true));
+    fold.title = 'Fold the lobby away (the tab on the right brings it back)';
+    head.appendChild(title); head.appendChild(fold);
+    const body = lbEl('div', 'lb-body');
+    const chat = lbEl('div', 'lb-chat');
+    const log = lbEl('div', 'lb-log'); log.setAttribute('role', 'log'); log.setAttribute('aria-live', 'polite');
+    const say = lbEl('div', 'lb-say');
+    const inp = lbEl('input'); inp.type = 'text'; inp.maxLength = 200; inp.placeholder = 'Say something'; inp.autocomplete = 'off'; inp.spellcheck = false;
+    inp.setAttribute('aria-label', 'Chat message');
+    const send = lbButton('Send', () => lobbyChatSend());
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); lobbyChatSend(); } if (e.key === 'Escape') { e.preventDefault(); inp.blur(); } });
+    say.appendChild(inp); say.appendChild(send);
+    chat.appendChild(log); chat.appendChild(say);
+    bar.appendChild(head); bar.appendChild(body); bar.appendChild(chat);
+    lbShield(bar);
+    const tab = lbButton('Lobby', () => lobbyTabClick()); tab.id = 'lobbytab'; tab.hidden = true;
+    tab.title = 'Show the lobby';
+    lbShield(tab);
+    document.body.appendChild(bar);
+    document.body.appendChild(tab);
+    lobby.ui = { bar, tab, body, chat, log, inp, send, title, folded: false, tabTimer: 0, tabNear: false, tabGuard: 0 };
+    // The host's look (lobby-look.js): its page colors, fonts and background
+    // while this sidebar exists.
+    if (globalThis.ikemenLobbyLook) globalThis.ikemenLobbyLook.enter();
+    const narrow = document.documentElement.clientWidth < LOBBY_NARROW;
+    lobbyFold(narrow);
+    window.addEventListener('resize', lobbyFit);
+    for (const t of LOBBY_TAB_EVENTS) window.addEventListener(t, lobbyTabWake, { capture: true, passive: true });
+    document.addEventListener('mouseout', lobbyTabOut);
+    tab.addEventListener('mouseleave', lobbyTabArm);
+    tab.addEventListener('focus', () => lobbyTabShow(true));
+    tab.addEventListener('blur', lobbyTabArm);
+    return lobby.ui;
+  }
+  // THE FOLDED TAB keeps out of the way (the owner, 2026-11-14: folded, it sat
+  // on the right edge at full opacity beside a game smaller than the screen).
+  // At rest it is invisible (opacity 0; it is still there for Tab and a screen
+  // reader). It shows while the mouse is within LOBBY_TAB_NEAR px of the right
+  // edge, on a tap there, and while it has keyboard focus; it fades out
+  // LOBBY_TAB_REST ms after the mouse leaves that strip (or the window), never
+  // while hovered or focused, as Game only's MENU button does (index.html).
+  // A tap on it while it is hidden only shows it: a finger never opens the
+  // lobby by touching an edge where nothing could be seen. Folding shows it
+  // too, so it is seen going there.
+  const LOBBY_TAB_NEAR = 96, LOBBY_TAB_REST = 2000;
+  const LOBBY_TAB_EVENTS = ['mousemove', 'pointermove', 'pointerdown', 'touchstart'];
+  function lobbyTabShow(on) {
+    const ui = lobby && lobby.ui;
+    if (ui) ui.tab.classList.toggle('lb-on', !!on);
+  }
+  function lobbyTabArm() {
+    const ui = lobby && lobby.ui;
+    if (!ui) return;
+    clearTimeout(ui.tabTimer);
+    ui.tabTimer = setTimeout(() => {
+      if (!lobby || lobby.ui !== ui) return;
+      // these arm it again when they end (mouseleave, blur, leaving the strip)
+      if (ui.tabNear || ui.tab.matches(':hover') || document.activeElement === ui.tab) return;
+      ui.tab.classList.remove('lb-on');
+    }, LOBBY_TAB_REST);
+  }
+  function lobbyTabWake(e) {
+    const ui = lobby && lobby.ui;
+    if (!ui || !ui.folded) return;
+    const p = e.touches && e.touches[0] ? e.touches[0] : e;
+    if (typeof p.clientX !== 'number') return;
+    const near = p.clientX >= document.documentElement.clientWidth - LOBBY_TAB_NEAR;
+    const press = e.type === 'pointerdown' || e.type === 'touchstart';
+    if (e.type === 'touchstart' || e.pointerType === 'touch' || e.pointerType === 'pen'
+      || (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents)) {
+      if (!press) return;
+      if (ui.tab.contains(e.target) && !ui.tab.classList.contains('lb-on')) ui.tabGuard = Date.now();
+      ui.tabNear = false;   // a finger does not rest anywhere
+      if (near) { lobbyTabShow(true); lobbyTabArm(); }
+      return;
+    }
+    const was = ui.tabNear;
+    ui.tabNear = near;
+    if (near) { lobbyTabShow(true); clearTimeout(ui.tabTimer); } else if (was) lobbyTabArm();
+  }
+  function lobbyTabOut(e) {
+    const ui = lobby && lobby.ui;
+    if (!ui || e.relatedTarget) return;   // still in the page
+    ui.tabNear = false;
+    if (ui.folded) lobbyTabArm();
+  }
+  function lobbyTabClick() {
+    const ui = lobby && lobby.ui;
+    if (!ui) return;
+    if (ui.tabGuard && Date.now() - ui.tabGuard < 1500) { ui.tabGuard = 0; return; }   // the tap that showed it
+    ui.tabGuard = 0;
+    lobbyFold(false);
+  }
+  // The room the picture leaves for the bar: its width when open and wide
+  // enough; nothing when folded or narrow (it overlays the edge then).
+  function lobbyFit() {
+    if (!lobby || !lobby.ui) { if (globalThis.ikemenReserveRight) globalThis.ikemenReserveRight(0); return; }
+    const narrow = document.documentElement.clientWidth < LOBBY_NARROW;
+    const r = lobby.ui.folded || narrow ? 0 : LOBBY_W;
+    if (globalThis.ikemenReserveRight) globalThis.ikemenReserveRight(r);
+  }
+  function lobbyFold(on) {
+    const ui = lobby && lobby.ui;
+    if (!ui) return;
+    ui.folded = !!on;
+    ui.bar.hidden = ui.folded;
+    ui.tab.hidden = !ui.folded;
+    clearTimeout(ui.tabTimer);
+    lobbyTabShow(ui.folded);
+    if (ui.folded) lobbyTabArm();
+    lobbyFit();
+    lbFocusGame();
+  }
+  function lobbyUiDrop() {
+    if (!lobby || !lobby.ui) return;
+    window.removeEventListener('resize', lobbyFit);
+    for (const t of LOBBY_TAB_EVENTS) window.removeEventListener(t, lobbyTabWake, { capture: true, passive: true });
+    document.removeEventListener('mouseout', lobbyTabOut);
+    clearTimeout(lobby.ui.tabTimer);
+    lobby.ui.bar.remove(); lobby.ui.tab.remove();
+    lobby.ui = null;
+    if (globalThis.ikemenLobbyLook) globalThis.ikemenLobbyLook.leave();
+    if (globalThis.ikemenReserveRight) globalThis.ikemenReserveRight(0);
+  }
+  function lobbyLog(text, cls, from) {
+    const ui = lobby && lobby.ui;
+    if (!ui) return;
+    const d = lbEl('div', cls || '');
+    if (from) {
+      d.dataset.from = String(from.id);
+      d.appendChild(lbEl('span', 'lb-cn', from.name + ': '));
+      d.appendChild(document.createTextNode(text));
+      if (lobby.muted.has(from.id)) d.hidden = true;
+    } else {
+      d.textContent = text;
+    }
+    const atEnd = ui.log.scrollTop + ui.log.clientHeight >= ui.log.scrollHeight - 4;
+    ui.log.appendChild(d);
+    while (ui.log.childNodes.length > 200) ui.log.removeChild(ui.log.firstChild);
+    if (atEnd) ui.log.scrollTop = ui.log.scrollHeight;
+  }
+  function lobbyChatSend() {
+    const ui = lobby && lobby.ui;
+    if (!ui || !lobbyOn()) return;
+    const t = ui.inp.value.trim();
+    if (!t) return;
+    lobbyRaw({ t: 'chat', text: t.slice(0, 200) });
+    ui.inp.value = '';
+  }
+
+  // THE LOOK'S PREVIEW: public/ikemen/lobby-preview.html (the Studio's
+  // Settings > Online > Lobby look) sets IKEMEN_LOBBY_PREVIEW before this file
+  // loads and draws this very sidebar with a made-up lobby: { view (a 'state'
+  // message), you, chat: [{ text, sys } | { text, from, name }], folded }.
+  // No socket is opened. The game page never sets it.
+  if (globalThis.IKEMEN_LOBBY_PREVIEW === true) {
+    globalThis.ikemenLobbyPreview = (st) => {
+      if (lobby && lobby.ui) lobbyUiDrop();
+      lobby = { names: {}, muted: new Set(st.muted || []), form: {}, code: st.view.code, you: st.you, view: st.view, note: st.note || '' };
+      for (const x of st.view.members) lobby.names[x.id] = x.name;
+      lobbyUiMake();
+      lobbyFold(!!st.folded);
+      lobbyRender();
+      for (const c of st.chat || []) lobbyLog(c.text, c.sys ? 'lb-sys' : '', c.sys ? null : { id: c.from, name: c.name });
+    };
+  }
+
+  // The form: create or join (the setup view, before the lobby socket is up).
+  function lobbySetupView(msg) {
+    const ui = lobbyUiMake();
+    ui.title.textContent = 'Lobby';
+    ui.chat.hidden = true;
+    const b = ui.body;
+    b.textContent = '';
+    let mode = lobby.mode || 'create';
+    lobbyBrowseStop();
+    const tabs = lbEl('div', 'lb-tabs');
+    tabs.setAttribute('role', 'tablist');
+    const tc = lbButton('Create', () => { lobby.mode = 'create'; lobbySetupView(); });
+    const tj = lbButton('Join', () => { lobby.mode = 'join'; lobbySetupView(); });
+    const tb = lbButton('Browse', () => { lobby.mode = 'browse'; lobbySetupView(); });
+    tc.setAttribute('aria-selected', String(mode === 'create')); tj.setAttribute('aria-selected', String(mode === 'join'));
+    tb.setAttribute('aria-selected', String(mode === 'browse'));
+    tc.className = 'lb-create-tab'; tj.className = 'lb-join-tab'; tb.className = 'lb-browse-tab';
+    tb.title = 'The open lobbies (every lobby without a password)';
+    tabs.appendChild(tc); tabs.appendChild(tj); tabs.appendChild(tb);
+    b.appendChild(tabs);
+    const field = (label, name, val, ph) => {
+      const l = lbEl('label', 'lb-f', label);
+      const i = lbEl('input'); i.type = 'text'; i.name = name; i.value = val || ''; i.placeholder = ph || '';
+      i.autocomplete = 'off'; i.spellcheck = false;
+      l.appendChild(i); b.appendChild(l);
+      return i;
+    };
+    let idName = '';
+    try { const id = JSON.parse(localStorage.getItem('ikemen-identity')); idName = (id && id.name) || ''; } catch (e) { idName = ''; }
+    const nameInp = field('Your name', 'lbname', lobby.form.name || idName, 'shown to the lobby');
+    nameInp.maxLength = 24;
+    if (mode === 'browse') { lobbyBrowseView(b, nameInp, msg); return; }
+    let codeInp = null;
+    if (mode === 'join') codeInp = field('Lobby code', 'lbcode', lobby.form.code || '', 'e.g. spicy-tiger-42');
+    const passInp = field(mode === 'create' ? 'Password (optional)' : 'Password (if it has one)', 'lbpass', '', mode === 'create' ? 'leave blank for none' : '');
+    passInp.maxLength = 64;
+    if (mode === 'create') {
+      b.appendChild(lbEl('div', 'lb-sec', 'Winner leaves after'));
+      const row = lbEl('div', 'lb-row lb-step');
+      const val = lbEl('b', '', lobby.form.streak ? String(lobby.form.streak) : 'OFF');
+      const set = (n) => { lobby.form.streak = Math.max(0, Math.min(9, n)); val.textContent = lobby.form.streak ? String(lobby.form.streak) : 'OFF'; };
+      row.appendChild(lbButton('-', () => set((lobby.form.streak || 0) - 1), 'lb-minus'));
+      row.appendChild(val);
+      row.appendChild(lbButton('+', () => set((lobby.form.streak || 0) + 1), 'lb-plus'));
+      row.appendChild(lbEl('span', 'lb-line', 'wins (OFF: stays until beaten)'));
+      b.appendChild(row);
+    }
+    const go = lbButton(mode === 'create' ? 'Create lobby' : 'Join lobby', () => {
+      lobby.form.name = nameInp.value.trim();
+      if (codeInp) lobby.form.code = codeInp.value.trim().toLowerCase();
+      if (!lobby.form.name) { msgEl.textContent = lobbyReason('name'); return; }
+      if (mode === 'join' && !lobby.form.code) { msgEl.textContent = 'Type the lobby code.'; return; }
+      go.disabled = true;
+      msgEl.textContent = mode === 'create' ? 'Creating...' : 'Joining...';
+      lobbyConnect(mode, lobby.form.code, passInp.value, lobby.form.name, lobby.form.streak || 0, (err) => {
+        go.disabled = false;
+        msgEl.textContent = err;
+      });
+    }, 'lb-go');
+    const row2 = lbEl('div', 'lb-row');
+    row2.appendChild(go);
+    row2.appendChild(lbButton('Cancel', () => lobbyLeave('You closed the lobby panel.'), 'lb-cancel'));
+    b.appendChild(row2);
+    const msgEl = lbEl('div', 'lb-msg', msg || '');
+    b.appendChild(msgEl);
+    b.appendChild(lbEl('div', 'lb-line', 'Up to 8 people. Two play; the winner stays, the loser goes to the back of the line; everyone else watches live.'));
+    if (globalThis.ikemenNetcode !== 'rollback') msgEl.textContent = lobbyReason('netcode');
+  }
+
+  //
+  function lobbyRender() {
+    if (!lobby || !lobby.ui || !lobby.view) return;
+    const ui = lobby.ui, v = lobby.view, b = ui.body;
+    ui.chat.hidden = false;
+    ui.title.textContent = 'Lobby ' + v.members.length + '/' + v.max;
+    b.textContent = '';
+    const code = lbEl('div', 'lb-code');
+    code.appendChild(lbEl('b', 'lb-codetext', v.code));
+    const copy = lbButton('Copy', () => {
+      const done = () => { copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); };
+      try { navigator.clipboard.writeText(v.code).then(done, done); } catch (e) { done(); }
+    }, 'lb-copy');
+    copy.title = 'Copy the lobby code' + (v.pass ? ' (it has a password: tell them that too)' : '');
+    code.appendChild(copy);
+    b.appendChild(code);
+    if (v.pass) b.appendChild(lbEl('div', 'lb-line lb-pass', 'Password set: tell your friends the password too.'));
+    // lb-now / lb-next / lb-streak and each member's data-st (play, line,
+    // spec, watch) and data-p are hooks for the look's panel themes
+    // (lobby-look.js); the text is the same in every theme.
+    for (const [i, t] of lobbyNowNext(false).entries()) b.appendChild(lbEl('div', i === 0 && v.match ? 'lb-line lb-now' : 'lb-line lb-next', t));
+    const holder = v.streak && v.streak.id ? lobbyName(v.streak.id) + ' ' + v.streak.n + ' in a row' : 'none';
+    b.appendChild(lbEl('div', 'lb-line lb-streak', 'STREAK: ' + holder + '   LIMIT: ' + (v.limit ? v.limit + ' wins' : 'OFF')));
+    if (v.host === lobby.you) {
+      const row = lbEl('div', 'lb-row lb-step lb-limit');
+      row.appendChild(lbEl('span', 'lb-line', 'Winner leaves after'));
+      row.appendChild(lbButton('-', () => lobbyRaw({ t: 'limit', n: Math.max(0, v.limit - 1) }), 'lb-minus'));
+      row.appendChild(lbEl('b', '', v.limit ? String(v.limit) : 'OFF'));
+      row.appendChild(lbButton('+', () => lobbyRaw({ t: 'limit', n: Math.min(9, v.limit + 1) }), 'lb-plus'));
+      b.appendChild(row);
+    }
+    b.appendChild(lbEl('div', 'lb-sec', 'Members ' + v.members.length + '/' + v.max));
+    for (const m of v.members) {
+      const st = lobbyStatusOf(m.id);
+      const row = lbEl('div', 'lb-mem' + (st.startsWith('PLAYING') ? ' lb-play' : ''));
+      row.dataset.id = String(m.id);
+      row.dataset.st = st.startsWith('PLAYING') ? 'play' : st.startsWith('IN LINE') ? 'line' : st.startsWith('SPECTATING') ? 'spec' : 'watch';
+      if (st.startsWith('PLAYING')) row.dataset.p = /P2/.test(st) ? '2' : '1';
+      const who = lbEl('div', 'lb-who');
+      const nm = lbEl('span', 'lb-nm', m.name);
+      if (m.id === v.host) nm.appendChild(lbEl('span', 'lb-tag', 'HOST'));
+      if (m.id === lobby.you) nm.appendChild(lbEl('span', 'lb-tag lb-you', 'YOU'));
+      who.appendChild(nm);
+      who.appendChild(lbEl('span', 'lb-st', st + (v.streak && v.streak.id === m.id ? ' (' + v.streak.n + ' in a row)' : '')));
+      row.appendChild(who);
+      if (m.id !== lobby.you) {
+        const muted = lobby.muted.has(m.id);
+        const mute = lbButton(muted ? 'Unmute' : 'Mute', () => {
+          if (lobby.muted.has(m.id)) lobby.muted.delete(m.id); else lobby.muted.add(m.id);
+          for (const d of ui.log.querySelectorAll('div[data-from="' + m.id + '"]')) d.hidden = lobby.muted.has(m.id);
+          lobbyRender();
+        }, 'lb-mute');
+        mute.title = 'Hide this member\'s chat on your screen';
+        row.appendChild(mute);
+        if (v.host === lobby.you) {
+          const kick = lbButton('Kick', () => {
+            if (kick.dataset.armed !== '1') { kick.dataset.armed = '1'; kick.textContent = 'Sure?'; setTimeout(() => { kick.dataset.armed = ''; kick.textContent = 'Kick'; }, 3000); return; }
+            lobbyRaw({ t: 'kick', id: m.id });
+          }, 'lb-kick');
+          kick.title = 'Remove this member from the lobby';
+          row.appendChild(kick);
+        }
+      }
+      b.appendChild(row);
+    }
+    const me = v.members.find((x) => x.id === lobby.you);
+    const rowc = lbEl('div', 'lb-row');
+    const spec = lbButton('', () => lobbyRaw({ t: 'spec', on: !(me && me.spec) }), 'lb-check lb-spec');
+    spec.setAttribute('aria-pressed', String(!!(me && me.spec)));
+    spec.appendChild(lbEl('i'));
+    spec.appendChild(document.createTextNode('Spectate only'));
+    spec.title = 'Only watch: never put in line. Turning it off puts you at the back of the line.';
+    rowc.appendChild(spec);
+    rowc.appendChild(lbButton('Leave', () => lobbyLeave('You left the lobby.'), 'lb-leave'));
+    b.appendChild(rowc);
+    if (lobby.note) b.appendChild(lbEl('div', 'lb-msg', lobby.note));
+  }
+
+  function lobbySysLine(s) {
+    const n = (k) => s[k + 'n'] || '?';
+    switch (s.k) {
+      case 'join': return n('id') + ' joined';
+      case 'leave': return n('id') + ' left';
+      case 'kick': return n('id') + ' was removed by the host';
+      case 'host': return n('id') + ' is now the lobby host';
+      case 'spec': return s.on ? n('id') + ' is spectating only' : n('id') + ' is back in line';
+      case 'limit': return s.n ? 'Winner leaves after ' + s.n + ' wins' : 'Streak limit off: the winner stays until beaten';
+      case 'match': return 'Match ' + s.match + ': ' + n('a') + ' vs ' + n('b');
+      case 'result': return n('w') + ' beat ' + n('l') + (s.n > 1 ? ' (' + s.n + ' in a row)' : '') + (s.how === 'drop' ? ' (' + n('l') + ' left)' : '');
+      case 'draw': return n('a') + ' and ' + n('b') + ' drew';
+      case 'void': return 'No result for ' + n('a') + ' vs ' + n('b') + ': both go to the back of the line';
+      case 'rotate': return n('id') + ' won ' + s.n + ' in a row and goes to the back of the line';
+      case 'drop': return n('id') + ' left mid-match';
+      case 'absent': return s.id === lobby.you
+        ? 'You did not take match ' + s.match + ' in time: you are spectating only (turn it off to get back in line)'
+        : n('id') + ' did not take match ' + s.match + ' in time: spectating only';
+      case 'away': return s.id === lobby.you
+        ? 'Your tab was in the background when match ' + s.match + ' came up: come back within ' + s.s + ' s to play it'
+        : n('id') + '\'s game is in a background tab: waiting up to ' + s.s + ' s for match ' + s.match;
+      case 'noconn': return n('a') + ' and ' + n('b') + ' could not connect: no contest (the streak stands)';
+      case 'bench': return s.id === lobby.you
+        ? 'You could not connect ' + s.n + ' times in a row: you are spectating only (turn it off when your connection is fixed)'
+        : n('id') + ' could not connect ' + s.n + ' times in a row: spectating only';
+      default: return '';
+    }
+  }
+
+  // ---- the list of open lobbies (BROWSE in the lobby panel) ----
+  //
+  // without a password: its host's name, members n/8, who plays now, the
+  // streak, a free seat. The page asks only while the list is on screen and
+  // the tab is visible, every LOBBY_LIST_EVERY_MS, and stops asking after
+  // LOBBY_LIST_FOR_MS (REFRESH resumes): a minute of browsing costs the lobby
+  // server about 6 requests. Names are shown as text (textContent), never as
+  // markup. JOIN takes the same path as joining by code. The new elements use
+  // only the --lob-* tokens for colors and fonts (the lobby look defines them).
+  const LOBBY_LIST_EVERY_MS = 10000, LOBBY_LIST_FOR_MS = 10 * 60 * 1000;
+  const LOBBY_BROWSE_CSS = [
+    '#lobbybar .lb-br-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }',
+    '#lobbybar .lb-br-at { flex: 1; min-width: 0; font: 11px var(--lob-font, monospace); color: var(--lob-dim, #9fb3cc); }',
+    '#lobbybar .lb-br-row { margin-top: 6px; padding: 5px 7px; border: 2px solid var(--lob-border, #6af); border-radius: 0;',
+    '  background: var(--lob-panel, #10141c); color: var(--lob-text, #d6e6ff); font: 12px var(--lob-font, monospace); }',
+    '#lobbybar .lb-br-top { display: flex; align-items: baseline; gap: 6px; }',
+    '#lobbybar .lb-br-host { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;',
+    '  font: bold 13px var(--lob-head-font, monospace); color: var(--lob-text, #d6e6ff); }',
+    '#lobbybar .lb-br-n { font: bold 12px var(--lob-font, monospace); color: var(--lob-accent, #6af); }',
+    '#lobbybar .lb-br-now, #lobbybar .lb-br-streak { color: var(--lob-dim, #9fb3cc); overflow-wrap: anywhere; }',
+    '#lobbybar .lb-br-row button { margin-top: 5px; }',
+    '#lobbybar .lb-br-empty { margin-top: 6px; padding: 8px; border: 2px solid var(--lob-dim, #9fb3cc); border-radius: 0;',
+    '  background: var(--lob-chat-bg, #05070a); color: var(--lob-dim, #9fb3cc); font: 12px var(--lob-font, monospace); }',
+  ].join('\n');
+  function lobbyListUrl() {
+    const s = signalUrl();
+    if (!s) return '';
+    try {
+      const u = new URL(s);
+      u.protocol = u.protocol === 'wss:' ? 'https:' : u.protocol === 'ws:' ? 'http:' : u.protocol;
+      u.pathname = u.pathname.replace(/\/ws\/?$/, '').replace(/\/$/, '') + '/lobbies';
+      u.search = ''; u.hash = '';
+      return u.toString();
+    } catch (e) { return ''; }
+  }
+  function lobbyBrowseStop() {
+    const br = lobby && lobby.browse;
+    if (!br) return;
+    clearTimeout(br.timer);
+    document.removeEventListener('visibilitychange', br.onVis);
+    lobby.browse = null;
+  }
+  function lobbyBrowseView(b, nameInp, msg) {
+    if (!document.getElementById('lobbybrowse-style')) {
+      const st = lbEl('style'); st.id = 'lobbybrowse-style'; st.textContent = LOBBY_BROWSE_CSS;
+      document.head.appendChild(st);
+    }
+    const msgEl = lbEl('div', 'lb-msg', msg || '');
+    const bar = lbEl('div', 'lb-br-bar');
+    const at = lbEl('span', 'lb-br-at', '');
+    bar.appendChild(at);
+    const br = { box: lbEl('div', 'lb-br-list'), at, nameInp, msgEl, since: Date.now(), timer: 0, busy: false, list: null, err: '', polls: 0 };
+    bar.appendChild(lbButton('Refresh', () => { br.since = Date.now(); br.paused = false; lobbyBrowsePoll(br); }, 'lb-br-refresh'));
+    b.appendChild(lbEl('div', 'lb-sec', 'Open lobbies'));
+    b.appendChild(bar);
+    b.appendChild(msgEl);
+    b.appendChild(br.box);
+    b.appendChild(lbEl('div', 'lb-line', 'Every lobby without a password is listed here. Pick one and press JOIN.'));
+    const row = lbEl('div', 'lb-row');
+    row.appendChild(lbButton('Cancel', () => lobbyLeave('You closed the lobby panel.'), 'lb-cancel'));
+    b.appendChild(row);
+    br.onVis = () => { if (lobby && lobby.browse === br && document.visibilityState === 'visible') lobbyBrowsePoll(br); };
+    document.addEventListener('visibilitychange', br.onVis);
+    lobby.browse = br;
+    if (globalThis.ikemenNetcode !== 'rollback') msgEl.textContent = lobbyReason('netcode');
+    lobbyBrowsePoll(br);
+  }
+  async function lobbyBrowsePoll(br) {
+    clearTimeout(br.timer);
+    br.timer = 0;
+    if (!lobby || lobby.browse !== br) return;
+    if (!br.box.isConnected) { lobbyBrowseStop(); return; }
+    if (document.visibilityState !== 'visible') return; // visibilitychange resumes it
+    if (Date.now() - br.since > LOBBY_LIST_FOR_MS) { br.paused = true; lobbyBrowseDraw(br); return; }
+    if (br.busy) return;
+    const url = lobbyListUrl();
+    if (!url) { br.err = 'This build has no lobby server.'; lobbyBrowseDraw(br); return; }
+    br.busy = true;
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (r.status === 429) br.err = 'The lobby server asked to slow down; the list refreshes shortly.';
+      else if (!r.ok) br.err = 'The list could not be loaded.';
+      else {
+        const j = await r.json();
+        br.list = Array.isArray(j && j.list) ? j.list : [];
+        br.err = '';
+        br.got = Date.now();
+      }
+    } catch (e) { br.err = 'The lobby server could not be reached.'; }
+    br.busy = false;
+    br.polls++;
+    if (!lobby || lobby.browse !== br) return;
+    lobbyBrowseDraw(br);
+    br.timer = setTimeout(() => lobbyBrowsePoll(br), LOBBY_LIST_EVERY_MS);
+  }
+  function lobbyBrowseDraw(br) {
+    const box = br.box;
+    box.textContent = '';
+    br.at.textContent = br.paused ? 'Paused (10 minutes). Refresh to go on.'
+      : br.got ? 'Updated ' + new Date(br.got).toLocaleTimeString() : 'Loading...';
+    if (br.err) box.appendChild(lbEl('div', 'lb-msg', br.err));
+    const L = br.list;
+    if (!L) return;
+    if (!L.length) {
+      box.appendChild(lbEl('div', 'lb-br-empty', 'No open lobbies right now. Create one: it shows up here for everyone (a lobby with a password never does).'));
+      return;
+    }
+    for (const e of L) {
+      if (!e || typeof e.code !== 'string') continue;
+      const row = lbEl('div', 'lb-br-row');
+      row.dataset.code = e.code;
+      const top = lbEl('div', 'lb-br-top');
+      top.appendChild(lbEl('span', 'lb-br-host', String(e.host || '?')));
+      top.appendChild(lbEl('span', 'lb-br-n', (e.n | 0) + '/' + (e.max | 0)));
+      row.appendChild(top);
+      row.appendChild(lbEl('div', 'lb-br-now', e.a && e.b ? 'Now: ' + e.a + ' vs ' + e.b : 'Waiting for players'));
+      if (e.streak && e.streak.n) row.appendChild(lbEl('div', 'lb-br-streak', 'Streak: ' + String(e.streak.name || '?') + ' ' + (e.streak.n | 0) + ' in a row'));
+      const j = lbButton(e.free ? 'Join' : 'Full', () => lobbyBrowseJoin(br, e.code), 'lb-br-join');
+      j.disabled = !e.free;
+      j.title = e.free ? 'Join ' + e.code : 'This lobby is full (8)';
+      row.appendChild(j);
+      box.appendChild(row);
+    }
+  }
+  function lobbyBrowseJoin(br, code) {
+    const name = br.nameInp.value.trim();
+    lobby.form.name = name;
+    if (!name) { br.msgEl.textContent = lobbyReason('name'); return; }
+    lobby.form.code = code;
+    br.msgEl.textContent = 'Joining ' + code + '...';
+    lobbyBrowseStop();
+    lobbyConnect('join', code, '', name, 0, (err) => {
+      if (lobby && !lobby.code && !lobby.closed) { lobby.mode = 'browse'; lobbySetupView(err); }
+    });
+  }
+
+  // THE BROWSER ID: a random id this page keeps in its own storage and sends
+  // with every lobby it joins (&bid=). The lobby host's kick bars it as well as
+  // the name, so a kicked person cannot come straight back from the same
+  // browser under another name. It is not secret and not an account: clearing
+  // the site's data or a private window makes a new one.
+  let lobbyBidMem = '';
+  function lobbyBid() {
+    if (lobbyBidMem) return lobbyBidMem;
+    let v = '';
+    try { v = localStorage.getItem('ikemen-lobby-bid') || ''; } catch (e) { v = ''; }
+    if (!/^[0-9a-f]{32}$/.test(v)) {
+      const r = new Uint8Array(16);
+      crypto.getRandomValues(r);
+      v = Array.from(r, (x) => x.toString(16).padStart(2, '0')).join('');
+      try { localStorage.setItem('ikemen-lobby-bid', v); } catch (e) { /* this page's id only */ }
+    }
+    lobbyBidMem = v;
+    return v;
+  }
+
+  // A BACKGROUND TAB when this page is paired. The browser pauses the game in
+  // a hidden tab, so its engine cannot take the match. The page says
+  // {t:'away', match}: the lobby waits 120 s instead of 60 s and tells
+  // everyone; and it calls its person back: the tab title blinks and a short
+  // beep sounds. Both stop when the tab is shown again (the engine then takes
+  // the match and says 'ready'). If the person does not come back in time the
+  // lobby puts this member on spectate only, as before.
+  let lobbyAlertTimer = 0, lobbyAlertTitle = '';
+  function lobbyAwayCheck() {
+    const a = lobby && lobby.assign;
+    if (!a || a.kind !== 'play' || lobby.taken === a.match || document.visibilityState !== 'hidden' || lobby.awayFor === a.match) return;
+    lobby.awayFor = a.match;
+    lobbyRaw({ t: 'away', match: a.match });
+    netLog('lobby: match ' + a.match + ' came up while this tab is hidden: told the lobby, calling you back');
+    lobbyAlertStart('>> YOUR MATCH <<');
+  }
+  function lobbyAlertStart(text) {
+    if (lobbyAlertTimer) return;
+    lobbyAlertTitle = document.title;
+    let on = true;
+    document.title = text;
+    lobbyAlertTimer = setInterval(() => { on = !on; document.title = on ? text : lobbyAlertTitle; }, 1000);
+    try {
+      const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+      const ac = AC ? new AC() : null;
+      if (ac) {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.value = 880; g.gain.value = 0.08;
+        o.connect(g); g.connect(ac.destination);
+        o.start(); o.stop(ac.currentTime + 0.2);
+        o.onended = () => { try { ac.close(); } catch (e) { /* closed */ } };
+      }
+    } catch (e) { /* no sound: the title still blinks */ }
+  }
+  function lobbyAlertStop() {
+    if (!lobbyAlertTimer) return;
+    clearInterval(lobbyAlertTimer);
+    lobbyAlertTimer = 0;
+    document.title = lobbyAlertTitle;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') lobbyAlertStop();
+    else if (lobby && !lobby.closed) lobbyAwayCheck();
+  });
+
+  // ---- the lobby socket ----
+  function lobbyConnect(mode, code, pass, name, streak, fail) {
+    const url = signalUrl();
+    if (!url) { fail('This build has no lobby server.'); return; }
+    if (!localHash) computeBuildHash();
+    const go = () => {
+      if (!localHash) { setTimeout(go, 100); return; }
+      const q = new URLSearchParams();
+      q.set('lobby', mode === 'create' ? 'new' : code);
+      q.set('build', hex8(localHash));
+      q.set('nc', String(localNetcode()));
+      q.set('name', name);
+      if (pass) q.set('pass', pass);
+      if (mode === 'create' && streak) q.set('streak', String(streak));
+      q.set('bid', lobbyBid());
+      const ws = new WebSocket(url + (url.includes('?') ? '&' : '?') + q.toString());
+      lobby.ws = ws;
+      let inside = false;
+      ws.onmessage = (e) => { if (lobby && lobby.ws === ws) { let m; try { m = JSON.parse(e.data); } catch { return; } if (m.t === 'lobby') inside = true; lobbyOnMsg(m, fail); } };
+      ws.onclose = () => {
+        if (!lobby || lobby.ws !== ws) return;
+        if (!inside) { if (!lobby.denied) fail('The lobby server could not be reached.'); lobby.ws = null; return; }
+        lobbyGone(lobby.denied ? lobbyReason(lobby.denied) : 'The connection to the lobby was lost.');
+      };
+    };
+    lobby.denied = '';
+    go();
+  }
+
+  function lobbyOnMsg(m, fail) {
+    if (m.t === 'deny') {
+      lobby.denied = m.reason;
+      if (!lobby.code) fail(lobbyReason(m.reason));
+      return;
+    }
+    if (m.t === 'lobby') {
+      lobby.code = m.code; lobby.you = m.you;
+      netLog('lobby: in ' + m.code + ' as member ' + m.you);
+      lobbyUiMake();
+      lobbyLog('You are in lobby ' + m.code + '.', 'lb-sys');
+      return;
+    }
+    if (m.t === 'state') {
+      const first = !lobby.view;
+      lobby.view = m;
+      for (const x of m.members) lobby.names[x.id] = x.name;
+      if (first) lobbyUiMake();
+      lobbyRender();
+      return;
+    }
+    if (m.t === 'sys') { const t = lobbySysLine(m); if (t) lobbyLog(t, 'lb-sys'); return; }
+    if (m.t === 'chat') { if (typeof m.text === 'string') lobbyLog(m.text, '', { id: m.from, name: String(m.name || '?') }); return; }
+    if (m.t === 'slow') { lobbyLog('(slow down: that line was not sent)', 'lb-sys'); return; }
+    if (m.t === 'match' || m.t === 'watch') {
+      const a = m.t === 'match'
+        ? { match: m.match, kind: 'play', role: m.role === 'host' ? 'host' : 'guest', opp: m.opp && m.opp.id }
+        : { match: m.match, kind: 'watch', host: m.host };
+      lobby.assign = a;
+      netLog('lobby: match ' + a.match + ' - ' + (a.kind === 'play' ? 'you play (' + a.role + ')' : 'you watch'));
+      if (a.kind === 'play') lobbyAwayCheck();
+      // A watch that has not started gives way at once (a newer match is up).
+      if (lobby.watch && lobby.watch.match < a.match && !lobby.watch.started) lobbyEndWatch('a newer match was assigned');
+      if (a.kind === 'play' && a.role === 'host' && !lobby.inMatch) {
+        wslots.forEach((s, i) => { if (s && !s.closed && s.lmatch !== a.match) wClose(i, 'an earlier lobby match'); });
+      }
+      return;
+    }
+    if (m.t === 'watcher') {
+      if (lobby.assign && lobby.assign.kind === 'play' && lobby.assign.role === 'host' && m.match === lobby.assign.match && Number.isInteger(m.id)) {
+        wAdd(m.id, m.match).catch((e) => netLog('watcher setup failed: ' + e.message));
+      }
+      return;
+    }
+    if (m.t === 'wbye') { wLobby(m); return; }
+    if (m.t === 'wdeny') {
+      if (lobby.watch && m.match === lobby.watch.match) lobbyEndWatch('the match host refused: ' + m.reason);
+      return;
+    }
+    if (m.t === 'sdp') {
+      const cur = lobby.cur;
+      // The other player's offer can come before this page's engine has
+      // taken the match (a tab in the background, whose game is paused):
+      // kept, and answered when the engine takes it (lobbyPlayStart).
+      const asg = lobby.assign;
+      if ((!cur || cur.match !== m.match) && asg && asg.kind === 'play' && asg.role === 'guest' && m.match === asg.match && m.from === asg.opp) {
+        lobby.offer = { match: m.match, sdp: m.sdp };
+        return;
+      }
+      // the other player's
+      if (cur && cur.kind === 'play' && m.match === cur.match && m.from === cur.opp) {
+        if (cur.role === 'host') {
+          if (pc && lobby.inMatch) pc.setRemoteDescription(m.sdp).catch((e) => netLog('lobby: answer refused: ' + e.message));
+        } else {
+          lobby.offer = { match: m.match, sdp: m.sdp };
+          lobbyGuestAnswer();
+        }
+        return;
+      }
+      // a watcher's answer (this page hosts the match)
+      if (lobby.assign && lobby.assign.kind === 'play' && lobby.assign.role === 'host' && m.match === lobby.assign.match) {
+        wLobby({ t: 'sdp', from: m.from, sdp: m.sdp });
+        return;
+      }
+      // the match host's offer to this watcher (kept until the engine is free)
+      if (lobby.assign && lobby.assign.kind === 'watch' && m.match === lobby.assign.match && m.from === lobby.assign.host) {
+        lobby.woffer = { match: m.match, sdp: m.sdp };
+        lobbyWatchAnswer();
+      }
+    }
+  }
+
+  // The lobby is over for this page (left, kicked, closed).
+  function lobbyGone(why) {
+    if (!lobby) return;
+    const l = lobby;
+    l.closed = true;
+    lobbyBrowseStop();
+    lobbyAlertStop();
+    if (l.watch) lobbyEndWatch('left the lobby');
+    if (l.inMatch) ikemenNet.close();
+    try { if (l.ws) { l.ws.onclose = null; l.ws.close(); } } catch { /* gone */ }
+    l.ws = null;
+    netLog('lobby: ' + why);
+    lobbyUiDrop();
+    lobby = { closed: true, why, names: {}, muted: new Set(), form: {} };
+  }
+  function lobbyLeave(why) { lobbyGone(why || 'You left the lobby.'); }
+
+  // ---- this page plays a match (ikemenNet.start('lobby'), from the engine) ----
+  async function lobbyPlayStart() {
+    const a = lobby && lobby.cur;
+    if (!a || a.kind !== 'play' || !lobbyOn()) { isFailed = true; netLog('lobby: no match to play'); return; }
+    lobby.inMatch = true;
+    lobby.playing = a.match;
+    lobby.connectBy = Date.now() + LOBBY_CONNECT_MS;
+    queueRole = a.role;
+    if (a.role === 'host') {
+      installHostWatchBridge();
+      await makePeer();
+      wireChannel(pc.createDataChannel('ikemen', { ordered: true }));
+      wireGGPO(pc.createDataChannel('ggpo', { ordered: false, maxRetransmits: 0 }));
+      await pc.setLocalDescription(await pc.createOffer());
+      await gatherComplete();
+      if (lobby.playing !== a.match) return;
+      lobbyRaw({ t: 'sdp', sdp: pc.localDescription });
+      netLog('lobby: offer sent to ' + lobbyName(a.opp));
+    } else {
+      if (globalThis.ikemenWatch) globalThis.ikemenWatch = undefined;
+      await makePeer();
+      pc.ondatachannel = (ev) => {
+        if (ev.channel.label === 'ggpo') wireGGPO(ev.channel);
+        else wireChannel(ev.channel);
+      };
+      lobby.guestReady = a.match;
+      lobbyGuestAnswer();
+    }
+  }
+  async function lobbyGuestAnswer() {
+    const a = lobby && lobby.cur;
+    const o = lobby && lobby.offer;
+    if (!a || !o || o.match !== a.match || lobby.guestReady !== a.match || !pc || lobby.answered === a.match) return;
+    lobby.answered = a.match;
+    try {
+      await pc.setRemoteDescription(o.sdp);
+      await pc.setLocalDescription(await pc.createAnswer());
+      await gatherComplete();
+      if (lobby.playing === a.match) lobbyRaw({ t: 'sdp', sdp: pc.localDescription });
+      netLog('lobby: answer sent to ' + lobbyName(a.opp));
+    } catch (e) { netLog('lobby: offer refused: ' + e.message); }
+  }
+
+  // ---- this page watches a match (the engine took a 'watch' assignment) ----
+  function lobbyWatchBegin(a) {
+    installWatcherBridge();
+    lobby.watch = { match: a.match, host: a.host, started: false };
+    lobbyWatchAnswer();
+  }
+  function lobbyWatchAnswer() {
+    const w = lobby && lobby.watch, o = lobby && lobby.woffer;
+    if (!w || !o || o.match !== w.match || wpc) return;
+    watchAnswer(o.sdp, (sdp) => lobbyRaw({ t: 'sdp', sdp })).catch((e) => netLog('lobby: watch setup failed: ' + e.message));
+  }
+  function lobbyEndWatch(why) {
+    if (!lobby || !lobby.watch) return;
+    netLog('lobby: watching ends (' + why + ')');
+    lobby.watch = null;
+    wClosed = true;
+    dropWatchConn();
+  }
+
+  // What the engine asks (main.lua main.f_lobby, through netLobby).
+  function lobbyCmd(cmd, arg) {
+    // The online menu's LOBBY row: a lobby server that has lobbies.
+    if (cmd === 'avail') return signalUrl() && lobbyServerCan() ? 'yes' : '';
+    if (cmd === 'open') {
+      if (!signalUrl()) return '';
+      if (!lobby || lobby.closed) lobby = { names: {}, muted: new Set(), form: {}, mode: 'create', results: [] };
+      if (!lobby.code) lobbySetupView();
+      else lobbyFold(false);
+      return 'ok';
+    }
+    if (!lobby || lobby.closed) return cmd === 'next' ? 'gone' : '';
+    if (cmd === 'next') {
+      if (!lobby.code) return lobby.ws || lobby.ui ? '' : 'gone';
+      if (!lobbyOn()) return 'gone';
+      const a = lobby.assign, v = lobby.view;
+      if (!a || a.match === lobby.taken || !v || !v.match || v.match.id !== a.match) return '';
+      lobby.taken = a.match;
+      lobby.cur = Object.assign({ a: v.match.a, b: v.match.b }, a);
+      if (a.kind === 'watch') lobbyWatchBegin(a);
+      // A player tells the lobby its engine took the match: one that never
+      // does within a minute (its game is not in the lobby loop, or gone) is
+      // put on spectate only and the other player keeps its place.
+      else lobbyRaw({ t: 'ready', match: a.match });
+      return a.kind + ':' + a.match;
+    }
+    if (cmd === 'stale') {
+      const c = lobby.cur, v = lobby.view;
+      if (!c || !lobbyOn() || !v || !v.match || v.match.id !== c.match) return 'yes';
+      // Both took the match but the connection never came up (their networks
+      // cannot reach each other): give up after LOBBY_CONNECT_MS; the engine
+      // reports "no result", and the lobby voids the match and moves on
+      // instead of waiting out its 15-minute cap.
+      // The clock starts when BOTH players' engines took the match (the
+      // lobby's state lists them in match.ready): a player whose opponent's
+      // tab is in the background waits for the lobby's longer deadline
+      // instead of giving up first. (A lobby without match.ready: the clock
+      // starts with this page's own start, as before.)
+      if (c.kind === 'play' && !isConnected) {
+        const r = v.match.ready;
+        if (Array.isArray(r)) {
+          if (lobby.bothFor !== c.match) { lobby.bothFor = c.match; lobby.bothAt = 0; }
+          if (!lobby.bothAt && r.includes(v.match.a) && r.includes(v.match.b)) lobby.bothAt = Date.now();
+          lobby.connectBy = lobby.bothAt ? lobby.bothAt + LOBBY_CONNECT_MS : 0;
+        }
+        if (lobby.connectBy && Date.now() > lobby.connectBy) {
+          lobby.connectBy = 0;
+          lobby.gaveUp = c.match;
+          netLog('lobby: no connection to ' + lobbyName(c.opp) + ' after ' + (LOBBY_CONNECT_MS / 1000) + ' s; giving up on match ' + c.match);
+          return 'yes';
+        }
+      }
+      return '';
+    }
+    if (cmd === 'result') {
+      const c = lobby.cur;
+      const side = parseInt(arg, 10);
+      if (c) {
+        const winner = side === 1 ? c.a : side === 2 ? c.b : side === 0 ? 0 : -1;
+        // Only for the match the lobby is still on: one it has settled or
+        // called off already (both players agreed; a player never took it)
+        // takes no report, and the server counts a late one as junk.
+        const v = lobby.view;
+        const open = !!(v && v.match && v.match.id === c.match);
+        // a page that gave up connecting says so: when both pages say so the
+        // lobby calls it no contest (the stayer keeps its streak); one page
+        // saying so against a win claim needs a watcher's vote for the claim,
+        // or the match is void
+        if (open) lobbyRaw(winner === -1 && c.kind === 'play' && lobby.gaveUp === c.match
+          ? { t: 'result', match: c.match, winner, why: 'noconn' } : { t: 'result', match: c.match, winner });
+        netLog('lobby: match ' + c.match + (open ? ' result sent: ' : ' is over on the lobby, not sent: ') + (winner > 0 ? lobbyName(winner) + ' won' : winner === 0 ? 'draw' : 'no result'));
+        if (lobby.results) lobby.results.push({ match: c.match, kind: c.kind, side, winner, sent: open });
+      }
+      if (c && c.kind === 'watch') lobby.watch = null;
+      lobby.cur = null;
+      return '';
+    }
+    if (cmd === 'leave') { lobbyLeave('You left the lobby.'); return ''; }
+    if (cmd === 'rounds') return devnet && /^[1-9]$/.test(qp.get('lobbyrounds') || '') ? qp.get('lobbyrounds') : '';
+    if (cmd === 'text') {
+      if (!lobby.code) return 'LOBBY\n\nCreate, join or browse lobbies in the panel on the right.\n\nEsc: back';
+      const v = lobby.view;
+      if (!v) return 'LOBBY ' + lobby.code;
+      const L = ['LOBBY ' + v.code + '   ' + v.members.length + '/' + v.max];
+      L.push(...lobbyNowNext(true));
+      const c = lobby.cur;
+      if (c && c.kind === 'watch') L.push('YOU: watching' + (lobby.watch && lobby.watch.started ? '' : ' (waiting for it to start)'));
+      else if (c && c.kind === 'play') L.push('YOU: connecting to ' + asciiName(lobbyName(c.opp)) + '...');
+      else L.push('YOU: ' + lobbyStatusOf(lobby.you).toLowerCase());
+      L.push('', 'Esc: leave the lobby');
+      return L.join('\n');
+    }
+    return '';
+  }
+
+  // What a test driver reads (dev switch only).
+  if (devnet) {
+    globalThis.ikemenTest = {
+      room: '',
+      // trail(): the checksum trail; trail(N): lobby match N's
+      trail(k) { return Array.from((k ? lobbyTrails.get(k) || new Map() : crcTrail).entries()).sort((a, b) => a[0] - b[0]); },
+      trails() { return Array.from(lobbyTrails.keys()); },
+      lobby() {
+        if (!lobby) return null;
+        return { code: lobby.code || '', you: lobby.you || 0, view: lobby.view || null, assign: lobby.assign || null,
+          cur: lobby.cur || null, taken: lobby.taken || 0, inMatch: !!lobby.inMatch, playing: lobby.playing || 0,
+          watch: lobby.watch || null, results: lobby.results || [], closed: !!lobby.closed, why: lobby.why || '',
+          browse: lobby.browse ? { polls: lobby.browse.polls || 0, n: lobby.browse.list ? lobby.browse.list.length : -1, paused: !!lobby.browse.paused } : null,
+          gaveUp: lobby.gaveUp || 0, away: lobby.awayFor || 0, alert: !!lobbyAlertTimer };
+      },
+      slots() { return globalThis.ikemenWatch && globalThis.ikemenWatch.slots ? globalThis.ikemenWatch.slots() : []; },
+      refused() { return globalThis.ikemenWatchRefused || ''; },
+      closed() { return wClosed; },
+      count() { return watchCount; },
+    };
+  }
+  if (devnet && qp.get('watch')) {
+    // The engine boots with -watch (index.html) and polls ikemenWatch.next(),
+    // which says "nothing yet" until the host's first message; the build
+    // check needs the Build ID and the Engine ID, both set during boot, so
+    // the connection waits for them.
+    installWatcherBridge();
+    const go = () => {
+      if (!(globalThis.ikemenBuildHash instanceof Uint8Array) || globalThis.ikemenEngineId === undefined) { setTimeout(go, 200); return; }
+      watchPanel(false);
+      startWatch(qp.get('watch'), qp.get('pass') || '');
+    };
+    go();
+  }
+
+  // ---- what this page's lobby server can do (LOBBY, WATCH A MATCH) ----
+  // A relay that only makes rooms (the host kit before 1.2.0) has no lobbies,
+  // no watching and no list of open lobbies, so the online menu must not offer
+  // them there. The page asks the list's own address once, at load (GET
+  // <lobby server>/lobbies, lobbyListUrl): 200 with {t:'lobbies'} is a server
+  // that has them (the reference relay, the host kit 1.2.0 and later). A 404 or
+  // any other answer (an older kit) hides them for good; a request that fails
+  // (offline) or is refused for now (429, 5xx) hides them until the online menu
+  // asks again (at most every LOBBY_CAN_RETRY_MS). Until an answer arrives the
+  // menu treats them as not there. A page without a lobby server never asks.
+  const LOBBY_CAN_RETRY_MS = 15000;
+  const lobbyCan = { url: '', state: '', at: 0 };   // state: '' | 'asking' | 'yes' | 'no'
+  function lobbyCanCheck() {
+    const u = lobbyListUrl();
+    if (!u) return;
+    if (lobbyCan.url === u && (lobbyCan.state === 'yes' || lobbyCan.state === 'no' || lobbyCan.state === 'asking')) return;
+    if (lobbyCan.url === u && Date.now() - lobbyCan.at < LOBBY_CAN_RETRY_MS) return;
+    lobbyCan.url = u; lobbyCan.state = 'asking'; lobbyCan.at = Date.now();
+    fetch(u, { cache: 'no-store', credentials: 'omit' }).then((r) => {
+      if (r.status === 429 || r.status >= 500) return null;
+      if (!r.ok) return false;
+      return r.json().then((d) => !!(d && d.t === 'lobbies'), () => false);
+    }).then((has) => {
+      if (lobbyCan.url !== u) return;
+      lobbyCan.state = has === null ? '' : has ? 'yes' : 'no';
+      lobbyCan.at = Date.now();
+      // the console only: netLog would open the netplay line under the game
+      console.log('[netplay] lobby server: ' + (has === null ? 'busy, asks again later' : has ? 'has lobbies and watching' : 'rooms only (no LOBBY or WATCH A MATCH)'));
+    }, () => {
+      if (lobbyCan.url !== u) return;
+      lobbyCan.state = ''; lobbyCan.at = Date.now();
+    });
+  }
+  function lobbyServerCan() {
+    lobbyCanCheck();
+    return lobbyCan.state === 'yes';
+  }
+  lobbyCanCheck();
+
   globalThis.ikemenNet = {
     start(mode) {
       resetState();
+      // A lobby's match: this page's role came from the lobby server.
+      if (mode === 'lobby') { netLog('lobby: starting the match'); lobbyPlayStart().catch((e) => { isFailed = true; netLog('lobby: ' + e.message); }); return; }
+      // A lobby's watch: the bridge is up already (lobbyWatchBegin), no panel.
+      if (mode === 'watch' && lobby && lobby.watch && globalThis.ikemenWatch && globalThis.ikemenWatch.role === 'watcher') {
+        netLog('lobby: watching match ' + lobby.watch.match);
+        return;
+      }
+      if (mode === 'watch') { netLog('watch a match'); startWatchFlow(); return; }
       netLog(mode === 'host' ? 'hosting - generating offer'
         : mode === 'queue' ? 'entering ranked match queue'
           : mode === 'casual' ? 'entering casual match queue'
@@ -1142,6 +2842,13 @@
       else if (mode === 'queue') startQueue('ranked');
       else if (mode === 'casual') startQueue('casual');
       else startJoin();
+    },
+    // index.html: the engine stopped (it exited, or crashed). A lobby member
+    // whose engine is gone can neither play nor watch, so the page leaves the
+    // lobby: the server takes it out of the line (a player of the current
+    // match loses it) and the rotation goes on instead of pairing it again.
+    engineExited() {
+      if (lobby && !lobby.closed && (lobby.code || lobby.ws)) lobbyGone('The game stopped, so this page left the lobby.');
     },
     //
     // server assigned us ('' until matched), and the verified display
@@ -1262,6 +2969,14 @@
         netLog('report error: ' + e.message);   // never disturb the match
       }
     },
+    // The online menu's WATCH A MATCH shows only where watching can work:
+    // this page has a lobby server and it serves watchers (lobbyServerCan;
+    // the engine reads it, watch_js.go).
+    get watchSupported() { return !!signalUrl() && lobbyServerCan(); },
+    // The winner-stays lobby (main.lua main.f_lobby, through netLobby).
+    lobby(cmd, arg) {
+      try { return lobbyCmd(String(cmd), String(arg || '')); } catch (e) { netLog('lobby: ' + e.message); return ''; }
+    },
     connected() { return isConnected; },
     failed() { return isFailed; },
     read(max) {
@@ -1284,6 +2999,7 @@
     // when the channel is closed.
     sendGGPO(u8) {
       if (!gdc || gdc.readyState !== 'open') return false;
+      if (trailOn) trailFromDatagram(u8); // dev switch (?devnet=1&crctrail=1)
       try { gdc.send(u8); return true; } catch { return false; }
     },
     readGGPO() {
@@ -1304,7 +3020,13 @@
     close() {
       try { if (dc) dc.close(); } catch {}
       try { if (pc) pc.close(); } catch {}
+      // The room ends with the session: the lobby socket closes, and every
+      // watcher's connection with it.
+      endHosting();
+      if (guestWs) { guestWs.__done = true; try { guestWs.close(); } catch {} guestWs = null; }
+      watchCount = null;
       isClosed = true; isConnected = false;
+      if (lobby) lobby.inMatch = false;
       netLog('session closed');
       hidePanel();
       setTimeout(hideDiag, 8000); // leave the log up briefly after teardown

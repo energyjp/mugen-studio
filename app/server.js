@@ -328,7 +328,7 @@ const READ_ONLY_ALLOWED = new Set([
 const READ_ONLY_REFUSED = new Map(Object.entries({
   'changing the roster': ['/api/roster', '/api/build-order', '/api/max-matches', '/api/char-props', '/api/settings',
     '/api/keys', '/api/button-style', '/api/game-only', '/api/local-config', '/api/board-art', '/api/host-setup', '/api/host-use', '/api/host-remove',
-    '/api/online-setup/copy', '/api/leaderboard-rank-image', '/api/leaderboard-background'],
+    '/api/online-setup/copy', '/api/leaderboard-rank-image', '/api/leaderboard-background', '/api/lobby-background'],
   'editing a character': ['/api/char-rename', '/api/char-variant', '/api/char-move-edit', '/api/char-move-add',
     '/api/char-edit-revert', '/api/char-air-edit', '/api/char-hit', '/api/char-scale', '/api/char-consts',
     '/api/char-stats', '/api/char-consts-reset', '/api/add-dependency', '/api/fix-pal-applier', '/api/movelist'],
@@ -481,6 +481,12 @@ function hostingState() {
         bgTypes: Object.keys(L.BG_TYPES), bgImageMaxBytes: L.BG_IMAGE_MAX_BYTES, bgVideoMaxBytes: L.BG_VIDEO_MAX_BYTES,
         bgFits: L.BG_FITS, bgDimDefault: L.BG_DIM_DEFAULT, bgDimMax: L.BG_DIM_MAX };
     })(),
+    // The lobby's look (lobbylook.js): colors, fonts, header and background
+    // of the winner-stays lobby on the web game page, exactly what roster.json
+    // keeps for it (null: no key), and the tables its rows are drawn from.
+    lobbyLook: require('./lobbylook').normalize(roster.lobbyLook),
+    lobbyLookStored: require('./lobbylook').toRoster(roster.lobbyLook),
+    lobbyTables: require('./lobbylook').tables(),
     // The board draws portraits and win poses from leaderboard-art/: the
     // ACTIVE bundle's own folder (layout.LEADERBOARD_ART; for the checkout's
     // Main, the private site's folder beside the program). The Website export
@@ -499,6 +505,10 @@ function hostingState() {
     // active bundle already use, for the "Use them in this bundle" button.
     hostKit: hostKitAvailable(),
     hostDefaultName: (() => { try { return hostKitAvailable() ? hostDeploy().DEFAULT_SCRIPT : ''; } catch (e) { return ''; } })(),
+    // The server version this copy's kit carries (router.js KIT_VERSION, as
+    // deploy.js reads it), so Settings can offer Update my servers to a host
+    // whose recorded kitVersion is older.
+    hostKitVersion: hostKitVersion(),
     // The rule a server name is held to, for the field to check as it is
     // typed (deploy.js NAME_RE, and the text Set up would give).
     hostNameRule: (() => {
@@ -552,6 +562,16 @@ function hostKitAvailable() {
   return fs.existsSync(path.join(HOSTKIT_DIR, 'worker.js')) && fs.existsSync(path.join(HOSTKIT_DIR, 'deploy.js'));
 }
 function hostDeploy() { return require(path.join(HOSTKIT_DIR, 'deploy.js')); }
+// The carried kit's KIT_VERSION, read the way deploy.js loadKit reads it (the
+// first `KIT_VERSION = '...'` in the kit's modules; it lives in router.js), or
+// '' without a kit.
+function hostKitVersion() {
+  if (!hostKitAvailable()) return '';
+  try {
+    const v = /\bKIT_VERSION\s*=\s*['"]([^'"\n]{1,40})['"]/.exec(fs.readFileSync(path.join(HOSTKIT_DIR, 'router.js'), 'utf8'));
+    return v ? v[1] : '';
+  } catch (e) { return ''; }
+}
 
 // The Mods tab's backend (modmgr.js): the Studio's own add-ons and the
 // bundle's own mods. Loaded on first use, like the lifebar library.
@@ -2535,6 +2555,8 @@ async function handleApi(req, res, pathname) {
       // THE GAME ONLY PAGE is /api/game-only's (Options > Game only page), on disk the same way:
       // an older snapshot can neither drop it nor bring it back.
       if (onDisk && onDisk.gameOnly !== undefined) roster.gameOnly = onDisk.gameOnly; else delete roster.gameOnly;
+      // THE LOBBY'S LOOK is Settings > Online's (/api/local-config), on disk the same way.
+      if (onDisk && onDisk.lobbyLook !== undefined) roster.lobbyLook = onDisk.lobbyLook; else delete roster.lobbyLook;
       if (Array.isArray(roster.chars)) {
         const disk = new Map(((onDisk && onDisk.chars) || []).map((c) => [(c.folder || '') + '|' + (c.select || ''), c]));
         for (const c of roster.chars) {
@@ -3122,7 +3144,8 @@ async function handleApi(req, res, pathname) {
       if (Object.keys(patch).length) localConfig.save(patch);
       if (typeof body.identityUrl === 'string' || typeof body.onlineName === 'boolean'
           || typeof body.leaderboardPage === 'string' || (body.queueMode && typeof body.queueMode === 'object')
-          || (body.leaderboardLook && typeof body.leaderboardLook === 'object')) {
+          || (body.leaderboardLook && typeof body.leaderboardLook === 'object')
+          || (body.lobbyLook && typeof body.lobbyLook === 'object')) {
         // Read-modify-write on disk, like /api/settings - never the page's
         // snapshot, which /api/roster warns about.
         const roster = vfslib.readRoster();
@@ -3148,6 +3171,11 @@ async function handleApi(req, res, pathname) {
         if (body.leaderboardLook && typeof body.leaderboardLook === 'object') {
           const l = require('./leaderboardlook').toRoster(body.leaderboardLook);
           if (l) roster.leaderboardLook = l; else delete roster.leaderboardLook;
+        }
+        // The lobby's look: today's look is the default, stored as no key.
+        if (body.lobbyLook && typeof body.lobbyLook === 'object') {
+          const l = require('./lobbylook').toRoster(body.lobbyLook);
+          if (l) roster.lobbyLook = l; else delete roster.lobbyLook;
         }
         vfslib.writeRoster(roster);
         invalidateVfs();   // onlineName and queueMode are build-time inputs to vfslib
@@ -3223,6 +3251,40 @@ async function handleApi(req, res, pathname) {
       let bg;
       try { bg = L.backgroundFile(req.headers['content-type'], Buffer.concat(chunks)); } catch (e) { return json(res, 400, { error: e.message }); }
       const dir = layout.LEADERBOARD_BG;
+      const file = path.join(dir, bg.name);
+      fs.mkdirSync(dir, { recursive: true });
+      if (!fs.existsSync(file)) {
+        const part = file + '.part-' + process.pid;
+        fs.writeFileSync(part, bg.buf);
+        fs.renameSync(part, file);
+      }
+      return json(res, 200, { ok: true, file: bg.name });
+    }
+
+    // THE LOBBY'S BACKGROUND (Settings > Online > Lobby look): the same file
+    // kinds, caps and checks as the board's background (lobbylook.js, which
+    // uses leaderboardlook.backgroundFile), sent the same way, kept in the
+    // bundle's own lobby-bg folder (layout.LOBBY_BG) under its hash. The look
+    // names it when the page saves the look.
+    if (pathname === '/api/lobby-background' && req.method === 'POST') {
+      const L = require('./lobbylook');
+      const cap = Math.max(L.BG_IMAGE_MAX_BYTES, L.BG_VIDEO_MAX_BYTES);
+      const chunks = [];
+      let got = 0, over = false;
+      await new Promise((resolve, reject) => {
+        req.on('data', (c) => {
+          if (over) return;
+          got += c.length;
+          if (got > cap) { over = true; chunks.length = 0; return; }
+          chunks.push(c);
+        });
+        req.on('end', resolve);
+        req.on('error', reject);
+      });
+      if (over) return json(res, 400, { error: 'That file is over 20 MB. Make the loop shorter or smaller and try again.' });
+      let bg;
+      try { bg = L.backgroundFile(req.headers['content-type'], Buffer.concat(chunks)); } catch (e) { return json(res, 400, { error: e.message }); }
+      const dir = layout.LOBBY_BG;
       const file = path.join(dir, bg.name);
       fs.mkdirSync(dir, { recursive: true });
       if (!fs.existsSync(file)) {
@@ -4103,6 +4165,26 @@ function routeRequest(req, res) {
     return;
   }
 
+  // ...and lobby-bg/ beside the game page: the lobby's background
+  // (layout.LOBBY_BG), for Test in Browser and the Lobby look preview, by the
+  // same rules.
+  if (pathname.startsWith('/ikemen/lobby-bg/')) {
+    const L = require('./lobbylook');
+    let name = '';
+    try { name = decodeURIComponent(pathname.slice('/ikemen/lobby-bg/'.length)); } catch (e) { /* bad escape */ }
+    const dir = path.resolve(layout.LOBBY_BG);
+    let inside = false;
+    if (L.BG_FILE_RE.test(name)) {
+      try {
+        const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+        inside = path.dirname(fold(fs.realpathSync.native(path.join(dir, name)))) === fold(fs.realpathSync.native(dir));
+      } catch (e) { inside = false; }
+    }
+    if (!inside) { res.writeHead(404); res.end(); return; }
+    serveFile(req, res, path.join(dir, name), { 'X-Content-Type-Options': 'nosniff' });
+    return;
+  }
+
   // Play this export (the export result card): the folder an export just
   // wrote, read-only. See serveExported.
   if (pathname === '/exported' || pathname.startsWith('/exported/')) {
@@ -4143,6 +4225,21 @@ function routeRequest(req, res) {
           res.end(r.text);
           return;
         }
+      }
+    }
+    // THE LOBBY'S LOOK, filled in the same way: the game page is served raw
+    // (only the Website export brands it), so Test in Browser would show the
+    // sidebar in its default look. A bundle with a lobby look gets it added
+    // after the page's brand block; one without gets the page's own bytes.
+    if (/[/\\]ikemen[/\\]index\.html$/i.test(staticPath) && req.method === 'GET') {
+      const look = require('./lobbylook').forStudio(vfslib.readRoster().lobbyLook);
+      let body = null;
+      if (look) { try { body = fs.readFileSync(staticPath, 'utf8'); } catch (e) { body = null; } }
+      const BLOCK = /window\.IKEMEN_BRAND\s*=\s*\{[\s\S]*?\};/;
+      if (look && body !== null && BLOCK.test(body)) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(body.replace(BLOCK, (m) => m + '\nwindow.IKEMEN_BRAND.lobbyLook = ' + JSON.stringify(look).replace(/</g, '\\u003c') + ';'));
+        return;
       }
     }
     serveFile(req, res, staticPath);

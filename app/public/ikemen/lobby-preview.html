@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lobby look preview</title>
+<style>
+  /* The game page around the game while in a lobby (index.html, html.inlobby),
+     with a screenshot of the game where the game draws. */
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #111; font-family: monospace; }
+  html.inlobby, html.inlobby body { background: var(--lob-bg, #0b0d12); }
+  html.inlobby.lob-bg body { background: transparent; }
+  #game { position: absolute; top: 50%; transform: translate(-50%, -50%); display: block;
+          border: 1px solid #444; }
+  html.inlobby #game { border-color: var(--lob-border, #6af); }
+</style>
+<script>
+// THE LOBBY LOOK'S PREVIEW (the Studio's Settings > Online > Lobby look): the
+// real sidebar (webrtc.js) and the real look (lobby-look.js) with a made-up
+// lobby beside a screenshot of the game (lobby-preview-game.png, the owner's
+// own Ikemen GO capture, the game alone at 4:3). ?look= is the look as the Studio
+// keeps it (lobbylook.js); its fonts and background come from where the
+// Studio serves them. The Website export never ships this page.
+(function () {
+  var q = new URLSearchParams(location.search);
+  var look = null;
+  try { look = JSON.parse(q.get('look') || 'null'); } catch (e) { look = null; }
+  if (look && typeof look === 'object') {
+    look.fontDir = '/ranking/leaderboard-fonts/';
+    look.bgDir = '/ikemen/lobby-bg/';
+  }
+  window.IKEMEN_BRAND = { lobbyLook: look };
+  window.IKEMEN_LOBBY_PREVIEW = true;
+  window.ikemenNetcode = 'rollback';
+})();
+</script>
+</head>
+<body>
+<img id="game" src="lobby-preview-game.png" alt="">
+<script>
+// The game's place: the screenshot, fitted like the game.
+(function () {
+  var c = document.getElementById('game');
+  // Fit it in what the sidebar leaves, keeping the screenshot's own shape
+  // (the game alone, 4:3; index.html fits the game the same way).
+  var right = 0;
+  var fit = function () {
+    var r = c.naturalWidth && c.naturalHeight ? c.naturalWidth / c.naturalHeight : 4 / 3;
+    var W = document.documentElement.clientWidth - right - 24, H = document.documentElement.clientHeight - 24;
+    var w = Math.max(40, Math.min(W, H * r));
+    c.style.width = Math.round(w) + 'px';
+    c.style.height = Math.round(w / r) + 'px';
+    c.style.left = Math.round((document.documentElement.clientWidth - right) / 2) + 'px';
+  };
+  window.ikemenReserveRight = function (px) { right = Math.max(0, px | 0); fit(); };
+  window.addEventListener('resize', fit);
+  c.addEventListener('load', fit);
+  fit();
+})();
+</script>
+<script src="./lobby-look.js"></script>
+<script src="./webrtc.js"></script>
+<script>
+// A full lobby mid-session: a match on, a line, a streak, some chat.
+(function () {
+  var q = new URLSearchParams(location.search);
+  var view = {
+    t: 'state', code: 'spicy-tiger-42', max: 8, host: 1, pass: false, limit: 5,
+    members: [
+      { id: 1, name: 'WB' }, { id: 2, name: 'DJ-AR' }, { id: 3, name: 'SHiZUKA' },
+      { id: 4, name: 'Futaba' }, { id: 5, name: 'Tomoko', spec: true }, { id: 6, name: 'Konata' },
+      { id: 7, name: 'Paco' }, { id: 8, name: 'Revy' },
+    ],
+    match: { id: 7, a: 1, b: 2 }, next: { a: 0, b: 4 }, line: [4, 3, 6, 7, 8], stay: 0, streak: { id: 1, n: 3 },
+  };
+  if (window.ikemenLobbyPreview) {
+    window.ikemenLobbyPreview({
+      view: view, you: 3, folded: q.get('folded') === '1',
+      chat: [
+        { sys: true, text: 'Revy joined' },
+        { from: 2, name: 'DJ-AR', text: 'gg, rematch later' },
+        { sys: true, text: 'WB beat Konata (3 in a row)' },
+        { sys: true, text: 'Match 7: WB vs DJ-AR' },
+        { from: 4, name: 'Futaba', text: 'I am next, then SHiZUKA' },
+        { from: 7, name: 'Paco', text: 'who stops the streak?' },
+      ],
+    });
+  }
+})();
+</script>
+</body>
+</html>

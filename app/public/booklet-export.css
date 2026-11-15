@@ -178,7 +178,7 @@ body.xback-open #main > nav.tabs > .tab.bk-thumb[aria-selected="true"]:focus-vis
   font: 400 var(--t-13)/1.55 var(--f-data); scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 #exportDlg .xterm:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 #exportDlg .xent { padding: 5px 12px; }
-#exportDlg .xent:nth-child(even) { background: var(--plate); }
+#exportDlg .xent:nth-child(even of .xent:not([hidden])) { background: var(--plate); }
 #exportDlg .xl { display: grid; grid-template-columns: var(--xl-tag-w, 7ch) minmax(0, 1fr); column-gap: 1ch; }   /* --xl-tag-w: a language's longer tags (studio.html cssWords) */
 #exportDlg .xl-tag { font-weight: 700; white-space: nowrap; }
 #exportDlg .xl-txt { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

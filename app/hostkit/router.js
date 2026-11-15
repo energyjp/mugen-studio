@@ -13,7 +13,16 @@
 // ROUTES
 //   GET  /                          health: {kit, version, parts} (wakes no object)
 //   OPTIONS <any>                   CORS preflight, 204, the request headers reflected
-//   /ws                             relay.js: rooms and the queue (WebSocket)
+//   /ws                             relay.js: rooms, watching, lobbies and the
+//                                   queue (WebSocket); joins by lobby code are
+//                                   rate limited per address (seek)
+//   GET  /lobbies                   the list of open lobbies (relay.js, THE
+//                                   LIST): {t:'lobbies', list:[...]}, cached in
+//                                   this instance for LIST_CACHE_MS, sent with
+//                                   Cache-Control: max-age=5, rate limited per
+//                                   address (lobbies); any other method 405.
+//                                   The game page asks it once to know whether
+//                                   its server has lobbies (kit 1.2.0 and up).
 //   GET  /mugen/identity/check      -> the Ladder object (ladder.js)
 //   POST /mugen/identity/claim      -> the Ladder, rate limited per IP
 //   POST /mugen/identity/recover    -> the Ladder, rate limited per IP
@@ -29,7 +38,8 @@
 //   anything else                   404 {error:'notfound'}
 // Only these exact paths reach the Ladder. Its /internal/* calls (verify and
 // pairing, used by the Queue) trust their caller, so no public request is
-// ever forwarded there.
+// ever forwarded there. Nor to a Room's /dir/* paths (the directory of open
+// lobbies): only Room objects write it, and GET /lobbies only reads.
 //
 // REPLIES keep the shapes the game's pages already read from the reference
 // server: 429 {ok:false, reason:'ratelimited'}, the Ladder's own 403
@@ -47,18 +57,29 @@
 // this Worker instance's memory, as the reference kept them in its process:
 // they stop a script hammering from one place and are not an exact global
 // count across Cloudflare's machines.
+// The two lobby rules (lobbies: list reads; seek: joins by lobby code, code
+// guessing) are the reference relay's: 30 a minute each, keyed 'addr', the
+// salted hash of the address by its prefix (an IPv4 address whole, an IPv6
+// address by its /64; relay.js addrHash), so one connection rotating through
+// its /64 is one address and the address itself is never held. Past seek a
+// join gets {t:'deny', reason:'slowdown'} without any Room being woken.
 //
 // No `cloudflare:workers` import and no Node APIs, so Node can load this file
 // for tests (tools/test-hostkit-worker.js).
 
-import { handleRelay } from './relay.js';
+import { handleRelay, addrHash, randomHex, refuseSocket, DIR_NAME } from './relay.js';
 import { ladderStub } from './ladder.js';
 import { sameSecret, KIT_NAME } from './ladder-core.js';
 
 // ---------------------------------------------------------------- settings --
-// Read by hostkit/deploy.js (kitVersion in its result) and by GET /.
-export const KIT_VERSION = '1.1.0';
+// Read by hostkit/deploy.js (kitVersion in its result) and by GET /. 1.2.0:
+// lobbies, watching a room's matches and the list of open lobbies.
+export const KIT_VERSION = '1.2.0';
 export const KIT_PARTS = Object.freeze(['relay', 'queue', 'ladder']);
+
+// How long this instance keeps the body of GET /lobbies before it asks the
+// directory object again (the reference relay's number).
+export const LIST_CACHE_MS = 5000;
 
 // Largest request body accepted, in bytes. A report is well under 1 KiB; the
 // Ladder has the same number as a backstop. A declared Content-Length over it
@@ -68,13 +89,17 @@ export const MAX_BODY_BYTES = 16 * 1024;
 
 export const RATE_WINDOW_MS = 60 * 60 * 1000;
 // by: 'ip' counts per client address; 'ip+name' per address and lowercased
-// player name. Numbers from the reference server.
+// player name; 'addr' per salted address hash by prefix (see RATE LIMITS
+// above), counted over the rule's own windowMs (RATE_WINDOW_MS when unset).
+// Numbers from the reference servers.
 export const RATE_LIMITS = Object.freeze({
   claim: Object.freeze({ limit: 10, by: 'ip' }),
   recover: Object.freeze({ limit: 20, by: 'ip' }),
   verify: Object.freeze({ limit: 60, by: 'ip+name' }),   // queue admissions on /ws
   me: Object.freeze({ limit: 600, by: 'ip+name' }),
   report: Object.freeze({ limit: 200, by: 'ip+name' }),
+  lobbies: Object.freeze({ limit: 30, by: 'addr', windowMs: 60 * 1000 }), // GET /lobbies
+  seek: Object.freeze({ limit: 30, by: 'addr', windowMs: 60 * 1000 }),    // ?lobby=CODE on /ws
 });
 // Keys held at most, per rule: every rule has its own table. Past the cap,
 // expired keys go first, then the least recently used, so a flood of fresh
@@ -206,6 +231,12 @@ export function createWorker(opts) {
   for (const ruleName of Object.keys(limits)) limiters[ruleName] = new RateLimiter(now, maxKeys);
 
   const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'unknown';
+  // The salt of the 'addr' keys: made at the first request that needs it (a
+  // Worker may make random values only while handling a request), held in
+  // this instance's memory only.
+  let salt = '';
+  // GET /lobbies, as last read from the directory object: { at, body }.
+  let listCache = null;
 
   function over(ruleName, request, name) {
     const rule = limits[ruleName];
@@ -213,6 +244,38 @@ export function createWorker(opts) {
     let key = ruleName + '|' + clientIp(request);
     if (rule.by === 'ip+name') key += '|' + String(name || '').toLowerCase();
     return limiters[ruleName].limited(key, rule.limit, windowMs);
+  }
+  // The same for an 'addr' rule: keyed by the salted hash of the address's
+  // prefix, never the address.
+  async function overAddr(ruleName, request) {
+    const rule = limits[ruleName];
+    if (!rule) return false;
+    if (!salt) salt = randomHex();
+    const key = ruleName + '|' + await addrHash(request, salt);
+    return limiters[ruleName].limited(key, rule.limit, rule.windowMs || windowMs);
+  }
+
+  // GET /lobbies (the reference relay's route, the same replies): 405 for
+  // another method, 429 {t:'slowdown'} past the read limit, the directory's
+  // body (cached LIST_CACHE_MS), or 503 with an empty list when the directory
+  // cannot be asked and nothing is cached.
+  async function lobbies(request, env) {
+    const h = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+    if (request.method !== 'GET') return new Response('GET only', { status: 405, headers: h });
+    if (await overAddr('lobbies', request)) {
+      return new Response('{"t":"slowdown"}', { status: 429, headers: Object.assign({ 'Retry-After': '20' }, h) });
+    }
+    const t = now();
+    if (!listCache || t - listCache.at >= LIST_CACHE_MS) {
+      let body = null;
+      try {
+        const r = await env.ROOM.get(env.ROOM.idFromName(DIR_NAME)).fetch('https://do/dir/list');
+        if (r.ok) body = await r.text();
+      } catch { body = null; }
+      if (body !== null) listCache = { at: t, body };
+      else if (!listCache) return new Response('{"t":"lobbies","list":[]}', { status: 503, headers: h });
+    }
+    return new Response(listCache.body, { headers: Object.assign({ 'Cache-Control': 'max-age=5' }, h) });
   }
 
   // Reads a body under the cap. Resolves to {text, data} or a Response to send.
@@ -244,9 +307,17 @@ export function createWorker(opts) {
   // request goes on with the code blanked, so the player hears 'badident'
   // over the socket without the Ladder being asked, exactly what the
   // reference relay answered when its verify call was rate limited.
-  function relay(request, env) {
+  //
+  // A join by lobby code (?lobby=CODE, not ?lobby=new) counts against seek
+  // first: past it the join is refused with 'slowdown' over a socket that
+  // never reaches a Room (code guessing cannot wake objects either).
+  async function relay(request, env) {
     const url = new URL(request.url);
     const upgrade = (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket';
+    const lobby = url.searchParams.get('lobby');
+    if (upgrade && lobby && lobby !== 'new' && lobby.trim().length <= 64 && await overAddr('seek', request)) {
+      return refuseSocket('slowdown');
+    }
     const name = url.searchParams.get('name') || '';
     const code = url.searchParams.get('code') || '';
     if (upgrade && url.searchParams.has('queue') && name && code && over('verify', request, name)) {
@@ -264,6 +335,7 @@ export function createWorker(opts) {
     const path = url.pathname.replace(/\/+$/, '') || '/';
 
     if (path === '/ws') return relay(request, env);
+    if (path === '/lobbies') return lobbies(request, env);
 
     if (path === '/' && (method === 'GET' || method === 'HEAD')) {
       return json({ kit: KIT_NAME, version: KIT_VERSION, parts: KIT_PARTS });

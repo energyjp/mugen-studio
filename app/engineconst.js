@@ -82,7 +82,7 @@ const FIELDS = [
   {
     id: 'default.attack.lifetopowermul', key: 'Default.Attack.LifeToPowerMul',
     kind: 'float', group: 'Damage into meters', label: 'Power to the attacker',
-    def: 0.7, sane: [0, 2], cite: 'char.go:950', defCite: 'char.go:8012',
+    def: 0.7, sane: [0, 2], cite: 'char.go:950', defCite: 'char.go:8013',
     does: 'How much super meter a normal or special hit gives the attacker, as a multiple of the hit damage. A HitDef that names getpower itself ignores it.',
     risk: 'Guard power is half of hit power and follows this too (char.go:964). A negative number drains the attacker\'s meter on every hit.',
     refuse: (v) => (v < 0 ? 'a negative multiplier drains the attacker\'s meter on every hit' : v > 100 ? 'above 100x the damage is not a meter gain' : null),
@@ -91,7 +91,7 @@ const FIELDS = [
   {
     id: 'super.attack.lifetopowermul', key: 'Super.Attack.LifeToPowerMul',
     kind: 'float', group: 'Damage into meters', label: 'Power to the attacker, on a super',
-    def: 0, sane: [0, 2], cite: 'char.go:937', defCite: 'char.go:8013',
+    def: 0, sane: [0, 2], cite: 'char.go:937', defCite: 'char.go:8014',
     does: 'The same, for a hit whose attr carries the super (A) class. Shipped at 0 so a super does not pay for itself.',
     risk: 'Raise it and a super that connects starts refilling the meter it cost.',
     refuse: (v) => (v < 0 ? 'a negative multiplier drains the attacker\'s meter on every super hit' : v > 100 ? 'above 100x the damage is not a meter gain' : null),
@@ -99,7 +99,7 @@ const FIELDS = [
   {
     id: 'default.gethit.lifetopowermul', key: 'Default.GetHit.LifeToPowerMul',
     kind: 'float', group: 'Damage into meters', label: 'Power to the receiver',
-    def: 0.6, sane: [0, 2], cite: 'char.go:952', defCite: 'char.go:8014',
+    def: 0.6, sane: [0, 2], cite: 'char.go:952', defCite: 'char.go:8015',
     does: 'How much super meter being hit gives the RECEIVER. A HitDef that names givepower itself ignores it.',
     risk: 'This is the comeback lever. At 0 the player being combo\'d gets nothing back; high values make long combos pay the victim.',
     refuse: (v) => (v < 0 ? 'a negative multiplier drains the meter of whoever is being hit' : v > 100 ? 'above 100x the damage is not a meter gain' : null),
@@ -107,7 +107,7 @@ const FIELDS = [
   {
     id: 'super.gethit.lifetopowermul', key: 'Super.GetHit.LifeToPowerMul',
     kind: 'float', group: 'Damage into meters', label: 'Power to the receiver, on a super',
-    def: 0.6, sane: [0, 2], cite: 'char.go:939', defCite: 'char.go:8015',
+    def: 0.6, sane: [0, 2], cite: 'char.go:939', defCite: 'char.go:8016',
     does: 'The same, for a hit carrying the super class.',
     risk: 'Leaving this above 0 while the attacker\'s super gain is 0 means a super feeds the opponent and not its owner - which is the shipped balance.',
     refuse: (v) => (v < 0 ? 'a negative multiplier drains the meter of whoever is being hit' : v > 100 ? 'above 100x the damage is not a meter gain' : null),
@@ -115,7 +115,7 @@ const FIELDS = [
   {
     id: 'default.lifetodizzypointsmul', key: 'Default.LifeToDizzyPointsMul',
     kind: 'float', group: 'Damage into meters', label: 'Dizzy points per point of damage',
-    def: 1.8, sane: [0, 5], cite: 'char.go:954', defCite: 'char.go:8019',
+    def: 1.8, sane: [0, 5], cite: 'char.go:954', defCite: 'char.go:8020',
     does: 'How much stun a normal or special hit deals, as a multiple of its damage. Only used while Dizzy is on in the match rules.',
     risk: 'A character\'s stun meter defaults to its own life, so 1.8 means a full life bar of damage dizzies someone about twice over.',
     refuse: (v) => (v < 0 ? 'a negative multiplier heals the stun meter on every hit' : v > 100 ? 'above 100x the damage is not a stun value' : null),
@@ -124,7 +124,7 @@ const FIELDS = [
   {
     id: 'super.lifetodizzypointsmul', key: 'Super.LifeToDizzyPointsMul',
     kind: 'float', group: 'Damage into meters', label: 'Dizzy points, on a super',
-    def: 0, sane: [0, 5], cite: 'char.go:941', defCite: 'char.go:8020',
+    def: 0, sane: [0, 5], cite: 'char.go:941', defCite: 'char.go:8021',
     does: 'The same for a super hit. Shipped at 0, so supers do not stun.',
     risk: 'Raising it lets a super both take the round and set up the dizzy for the next one.',
     refuse: (v) => (v < 0 ? 'a negative multiplier heals the stun meter on every super hit' : v > 100 ? 'above 100x the damage is not a stun value' : null),
@@ -132,7 +132,7 @@ const FIELDS = [
   {
     id: 'default.lifetoguardpointsmul', key: 'Default.LifeToGuardPointsMul',
     kind: 'float', group: 'Damage into meters', label: 'Guard points per point of damage',
-    def: 1.5, sane: [0, 5], cite: 'char.go:956', defCite: 'char.go:8017',
+    def: 1.5, sane: [0, 5], cite: 'char.go:956', defCite: 'char.go:8018',
     does: 'How much guard meter a blocked normal or special takes, as a multiple of the hit damage. Only used while Guard Break is on in the match rules.',
     risk: 'Blocking is the only thing this touches, so it decides how long a defensive player can hold out.',
     refuse: (v) => (v < 0 ? 'a negative multiplier refills the guard meter on every blocked hit' : v > 100 ? 'above 100x the damage is not a guard value' : null),
@@ -141,7 +141,7 @@ const FIELDS = [
   {
     id: 'super.lifetoguardpointsmul', key: 'Super.LifeToGuardPointsMul',
     kind: 'float', group: 'Damage into meters', label: 'Guard points, on a super',
-    def: -0.33, sane: [0, 5], cite: 'char.go:943', defCite: 'char.go:8018',
+    def: -0.33, sane: [0, 5], cite: 'char.go:943', defCite: 'char.go:8019',
     does: 'The same for a blocked super.',
     risk: 'The engine\'s built-in for this one is NEGATIVE (-0.33) while the file the engine ships sets it to 0.33. Deleting the line does not restore the shipped behavior - it flips the sign, and a blocked super starts refilling the guard meter.',
     refuse: (v) => (v > 100 ? 'above 100x the damage is not a guard value' : v < -100 ? 'below -100x the damage is not a guard value' : null),
@@ -150,7 +150,7 @@ const FIELDS = [
   {
     id: 'default.lifetoredlifemul', key: 'Default.LifeToRedLifeMul',
     kind: 'float', group: 'Damage into meters', label: 'Red life kept',
-    def: 0.75, sane: [0, 1], cite: 'char.go:958', defCite: 'char.go:8021',
+    def: 0.75, sane: [0, 1], cite: 'char.go:958', defCite: 'char.go:8022',
     does: 'How much of a normal hit\'s damage stays as recoverable red life. Used for the hit and, with the guard damage, for a block. Only while Red Life is on in the match rules.',
     risk: 'At 1 nothing is ever lost for good in a tag match; at 0 red life does nothing.',
     refuse: (v) => (v < 0 ? 'a negative multiplier takes red life away instead of leaving it' : v > 10 ? 'more than ten times the damage is not red life' : null),
@@ -158,7 +158,7 @@ const FIELDS = [
   {
     id: 'super.lifetoredlifemul', key: 'Super.LifeToRedLifeMul',
     kind: 'float', group: 'Damage into meters', label: 'Red life kept, on a super',
-    def: 0.75, sane: [0, 1], cite: 'char.go:945', defCite: 'char.go:8022',
+    def: 0.75, sane: [0, 1], cite: 'char.go:945', defCite: 'char.go:8023',
     does: 'The same for a super hit. Also the multiplier the engine uses when a super drains a target\'s red life directly (char.go:8470).',
     risk: 'Lower than the normal value and supers become the way to take life that cannot be recovered.',
     refuse: (v) => (v < 0 ? 'a negative multiplier takes red life away instead of leaving it' : v > 10 ? 'more than ten times the damage is not red life' : null),
@@ -166,7 +166,7 @@ const FIELDS = [
   {
     id: 'super.targetdefencemul', key: 'Super.TargetDefenceMul',
     kind: 'float', group: 'Damage into meters', label: 'Defence during a super',
-    def: 1.5, sane: [1, 3], cite: 'bytecode.go:10476', defCite: 'char.go:8016',
+    def: 1.5, sane: [1, 3], cite: 'bytecode.go:10476', defCite: 'char.go:8017',
     does: 'How much a SuperPause raises the opponent\'s defence for the combo that follows. A SuperPause with its own p2defmul ignores it.',
     risk: 'This is the anti-infinite on supers: at 1 a super combo does its full damage, and the whole cast gets more dangerous at once.',
     refuse: (v) => (v <= 0 ? 'damage is divided by this, so 0 or less makes a super combo an instant KO' : v > 100 ? 'above 100 is not a defence multiplier' : null),
@@ -258,28 +258,28 @@ const FIELDS = [
   {
     id: 'default.legacygamedistancespec', key: 'Default.LegacyGameDistanceSpec',
     kind: 'bool', group: 'Compatibility', label: 'Legacy GameWidth and GameHeight',
-    def: 0, cite: 'bytecode.go:2227, 2237', defCite: 'char.go:8023',
+    def: 0, cite: 'bytecode.go:2227, 2237', defCite: 'char.go:8024',
     does: 'With this on, a character declaring mugenversion 1.0 reads GameWidth and GameHeight as the SCREEN size, unaffected by the stage\'s zoom.',
     risk: 'Only applies to mugenversion 1.0 characters - the test is on the version AND this key. Off, a zooming stage moves every distance check those characters make.',
   },
   {
     id: 'default.legacyfallyvelyaccel', key: 'Default.LegacyFallYVelYAccel',
     kind: 'bool', group: 'Compatibility', label: 'Legacy fall velocity defaults',
-    def: 0, cite: 'char.go:687, 1121', defCite: 'char.go:8024',
+    def: 0, cite: 'char.go:687, 1121', defCite: 'char.go:8025',
     does: 'With this on, a HitDef that leaves out fall.yvelocity and fall.yaccel gets fixed numbers instead of ones scaled to the character\'s own coordinate space.',
     risk: 'Turning it on changes how far every unspecified knockdown throws a character in a 640-wide cast.',
   },
   {
     id: 'input.pauseonhitpause', key: 'Input.PauseOnHitPause',
     kind: 'bool', group: 'Input', label: 'Buffer commands during hit pause',
-    def: 1, cite: 'char.go:13431', defCite: 'char.go:8026',
+    def: 1, cite: 'char.go:13432', defCite: 'char.go:8027',
     does: 'Whether command input keeps being buffered while the hit pause freezes both players.',
     risk: 'Marked deprecated in the engine\'s own source: a command\'s own parameters are the supported way to say this now. Off, combos entered during the freeze are dropped.',
   },
   {
     id: 'input.fbflipenemydistance', key: 'Input.FBFlipEnemyDistance',
     kind: 'float', group: 'Input', label: 'Back and forward flip distance',
-    def: -1, sane: [-1, 100], cite: 'char.go:6536', defCite: 'char.go:8027',
+    def: -1, sane: [-1, 100], cite: 'char.go:6537', defCite: 'char.go:8028',
     does: 'Any value of 0 or more makes B and F swap when the opponent is behind by more than that distance, instead of following the character\'s own facing.',
     risk: 'Negative (the default) is the MUGEN behavior: the flip follows facing and nothing else. This is a control change every player will feel, on every character.',
     refuse: (v) => (v > 10000 ? 'above 10000 is further than any stage' : null),
