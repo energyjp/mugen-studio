@@ -1418,6 +1418,20 @@ function assemble(opts, roster, view) {
     console.warn('team play mod generation failed:', e.message);
   }
 
+  // Menu sounds play through (menusounds.js): the modern-input engine stops a
+  // screenpack sound that plays again while it is still playing; this points
+  // the menus' motif.Snd at a copy that layers, as MUGEN does. Every build;
+  // the desktop export ships the same text. Not when the Mods tab switched it
+  // off ('menu-sounds').
+  try {
+    if (addOnOn(roster, 'menu-sounds')) {
+      const ms = require('./menusounds');
+      generated[ms.MENU_SOUNDS_VPATH] = Buffer.from(ms.menuSoundsLua(), 'latin1');
+    }
+  } catch (e) {
+    console.warn('menu sounds mod generation failed:', e.message);
+  }
+
   // The Training frame meter (addons/framebar): off unless the Mods tab
   // switched it on ('framebar', roster.modsOn). Shipped as it is; the desktop
   // export carries the same file.

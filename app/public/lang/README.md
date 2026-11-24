@@ -25,7 +25,7 @@ from the same pack.
  "lang": "es-419",
  "name": "Español",
  "english": "Spanish (Latin America)",
- "studio": "2.5",
+ "studio": "2.5.1",
  "strings": {
   "Characters": "Personajes",
   "{n} characters": "{n} personajes",

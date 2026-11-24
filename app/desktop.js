@@ -378,12 +378,15 @@ const TRAINING_TEAM_LUA = [
 // States1 line), where a Scene Viewer that only failed to generate leaves the
 // team mod and the hook in place.
 function sandboxAssets(generated, forkTrainingZss, roster) {
-  const out = { sceneviewer: null, team: TRAINING_TEAM_LUA, zss: null, teamPlay: null, galleryLua: null, galleryZss: null, selectAnn: null, netMenu: null, netMenuFont: null, trainingOff: false, framebar: null };
+  const out = { sceneviewer: null, team: TRAINING_TEAM_LUA, zss: null, teamPlay: null, menuSounds: null, galleryLua: null, galleryZss: null, selectAnn: null, netMenu: null, netMenuFont: null, trainingOff: false, framebar: null };
   const V = require('./modmgr.js').VPATHS;
   // The team play mod (teamplay.js) is the same text in both builds: nothing in
   // it is web-only, so it is carried as generated.
   const tp = generated && generated[V.teamPlay];
   if (tp) out.teamPlay = Buffer.isBuffer(tp) ? tp.toString('latin1') : String(tp);
+  // Menu sounds play through (menusounds.js), likewise the same text.
+  const ms = generated && generated[V.menuSounds];
+  if (ms) out.menuSounds = Buffer.isBuffer(ms) ? ms.toString('latin1') : String(ms);
   // The frame meter, when the Mods tab switched it on (the build made it).
   const fb = generated && generated[V.framebar];
   if (fb) out.framebar = Buffer.isBuffer(fb) ? fb.toString('latin1') : String(fb);
@@ -446,6 +449,7 @@ function sandboxAssets(generated, forkTrainingZss, roster) {
     const off = (id) => !mm.builtinOn(roster, id);
     if (off('training')) { out.sceneviewer = null; out.team = null; out.zss = null; out.trainingOff = true; }
     if (off('team-play')) out.teamPlay = null;
+    if (off('menu-sounds')) out.menuSounds = null;
     if (off('framebar')) out.framebar = null;
     if (off('select-announcer')) out.selectAnn = null;
     if (off('net-menu')) { out.netMenu = null; out.netMenuFont = null; }
@@ -494,6 +498,10 @@ function syncSandboxFiles(dest, assets) {
   const tpPath = at(V.teamPlay);
   if (assets.teamPlay) { writeOut(tpPath, assets.teamPlay, 'latin1'); written++; }
   else rmFile(tpPath);
+  // Menu sounds play through: written when on, removed otherwise.
+  const msPath = at(V.menuSounds);
+  if (assets.menuSounds) { writeOut(msPath, assets.menuSounds, 'latin1'); written++; }
+  else rmFile(msPath);
   // The frame meter: written when switched on, removed otherwise.
   const fbPath = at(V.framebar);
   if (assets.framebar) { writeOut(fbPath, assets.framebar, 'latin1'); written++; }
@@ -541,6 +549,7 @@ function syncSandboxFiles(dest, assets) {
     mod: assets.sceneviewer ? V.sceneViewer : null,
     team: assets.team ? V.trainingTeam : null,
     teamPlay: assets.teamPlay ? V.teamPlay : null,
+    menuSounds: assets.menuSounds ? V.menuSounds : null,
     framebar: assets.framebar ? V.framebar : null,
     selectAnn: assets.selectAnn ? saVpath : null,
     netMenu: assets.netMenu ? nmVpath : null,
@@ -1369,6 +1378,8 @@ function exportDesktop(opts = {}) {
   //                                    size, and in an add004 tag build a human
   //                                    side drives the partner it tags in
   //                                    (teamplay.js; the website ships the same)
+  //   mugen-studio/menu-sounds.lua     menu sounds play through as in MUGEN
+  //                                    (menusounds.js; the website ships the same)
   //   mugen-studio/select-announcer.lua  mugenhook's per-cell select clips,
   //                                    only for a bundle that has the table
   //                                    (selectann.js), removed otherwise

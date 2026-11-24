@@ -53,8 +53,8 @@ const rmFile = (p) => require('./lifebars.js').rmFile(p);
 // ONE FOLDER FOR ALL OF THEM, so a desktop install's external/mods holds the
 // Studio's files in one place and the user's mods beside it. No dot in it:
 // it is part of every require path below it. This is the single source of
-// these paths; the generators (netmenu.js, teamplay.js, selectann.js,
-// gallery.js, vfslib.js, desktop.js) name the same strings.
+// these paths; the generators (netmenu.js, teamplay.js, menusounds.js,
+// selectann.js, gallery.js, vfslib.js, desktop.js) name the same strings.
 const STUDIO_MODS_DIR = 'external/mods/mugen-studio';
 // The frame meter's source: a plain Lua file the Studio carries (addons/),
 // shipped as it is when the Mods tab switches it on.
@@ -64,6 +64,7 @@ const VPATHS = Object.freeze({
   netMenu: STUDIO_MODS_DIR + '/net-menu.lua',
   netMenuFont: 'font/net-menu-6x9.def',
   teamPlay: STUDIO_MODS_DIR + '/team-play.lua',
+  menuSounds: STUDIO_MODS_DIR + '/menu-sounds.lua',
   selectAnn: STUDIO_MODS_DIR + '/select-announcer.lua',
   sceneViewer: STUDIO_MODS_DIR + '/sceneviewer.lua',
   trainingTeam: STUDIO_MODS_DIR + '/training-team.lua',
@@ -122,6 +123,15 @@ const BUILTINS = Object.freeze([
     offLoses: 'The CPU team in Arcade starts at 2 again; the team size icons follow the last mode drawn on screenpacks'
       + ' that stack the modes; on an add004 tag build the partner you tag in fights as a CPU.',
     files: [VPATHS.teamPlay],
+  },
+  {
+    id: 'menu-sounds',
+    label: 'Menu sounds play through',
+    about: 'Menu and select screen sounds play to their end, as in MUGEN: moving the cursor quickly layers the cursor'
+      + ' sounds instead of cutting each one off with the next.',
+    offLoses: 'A menu sound that plays again while it is still playing starts over, so moving the cursor quickly cuts'
+      + ' each cursor sound off.',
+    files: [VPATHS.menuSounds],
   },
   {
     id: 'select-announcer',
