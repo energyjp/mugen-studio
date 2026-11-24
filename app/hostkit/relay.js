@@ -39,7 +39,8 @@
 //   leaving sends {t:'bye'} to the other. On the queue path {t:'playing'}
 //   from either peer marks the handoff to the game and is never relayed.
 //   Room and lobby codes are lowercased. One Queue object per mode+build+netcode.
-// And on plain HTTP (router.js serves it): GET /lobbies -> {t:'lobbies', list}
+// And on plain HTTP (router.js serves it): GET /lobbies -> {t:'lobbies', list},
+// GET /lobbies?build=HEX16 -> {t:'lobbies', build, other, list}
 // (THE LIST, below).
 //
 // THE SAME AS THE REFERENCE SERVER. The rooms with watchers, the lobbies and
@@ -209,9 +210,9 @@ const nameKey = (n) => String(n || '').toLowerCase();
 // it picks a Room, and this name is not. Nothing a client sends is written
 // into it: only a lobby's own Room object puts its entry (lobbyEntry in the
 // LOBBY CORE: code, host's name, members n/8, the two playing, the streak, a
-// free seat; never an address, never chat), as a Durable Object to Durable
-// Object request that only this file makes (https://do/dir/put, a path the
-// router never forwards a client to). A lobby puts its entry when it changes
+// free seat, the Build ID; never an address, never chat), as a Durable
+// Object to Durable Object request that only this file makes
+// (https://do/dir/put, a path the router never forwards a client to). A lobby puts its entry when it changes
 // and refreshes it every DIR_REFRESH_MS (its alarm); the directory drops an
 // entry DIR_TTL_MS after its last put, so a lobby that died without saying so
 // (a failed request, a lost object) leaves the list within minutes. A lobby
@@ -224,6 +225,10 @@ const nameKey = (n) => String(n || '').toLowerCase();
 // LIST_CACHE_MS, so the directory object is asked at most once per
 // LIST_CACHE_MS per isolate however many viewers poll (no storage read: the
 // directory keeps the list in memory and rebuilds the body at most every 2 s).
+// A page asks with its Build ID (?build=, lobbyListBuild in the LOBBY CORE)
+// and gets only its own build's lobbies: each build's body is cached on its
+// own, the same way, so a read costs the same; at most LOBBY_LIST_BUILDS of
+// them are kept at once.
 // The page polls every 10 s, only while its list is on screen and the tab is
 // visible, and stops after 10 minutes (a button resumes). The page also asks
 // once when it loads, to know whether its server has lobbies at all (the
@@ -255,6 +260,9 @@ function randomHex() {
   return Array.from(r, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 export { randomHex };
+// The list by build (LOBBY CORE, lobbyListBuild): router.js reads ?build= the
+// same way and keeps its cache per build the same way.
+export { lobbyListBuild, LOBBY_LIST_BUILDS };
 // The salted hash of the connecting address, by its prefix (memory only, see
 // LIMITS).
 export async function addrHash(request, salt) {
@@ -289,7 +297,7 @@ export async function handleRelay(request, env) {
   if (lobby) {
     const fwd = new URL('https://do/ws');
     fwd.searchParams.set('role', 'lobby');
-    for (const k of ['build', 'nc', 'name', 'pass', 'streak', 'bid']) fwd.searchParams.set(k, (url.searchParams.get(k) || '').slice(0, 256));
+    for (const k of ['build', 'nc', 'name', 'pass', 'streak', 'bid', 'title']) fwd.searchParams.set(k, (url.searchParams.get(k) || '').slice(0, 256));
     if (lobby === 'new') {
       for (let i = 0; i < 8; i++) {
         const code = newCode();
@@ -794,13 +802,19 @@ const LOBBY_ONLY = ['room', 'joined', 'peer', 'deny', 'watching', 'watcher', 'wb
 // ADMITS a minute (join/leave churn), whoever they are.
 //
 // THE LIST OF OPEN LOBBIES. lobbyEntry(L) is what the servers' directory shows
-// of a lobby, and all it shows: the code, the lobby host's name, members n/8,
-// the two playing now and the streak, whether a seat is free. A lobby with a
-// password has no entry (never listed), nor does an empty one.
+// of a lobby, and all it shows: the code, its title (empty if the creator gave
+// none), the lobby host's name, members n/8,
+// the two playing now and the streak, whether a seat is free, and its Build ID
+// (the one every join is checked against). A lobby with a password has no
+// entry (never listed), nor does an empty one. GET /lobbies?build=HEX16 lists
+// only the lobbies on that build, plus how many are on other builds
+// (lobbyListBody); without it the list is everyone's, as before.
 //
 // PROTOCOL (JSON text frames on the lobby socket).
-//   open  ?lobby=new&build=HEX16&nc=1&name=NAME[&pass=P][&streak=N][&bid=HEX]
+//   open  ?lobby=new&build=HEX16&nc=1&name=NAME[&pass=P][&streak=N][&bid=HEX][&title=T]
 //         ?lobby=CODE&build=HEX16&nc=1&name=NAME[&pass=P][&bid=HEX]   joins
+//         title: the lobby's title, set once by its creator (plain text, up to
+//         LOBBY_TITLE_MAX; a join's is ignored); the list and the panel show it
 //         refused with {t:'deny', reason} then closed: badcode, badpass, build,
 //         netcode, full, name, kicked, slowdown, busy
 //   server -> member
@@ -851,6 +865,7 @@ const LOBBY_ONLY = ['room', 'joined', 'peer', 'deny', 'watching', 'watcher', 'wb
 // plain text (the page escapes them); passwords never leave the server.
 const LOBBY_MAX = 8;
 const LOBBY_NAME_MAX = 24;
+const LOBBY_TITLE_MAX = 32;
 const LOBBY_PASS_MAX = 64;
 const LOBBY_STREAK_MAX = 9;
 const LOBBY_CHAT_MAX = 200;
@@ -901,6 +916,7 @@ function lobbyParams(get) {
     build: String(get('build') || '').toLowerCase(),
     nc: String(get('nc') || ''),
     name: lobbyClean(get('name'), LOBBY_NAME_MAX),
+    title: lobbyClean(get('title'), LOBBY_TITLE_MAX),
     pass: String(get('pass') || ''),
     limit: Number.isInteger(n) ? Math.max(0, Math.min(LOBBY_STREAK_MAX, n)) : 0,
     bid: /^[0-9a-f]{16,32}$/.test(bid) ? bid : '',
@@ -977,7 +993,7 @@ function lobbyAdmit(L, p) {
 }
 
 function lobbyCreate(code, p, now) {
-  return { code, pass: p.pass, build: p.build, limit: p.limit, born: now, seen: now,
+  return { code, title: p.title || '', pass: p.pass, build: p.build, limit: p.limit, born: now, seen: now,
     seq: 0, mseq: 0, host: 0, members: [], line: [], stay: 0, streak: { id: 0, n: 0 },
     match: null, kicked: [], kbid: [], okbid: [] };
 }
@@ -1241,7 +1257,7 @@ function lobbyPreview(L) {
 
 function lobbyView(L) {
   const m = L.match;
-  return { t: 'state', code: L.code, host: L.host, limit: L.limit, pass: !!L.pass, max: LOBBY_MAX,
+  return { t: 'state', code: L.code, title: L.title || '', host: L.host, limit: L.limit, pass: !!L.pass, max: LOBBY_MAX,
     members: L.members.map((x) => ({ id: x.id, name: x.name, spec: x.spec })),
     line: L.line.slice(), stay: L.stay, streak: { id: L.streak.id, n: L.streak.n },
     match: m ? { id: m.id, a: m.a, b: m.b, ready: (m.ready || []).slice(), away: (m.away || []).slice() } : null,
@@ -1254,10 +1270,10 @@ function lobbyEntry(L) {
   if (!L || L.pass || !L.members.length) return null;
   const nm = (id) => { const x = lobbyMember(L, id); return x ? x.name : ''; };
   const m = L.match;
-  return { code: L.code, host: nm(L.host), n: L.members.length, max: LOBBY_MAX,
+  return { code: L.code, title: L.title || '', host: nm(L.host), n: L.members.length, max: LOBBY_MAX,
     a: m ? nm(m.a) : '', b: m ? nm(m.b) : '',
     streak: L.streak.n && lobbyMember(L, L.streak.id) ? { name: nm(L.streak.id), n: L.streak.n } : null,
-    free: L.members.length < LOBBY_MAX };
+    free: L.members.length < LOBBY_MAX, build: L.build };
 }
 
 // The list as served: entries ({e, born}) with people in them first (a flood of
@@ -1267,6 +1283,37 @@ const LOBBY_LIST_SHOW = 100;
 function lobbyList(items) {
   return items.filter((x) => x && x.e).sort((x, y) => (y.e.n - x.e.n) || (x.born - y.born) || (x.e.code < y.e.code ? -1 : 1))
     .slice(0, LOBBY_LIST_SHOW).map((x) => x.e);
+}
+
+// The list for one build. A player can join only a lobby on their own build
+// (the 'build' deny), so the page asks GET /lobbies?build=<its Build ID>:
+// lobbyListBuild(value of ?build) is that Build ID, or '' when the request has
+// none or not one shaped like a Build ID (an older page: the whole list, as
+// before). lobbyListBody is the reply: with a build, only that build's
+// lobbies (sorted and capped as above) and `other`, how many listed lobbies
+// are on another build; without, every lobby. A server keeps the reply per
+// build for its cache time, for at most LOBBY_LIST_BUILDS builds at once (the
+// oldest made goes first).
+const LOBBY_LIST_BUILDS = 64;
+function lobbyListBuild(v) {
+  const s = String(v || '').toLowerCase();
+  return /^[0-9a-f]{16}$/.test(s) ? s : '';
+}
+function lobbyListBody(items, build) {
+  const all = items.filter((x) => x && x.e);
+  if (!build) return { t: 'lobbies', list: lobbyList(all) };
+  const mine = all.filter((x) => x.e.build === build);
+  return { t: 'lobbies', build, other: all.length - mine.length, list: lobbyList(mine) };
+}
+function lobbyListCache(cache, build, now, maxAgeMs, make) {
+  let c = cache.get(build);
+  if (!c || now - c.at >= maxAgeMs) {
+    c = { at: now, body: make() };
+    cache.delete(build);
+    cache.set(build, c);
+    while (cache.size > LOBBY_LIST_BUILDS) cache.delete(cache.keys().next().value);
+  }
+  return c.body;
 }
 
 // ---- what a server does with it. `out` collects what to send ([member id,
@@ -1486,7 +1533,9 @@ function dirClean(code, e) {
   if (!n) return null;
   const st = e.streak && typeof e.streak === 'object' && Number.isInteger(e.streak.n) && e.streak.n >= 1 && e.streak.n <= 9999
     ? { name: s(e.streak.name), n: e.streak.n } : null;
-  return { code, host: s(e.host), n, max: LOBBY_MAX, a: s(e.a), b: s(e.b), streak: st, free: n < LOBBY_MAX };
+  const out = { code, title: lobbyClean(e.title, LOBBY_TITLE_MAX), host: s(e.host), n, max: LOBBY_MAX, a: s(e.a), b: s(e.b), streak: st, free: n < LOBBY_MAX };
+  if (typeof e.build === 'string' && /^[0-9a-f]{16}$/.test(e.build)) out.build = e.build;
+  return out;
 }
 
 export class Room {
@@ -1862,7 +1911,7 @@ export class Room {
     const drop = [];
     for (const [k, x] of D) if (x.exp <= now) { D.delete(k); drop.push('d:' + k); if (this.owners) this.owners.delete(k); }
     for (let i = 0; i < drop.length; i += 128) await this.state.storage.delete(drop.slice(i, i + 128)).catch(() => {});
-    if (drop.length) this.listBody = null;
+    if (drop.length) this.lists = null;
     if (url.pathname === '/dir/put') {
       let b = null;
       try { b = await request.json(); } catch { b = null; }
@@ -1884,15 +1933,16 @@ export class Room {
       const x = { e, born: b.born, v: b.v, exp: now + DIR_TTL_MS };
       D.set(b.code, x);
       await this.state.storage.put('d:' + b.code, x).catch(() => {});
-      this.listBody = null;
+      this.lists = null;
       return json({ ok: true });
     }
     if (url.pathname === '/dir/list') {
-      if (!this.listBody || now - (this.listAt || 0) >= 2000) {
-        this.listBody = JSON.stringify({ t: 'lobbies', list: lobbyList(Array.from(D.values())) });
-        this.listAt = now;
-      }
-      return new Response(this.listBody, { headers: { 'Content-Type': 'application/json' } });
+      // ?build= (lobbyListBuild): one build's lobbies; each build's body is
+      // kept apart and rebuilt at most every 2 s, all of them dropped on a change
+      const build = lobbyListBuild(url.searchParams.get('build'));
+      if (!this.lists) this.lists = new Map();
+      const body = lobbyListCache(this.lists, build, now, 2000, () => JSON.stringify(lobbyListBody(Array.from(D.values()), build)));
+      return new Response(body, { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response('not found', { status: 404 });
   }

@@ -21,50 +21,52 @@ The page: index.html, play.html and their scripts
   sffdec-core.js follows Ikemen GO's src/image.go  (MIT, License.txt)
 
 ikemen.wasm - Ikemen GO, the engine (License.txt)
-  Go runtime and standard library (go1.26.5)  (BSD-3-Clause, see [2])
-  github.com/ebitengine/oto/v3 v3.2.0  (Apache-2.0, see [3])
+  Go runtime and standard library (go1.27.4)  (BSD-3-Clause, see [2])
+  github.com/ebitengine/oto/v3 v3.3.2 (built from the engine's own copy in third_party/oto)  (Apache-2.0, see [3])
   github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [4])
   github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [5])
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [6])
   github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [3])
-  github.com/icza/bitio v1.1.0  (Apache-2.0, see [7])
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [8])
+  github.com/icza/bitio v1.1.0  (Apache-2.0, see [6])
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2  (MIT, see [7])
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e (built from the engine's own copy in third_party/ggpo)  (MIT, see [8])
   github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [9])
   github.com/jfreymuth/vorbis v1.0.2  (MIT, see [9])
   github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [10])
   github.com/lukegb/dds v0.0.0-20190402175749-8b7170e64003  (Apache-2.0, see [11])
   github.com/mdouchement/hdr v0.2.4  (MIT, see [12])
   github.com/mewkiz/flac v1.0.12  (Unlicense (public domain), see [13])
-  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14  (Unlicense (public domain), see [14])
+  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 (built from the engine's own copy in third_party/mewkiz-pkg)  (Unlicense (public domain), see [14])
   github.com/pkg/errors v0.9.1  (BSD-2-Clause, see [15])
   github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [16])
   github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [17])
-  github.com/tidwall/gjson v1.18.0  (MIT, see [18])
+  github.com/tidwall/gjson v1.20.2  (MIT, see [18])
   github.com/tidwall/match v1.1.1  (MIT, see [18])
-  github.com/tidwall/pretty v1.2.0  (MIT, see [19])
-  github.com/tidwall/sjson v1.2.5  (MIT, see [18])
-  github.com/yuin/gopher-lua v1.1.0  (MIT, see [20])
+  github.com/tidwall/pretty v1.3.0  (MIT, see [19])
+  github.com/tidwall/sjson v1.2.9  (MIT, see [18])
+  github.com/yuin/gopher-lua v1.1.0 (built from the engine's own copy in third_party/gopher-lua)  (MIT, see [20])
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498  (BSD-3-Clause, see [21])
-  golang.org/x/image v0.22.0  (BSD-3-Clause, see [2])
+  golang.org/x/image v0.48.0  (BSD-3-Clause, see [2])
   golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a  (BSD-3-Clause, see [21])
-  golang.org/x/text v0.20.0  (BSD-3-Clause, see [2])
+  golang.org/x/text v0.44.0  (BSD-3-Clause, see [2])
   gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [22])
 
-ikemen-fs/game.pak - the game's files
+ikemen-fs/game.pak - the game's files (a lite build: ikemen-fs/game.lite, which holds them and ikemen.wasm)
   Open Sans (font/Open_Sans)  (Apache-2.0, see [11])
   Elecbyte's screens, sounds, fonts and Kung Fu Man  (CC BY-NC 3.0, non-commercial, see [23])
   the screenpack, lifebars and sounds  (CC BY 3.0: ScreenpackLicense.txt)
+  the controller and keyboard button pictures (Kenney Input Prompts) (data/glyphs.sff)  (CC0 1.0, see [24])
+  the controller diagrams (General Arcade) (data/glyphs.sff)  (MIT, see [25])
 
 vendor/libarchive/2.0.2/ - the Mod Studio's .rar and .7z unpacker, which studio-lite.html loads the first time one is added
-  libarchive.js 2.0.2, in libarchive.js, worker-bundle.js  (MIT, see [24])
-  Comlink 4.4.1, in libarchive.js, worker-bundle.js (built into both)  (Apache-2.0, see [25])
-  libarchive 3.7.2, in libarchive.wasm  (BSD-2-Clause, see [26])
-  zlib 1.2.13, in libarchive.wasm  (Zlib, see [27])
-  bzip2 1.0.6, in libarchive.wasm  (bzip2 (BSD-style), see [28])
-  liblzma (XZ Utils) 5.2.11, in libarchive.wasm  (public domain, see [29])
-  OpenSSL (libcrypto) 1.0.2s, in libarchive.wasm  (OpenSSL and SSLeay (BSD-style), see [30])
-  Emscripten's runtime, in libarchive.wasm, worker-bundle.js  (MIT or NCSA, see [31])
-  musl, Emscripten's C library, in libarchive.wasm  (MIT, see [32])
+  libarchive.js 2.0.2, in libarchive.js, worker-bundle.js  (MIT, see [26])
+  Comlink 4.4.1, in libarchive.js, worker-bundle.js (built into both)  (Apache-2.0, see [27])
+  libarchive 3.7.2, in libarchive.wasm  (BSD-2-Clause, see [28])
+  zlib 1.2.13, in libarchive.wasm  (Zlib, see [29])
+  bzip2 1.0.6, in libarchive.wasm  (bzip2 (BSD-style), see [30])
+  liblzma (XZ Utils) 5.2.11, in libarchive.wasm  (public domain, see [31])
+  OpenSSL (libcrypto) 1.0.2s, in libarchive.wasm  (OpenSSL and SSLeay (BSD-style), see [32])
+  Emscripten's runtime, in libarchive.wasm, worker-bundle.js  (MIT or NCSA, see [33])
+  musl, Emscripten's C library, in libarchive.wasm  (MIT, see [34])
 
 
 LICENSE TEXTS
@@ -103,8 +105,8 @@ SOFTWARE.
 --------------------------------------------------------------------------------
 Applies to:
   wasm_exec.js, and the Go runtime and standard library in ikemen.wasm
-  golang.org/x/image v0.22.0
-  golang.org/x/text v0.20.0
+  golang.org/x/image v0.48.0
+  golang.org/x/text v0.44.0
 
 Copyright 2009 The Go Authors.
 
@@ -138,7 +140,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 [3] Apache-2.0
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/ebitengine/oto/v3 v3.2.0
+  github.com/ebitengine/oto/v3 v3.3.2 (built from the engine's own copy in third_party/oto)
   github.com/hajimehoshi/go-mp3 v0.3.4
 
                                  Apache License
@@ -563,35 +565,7 @@ Legal Terms
 --- end of FTL.TXT ---
 
 --------------------------------------------------------------------------------
-[6] MIT - github.com/gopxl/beep/v2
---------------------------------------------------------------------------------
-Applies to:
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99
-
-MIT License
-
-Copyright (c) 2017 Michal Štrba
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---------------------------------------------------------------------------------
-[7] Apache-2.0 - github.com/icza/bitio
+[6] Apache-2.0 - github.com/icza/bitio
 --------------------------------------------------------------------------------
 Applies to:
   github.com/icza/bitio v1.1.0
@@ -799,10 +773,38 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
+[7] MIT - github.com/ikemen-engine/beep/v2
+--------------------------------------------------------------------------------
+Applies to:
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2
+
+MIT License
+
+Copyright (c) 2017 Michal Štrba
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
 [8] MIT - github.com/ikemen-engine/ggpo
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e (built from the engine's own copy in third_party/ggpo)
 
 MIT License
 
@@ -1142,7 +1144,7 @@ For more information, please refer to <http://unlicense.org/>
 [14] Unlicense (public domain) - github.com/mewkiz/pkg
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14
+  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 (built from the engine's own copy in third_party/mewkiz-pkg)
 
 This is free and unencumbered software released into the public domain.
 
@@ -1267,9 +1269,9 @@ SOFTWARE.
 [18] MIT
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/tidwall/gjson v1.18.0
+  github.com/tidwall/gjson v1.20.2
   github.com/tidwall/match v1.1.1
-  github.com/tidwall/sjson v1.2.5
+  github.com/tidwall/sjson v1.2.9
 
 The MIT License (MIT)
 
@@ -1296,7 +1298,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 [19] MIT - github.com/tidwall/pretty
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/tidwall/pretty v1.2.0
+  github.com/tidwall/pretty v1.3.0
 
 The MIT License (MIT)
 
@@ -1323,7 +1325,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 [20] MIT - github.com/yuin/gopher-lua
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/yuin/gopher-lua v1.1.0
+  github.com/yuin/gopher-lua v1.1.0 (built from the engine's own copy in third_party/gopher-lua)
 
 The MIT License (MIT)
 
@@ -1600,7 +1602,47 @@ In practice: a game that contains any of Elecbyte's content can be shared for
 free, but not sold.
 
 --------------------------------------------------------------------------------
-[24] MIT - libarchive.js
+[24] CC0 1.0 - Kenney Input Prompts
+--------------------------------------------------------------------------------
+Applies to:
+  the controller and keyboard button pictures (Kenney Input Prompts) (data/glyphs.sff)
+
+Kenney Input Prompts
+Author: Kenney (https://kenney.nl)
+License: CC0 1.0 Universal (public domain)
+Source: https://kenney.nl/assets/input-prompts
+License terms: https://creativecommons.org/publicdomain/zero/1.0/
+
+--------------------------------------------------------------------------------
+[25] MIT - General Arcade
+--------------------------------------------------------------------------------
+Applies to:
+  the controller diagrams (General Arcade) (data/glyphs.sff)
+
+MIT License
+
+Copyright (c) 2016-2026 General Arcade
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+[26] MIT - libarchive.js
 --------------------------------------------------------------------------------
 Applies to:
   libarchive.js 2.0.2 (vendor/libarchive/2.0.2)
@@ -1628,7 +1670,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[25] Apache-2.0 - Comlink
+[27] Apache-2.0 - Comlink
 --------------------------------------------------------------------------------
 Applies to:
   Comlink 4.4.1 (vendor/libarchive/2.0.2)
@@ -1837,7 +1879,7 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
-[26] BSD-2-Clause - libarchive
+[28] BSD-2-Clause - libarchive
 --------------------------------------------------------------------------------
 Applies to:
   libarchive 3.7.2 (vendor/libarchive/2.0.2)
@@ -1946,7 +1988,7 @@ which carries this notice too:
  */
 
 --------------------------------------------------------------------------------
-[27] Zlib - zlib
+[29] Zlib - zlib
 --------------------------------------------------------------------------------
 Applies to:
   zlib 1.2.13 (vendor/libarchive/2.0.2)
@@ -1975,7 +2017,7 @@ Copyright notice:
   jloup@gzip.org          madler@alumni.caltech.edu
 
 --------------------------------------------------------------------------------
-[28] bzip2 (BSD-style) - bzip2
+[30] bzip2 (BSD-style) - bzip2
 --------------------------------------------------------------------------------
 Applies to:
   bzip2 1.0.6 (vendor/libarchive/2.0.2)
@@ -2024,7 +2066,7 @@ bzip2/libbzip2 version 1.0.6 of 6 September 2010
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-[29] public domain - liblzma (XZ Utils)
+[31] public domain - liblzma (XZ Utils)
 --------------------------------------------------------------------------------
 Applies to:
   liblzma (XZ Utils) 5.2.11 (vendor/libarchive/2.0.2)
@@ -2095,7 +2137,7 @@ XZ Utils Licensing
     information.
 
 --------------------------------------------------------------------------------
-[30] OpenSSL and SSLeay (BSD-style) - OpenSSL (libcrypto)
+[32] OpenSSL and SSLeay (BSD-style) - OpenSSL (libcrypto)
 --------------------------------------------------------------------------------
 Applies to:
   OpenSSL (libcrypto) 1.0.2s (vendor/libarchive/2.0.2)
@@ -2228,7 +2270,7 @@ Applies to:
  */
 
 --------------------------------------------------------------------------------
-[31] MIT or NCSA - Emscripten's runtime
+[33] MIT or NCSA - Emscripten's runtime
 --------------------------------------------------------------------------------
 Applies to:
   Emscripten's runtime (vendor/libarchive/2.0.2)
@@ -2336,7 +2378,7 @@ used by default, but certain options use it (e.g., the optional closure compiler
 flag will run closure compiler from third_party/).
 
 --------------------------------------------------------------------------------
-[32] MIT - musl, Emscripten's C library
+[34] MIT - musl, Emscripten's C library
 --------------------------------------------------------------------------------
 Applies to:
   musl, Emscripten's C library (vendor/libarchive/2.0.2)

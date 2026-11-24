@@ -78,12 +78,42 @@ function plan(text, aspect) {
   // engine's own key for exactly this, is raised by the same factor.
   const ps = findKey(ls, info, 'portraitscale');
   const psv = ps && nums(ps.value)[0] > 0 ? nums(ps.value)[0] : 1;
+  // THE CAMERA'S WIDEST REACH COUNTS ZOOMOUT. The screen's edge goes as far as
+  //   boundright + localcoord.w / (2 * zoomout)
+  // stage units right of center (camera.go Reset, 194-196: maxRight =
+  // boundright * localscl + halfWidth / zoomout, minLeft mirrors it, with
+  // halfWidth = gameWidth / 2 and localscl = gameWidth / localcoord.w, so the
+  // game's width cancels); action() keeps the view's edges inside them
+  // (366-378) and hardLimit clamps to them (693-697). widefit3d.js reach()
+  // uses the same rule. With autozoom the reach is boundright + localcoord.w / 2
+  // (camera.go 188-189): zoomout drops out. Widening by 2 * pull grows that
+  // reach by pull / zoomout at each end while the bounds pull in by at most
+  // pull, so a stage that zooms out shows more past its old frame than at zoom
+  // 1: TouhouCasino (no localcoord, bounds -29/29, zoomout 0.6) reaches 295.7
+  // each way before the fit and 355 after, 59.3 past (24 at zoom 1).
+  // camera.go reads zoomout as a float (stage.go ReadF32); 0 or less, or
+  // unreadable, is taken as 1 rather than divided by.
+  const zk = findKey(ls, cam, 'zoomout'), zv = zk ? nums(zk.value)[0] : NaN;
+  const zoomout = Number.isFinite(zv) && zv > 0 ? zv : 1;
+  const ak = findKey(ls, cam, 'autozoom');
+  const autozoom = !!ak && /^[+-]?\d*[1-9]/.test(String(ak.value).split(',')[0].trim());   // ReadBool: Atoi != 0
+  const grow = autozoom ? pull : pull / zoomout;   // the widening's half, at the widest the camera gets
+  // THE BOUNDS PULL IN BY THAT ZOOMED-OUT AMOUNT (the author's call,
+  // 2026-11-23), not by pull: then the camera, zoomed all the way out, reaches
+  // no further past the old frame than before the fit. At zoom 1 it scrolls a
+  // little less far than it used to - the price of never opening void when it
+  // zooms out. Whole units, rounded up: stage.go reads the bounds as int32.
+  const boundPull = Math.ceil(grow - 1e-9);
+  const nbl = Math.min(0, blv + boundPull), nbr = Math.max(0, brv - boundPull);
+  const r1 = (x) => Math.max(0, Math.round(x * 10) / 10);
   return {
-    fitted: false, fits: true, localcoord: [W, H], to: [Wt, H], pull,
-    bounds: { from: [blv, brv], to: [Math.min(0, blv + pull), Math.max(0, brv - pull)] },
+    fitted: false, fits: true, localcoord: [W, H], to: [Wt, H], pull, boundPull,
+    bounds: { from: [blv, brv], to: [nbl, nbr] },
     portrait: { from: psv, to: Math.round(psv * Wt / W * 100000) / 100000 },
-    // units the camera may look past the stage's old frame at each end, if the picture stops there
-    short: { left: Math.max(0, pull + blv), right: Math.max(0, pull - brv) },
+    zoomout: autozoom ? 1 : zoomout,
+    // units the camera may look past the stage's old frame at each end, zoomed
+    // all the way out, if the picture stops there (one decimal)
+    short: { left: r1(grow + blv - nbl), right: r1(grow - brv + nbr) },
   };
 }
 function parseMarker(line) {

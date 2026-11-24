@@ -49,8 +49,9 @@ function getVfs() {
   // decides, the same way the author's does.
   // In a build open read-only this is the match view (vfslib.js): the engine,
   // the screenpack and the match chosen at /api/readonly/match, never the
-  // whole build.
-  if (!vfs) vfs = vfslib.build({ privateMenu: true });
+  // whole build. `web`: this is the browser game (the side select screen,
+  // motifcompat.sideSelect).
+  if (!vfs) vfs = vfslib.build({ privateMenu: true, web: true });
   return vfs;
 }
 // A TEMP file or folder this server made, removed with the checked delete
@@ -176,6 +177,9 @@ function exportById(id) {
   return /^[0-9a-f]{16}$/.test(String(id || '')) ? EXPORTS.get(String(id)) || null : null;
 }
 const zipsRunning = new Set();
+// The Website export running now (/api/export-status): { t0, now: the lite
+// step's last report }, or null.
+let exportStatus = null;
 
 // What the card shows beside an export's own result: the folder's files and
 // size, its largest file, and the id. A summary that cannot be read is left
@@ -313,6 +317,8 @@ const READ_ONLY_ALLOWED = new Set([
   // Content/ (bundles.removeExternal refuses the one open now)
   '/api/bundles/remove-external',
   '/api/download-folder', '/api/local-config/test', '/api/players',
+  // where ffmpeg is, for a lite Website export: the Studio's own setting
+  '/api/ffmpeg',
   '/api/open-path', '/api/open-folder', '/api/launch-build', '/api/pick-file',
   '/api/export-open', '/api/export-play', '/api/mods/open',
   // the match view: which two characters and stage the web game loads - held
@@ -336,7 +342,7 @@ const READ_ONLY_REFUSED = new Map(Object.entries({
     '/api/convert-png-palettes', '/api/fill-palette-gaps', '/api/fix-palettes', '/api/fix-palette-keys'],
   'changing portraits': ['/api/portrait', '/api/portrait-picture', '/api/portrait-fit', '/api/portrait-fix', '/api/portrait-revert'],
   'editing a stage': ['/api/stage-widefit', '/api/stage-thumbfit', '/api/stage-thumb-add', '/api/stage-thumb-remove',
-    '/api/stage-textransform', '/api/stage-widefit3d', '/api/stage-attachfix', '/api/stage-nearfit'],
+    '/api/stage-textransform', '/api/stage-widefit3d', '/api/stage-attachfix', '/api/stage-nearfit', '/api/stage-debugbg'],
   'changing the screenpack': ['/api/motif-def', '/api/motif-describe-rows', '/api/motif-grid', '/api/theme',
     '/api/theme-layout', '/api/theme-options', '/api/theme-remove', '/api/theme-copy', '/api/remove-logo'],
   'changing the engine settings': ['/api/engine-const', '/api/lifebar', '/api/lifebars'],
@@ -2134,6 +2140,46 @@ async function handleApi(req, res, pathname) {
       }
     }
 
+    // DEBUG BACKGROUND (debugbg.js): GET ?file= = whether the stage's [BGdef]
+    // has debugbg on (the engine paints every gap in its art magenta), null
+    // when it is off and was never turned off here; GET ?all=1 = that for
+    // every stage of the roster in one request; POST { file, action: fix |
+    // undo } turns it off in the stage's own .def, or puts it back. Same
+    // stage-name rules as the widescreen fit above.
+    if (pathname === '/api/stage-debugbg') {
+      const stagesDir = layout.dir('stages');
+      const body = req.method === 'POST' ? JSON.parse((await readBody(req)).toString('utf8') || '{}') : {};
+      const query = req.method === 'GET' ? url.parse(req.url, true).query : {};
+      const debugbg = require('./debugbg.js');
+      if (req.method === 'GET' && query.all) {
+        const roster = vfslib.readRoster();
+        const results = new Map();
+        for (const s of roster.stages || []) {
+          const f = String((s && s.file) || '');
+          if (!f || results.has(f)) continue;
+          const full = stageFilePath(stagesDir, f);
+          let d = null;
+          if (full && fs.existsSync(full)) { try { d = debugbg.status(stagesDir, f); } catch (e) { d = null; } }
+          results.set(f, d);
+        }
+        return json(res, 200, { results: Object.fromEntries(results) });
+      }
+      const file = String(req.method === 'GET' ? (query.file || '') : (body.file || ''));
+      const full = stageFilePath(stagesDir, file);
+      if (!full) return json(res, 400, { error: 'bad stage name' });
+      if (!fs.existsSync(full)) return json(res, 404, { error: 'no such stage' });
+      try {
+        if (req.method === 'GET') return json(res, 200, { result: debugbg.status(stagesDir, file) });
+        if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' });
+        if (body.action !== 'fix' && body.action !== 'undo') return json(res, 400, { error: 'unknown action' });
+        const result = body.action === 'undo' ? debugbg.undoFile(stagesDir, file) : debugbg.fixFile(stagesDir, file);
+        invalidateVfs();
+        return json(res, 200, { result });
+      } catch (e) {
+        return json(res, 400, { error: e.message });
+      }
+    }
+
     // FIT THUMBNAIL (thumbfit.js): a stage's own select-screen picture, drawn
     // too small (or too large) for its coordinate space, gets the
     // portraitscale that fills the box. GET ?file= = what the fit would do,
@@ -2409,6 +2455,44 @@ async function handleApi(req, res, pathname) {
       return json(res, 200, { dir: now });
     }
 
+    // THE HEADER'S BUILD SIZE for the export that is picked (exportsize.js):
+    //   GET /api/build-size?kind=web|lite|desktop[&public=1]
+    //   -> { kind, total, exact, ... } - web is exact; lite and desktop are
+    //   estimates and say so. Reads only.
+    if (pathname === '/api/build-size' && req.method === 'GET') {
+      const q = Object.fromEntries(new URL(req.url, 'http://x').searchParams);
+      const kind = ['web', 'lite', 'desktop'].includes(q.kind) ? q.kind : 'web';
+      // liteAutoMax: game data (content) over it makes Lite build start unticked
+      // (lite/pack.js AUTO_MAX; the export decides the same on the real game.pak)
+      try {
+        const answer = require('./exportsize.js').forExport(kind, { public: q.public === '1' });
+        if (kind !== 'desktop') answer.liteAutoMax = require('./lite/pack.js').AUTO_MAX;
+        return json(res, 200, answer);
+      }
+      catch (e) { return json(res, 500, { error: e.message }); }
+    }
+    // THE MP3 ENCODER a lite Website export uses (Options > MP3 encoder):
+    //   GET  /api/ffmpeg          -> { setting, found, why }
+    //   POST /api/ffmpeg {path}   -> the same, after saving ('' clears it)
+    // `found` is the program that will be used - the one set, or ffmpeg on
+    // PATH - and only one that can write MP3 counts; `why` says why there is
+    // none, and then a lite build keeps its sounds lossless.
+    if (pathname === '/api/ffmpeg' && (req.method === 'GET' || req.method === 'POST')) {
+      if (req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+        const p = String(body.path || '').trim();
+        if (p && !path.isAbsolute(p)) return json(res, 400, { error: 'give a full path, e.g. D:\\ffmpeg\\bin' });
+        if (p) {
+          const f = require('./lite/pack.js').findFfmpeg(p);
+          if (!f.path) return json(res, 400, { error: f.why });
+        }
+        layout.setFfmpeg(p);
+      }
+      const setting = layout.FFMPEG;
+      const f = require('./lite/pack.js').findFfmpeg(setting);
+      return json(res, 200, { setting, found: f.path, why: f.why });
+    }
+
     // Show a character's folder in the OS file manager. This is a desktop
     // tool driving a local machine, so it is a reasonable thing to offer - but
     // the id is validated against the same pattern the other routes use and
@@ -2552,6 +2636,8 @@ async function handleApi(req, res, pathname) {
       for (const k of ['hModule', 'hModuleSeen']) { if (onDisk && onDisk[k] !== undefined) roster[k] = onDisk[k]; else delete roster[k]; }
       // THE COMMAND LIST'S BUTTONS are /api/button-style's (Settings > Controls), on disk the same way.
       if (onDisk && onDisk.buttonStyle !== undefined) roster.buttonStyle = onDisk.buttonStyle; else delete roster.buttonStyle;
+      // THE MODERN-INPUT CONTROLS are /api/keys' on that engine (Settings > Controls), on disk the same way.
+      if (onDisk && onDisk.controls !== undefined) roster.controls = onDisk.controls; else delete roster.controls;
       // THE GAME ONLY PAGE is /api/game-only's (Options > Game only page), on disk the same way:
       // an older snapshot can neither drop it nor bring it back.
       if (onDisk && onDisk.gameOnly !== undefined) roster.gameOnly = onDisk.gameOnly; else delete roster.gameOnly;
@@ -3016,6 +3102,62 @@ async function handleApi(req, res, pathname) {
     // the wrong shape for them; keylib.js holds the names the engine parses,
     // this build's own layout, and the conflict rule the engine's own
     // key-config screen uses. The page captures a press and sends the name.
+    //
+    // ON THE MODERN-INPUT ENGINE (IKEMEN_V2, the default) the build states
+    // keyboard controllers and a button setup instead (keylib.js, Decision
+    // 17): its two default keyboard layouts and the Standard setup; players
+    // remap in the game's own Controller Mapping and Button Setup. The old
+    // payload stays for a --v1 server.
+    if (pathname === '/api/keys' && req.method === 'GET' && process.env.IKEMEN_V2) {
+      const keylib = require('./keylib');
+      const controls = keylib.controlsOf(vfslib.readRoster());
+      return json(res, 200, {
+        ok: true, v2: true,
+        model: keylib.modelV2(controls),
+        controls: keylib.CONTROLS,
+        actions: keylib.ACTIONS,
+        setupButtons: keylib.SETUP_BUTTONS,
+        names: keylib.KEY_NAMES,
+        codes: keylib.CODE_TO_NAME,
+        unreachable: keylib.UNREACHABLE,
+        nokey: keylib.UNBOUND,
+        written: keylib.sectionsWrittenV2(controls),
+      });
+    }
+
+    // POST { slot: 'keyboard1' | 'keyboard2', set: { DP_U: 'j', ... } },
+    // { slot: 'setup', set: { a: 'X', ... } }, or { slot, reset: true }. A null
+    // puts one control back. Stored sparse (roster.controls), like the old
+    // slots. A bundle that changed [Keys_P1] / [Keys_P2] before keeps that
+    // layout until this page first saves (keylib.controlsOf); from then on
+    // roster.controls is what the build writes, even when it is empty.
+    if (pathname === '/api/keys' && req.method === 'POST' && process.env.IKEMEN_V2) {
+      const keylib = require('./keylib');
+      const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+      const slot = String(body.slot || '').toLowerCase();
+      if (!keylib.KEYBOARD_IDS.includes(slot) && slot !== 'setup') throw new Error('no such control slot: ' + body.slot);
+      const roster = vfslib.readRoster();
+      const next = keylib.controlsOf(roster);
+      if (body.reset) delete next[slot];
+      else {
+        const merged = Object.assign({}, next[slot]);
+        for (const [k, v] of Object.entries(body.set || {})) {
+          if (v === null) delete merged[k];
+          else merged[k] = v;
+        }
+        next[slot] = merged;
+      }
+      roster.controls = keylib.normalizeControls(next);
+      vfslib.writeRoster(roster);
+      invalidateVfs();
+      const controls = keylib.controlsOf(roster);
+      return json(res, 200, {
+        ok: true, v2: true,
+        model: keylib.modelV2(controls),
+        written: keylib.sectionsWrittenV2(controls),
+      });
+    }
+
     if (pathname === '/api/keys' && req.method === 'GET') {
       const keylib = require('./keylib');
       const roster = vfslib.readRoster();
@@ -3087,7 +3229,8 @@ async function handleApi(req, res, pathname) {
     // a button (roster.buttonStyle; absent = the default, Arcade), and each
     // style's pictures for the eight buttons the list prints (and any punch,
     // any kick, Start), mapped through
-    // Joystick_P1 as this build writes it. POST { style } saves it.
+    // Joystick_P1 as this build writes it (on the modern-input engine: the
+    // controller setup, buttonstyle.padSource). POST { style } saves it.
     if (pathname === '/api/button-style' && (req.method === 'GET' || req.method === 'POST')) {
       const BTN = require('./buttonstyle.js');
       let roster = vfslib.readRoster();
@@ -3101,7 +3244,7 @@ async function handleApi(req, res, pathname) {
       }
       let stock = null;
       try { stock = fs.readFileSync(path.join(layout.dir('release-v2'), 'data', 'glyphs.sff')); } catch (e) { stock = null; }
-      return json(res, 200, { ok: true, style: BTN.styleOf(roster), def: BTN.DEFAULT_STYLE, styles: BTN.preview(roster.keys, stock) });
+      return json(res, 200, { ok: true, style: BTN.styleOf(roster), def: BTN.DEFAULT_STYLE, styles: BTN.preview(BTN.padSource(roster), stock) });
     }
 
     // WHERE THIS BUILD FINDS ITS RELAYS - the Settings > Online tab. Three
@@ -3714,8 +3857,24 @@ async function handleApi(req, res, pathname) {
       }
     }
 
+    // WHAT A WEBSITE EXPORT IS DOING NOW, for the page's building line while
+    // /api/export runs (lite/pack.js reports its steps): { running, step,
+    // done, total, busy (jobs running), bigMb, seconds }, or { running: false }.
+    // The full export before the lite step holds this thread, so a question
+    // asked then is answered when it is written.
+    if (pathname === '/api/export-status' && req.method === 'GET') {
+      if (!exportStatus) return json(res, 200, { running: false });
+      return json(res, 200, Object.assign({}, exportStatus.now, { running: true, seconds: Math.round((Date.now() - exportStatus.t0) / 1000) }));
+    }
+
     if (pathname === '/api/export' && req.method === 'POST') {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+      // This export's own status. Two exports can overlap (the lite step
+      // waits on its workers), so each one writes only its own object and
+      // clears the slot only while the slot is still its own.
+      const mine = { t0: Date.now(), now: { step: 'export' } };
+      exportStatus = mine;
+      try {
       // Match the engine the Studio is running (V2 by default), pak by default
       // (the deployable itch/website format), and honor an optional public
       // (STUN-only, docs-bundled) build for sharing.
@@ -3731,6 +3890,49 @@ async function handleApi(req, res, pathname) {
         // clicking the button is looking.
         dest: exportDest(body.dest),
       });
+      // A LITE BUILD (Options > Lite build): the export just written, made
+      // into one compressed game.lite in place (lite/pack.js). It checks
+      // itself before it swaps anything; a failure leaves the full build in
+      // the folder and is said on the card, never thrown away silently.
+      // lite: true makes it lite, false or absent full. 'auto' (the Studio
+      // page, when the box was not touched): lite unless the game data is over
+      // lite/pack.js AUTO_MAX, and then a full build that says why on its card
+      // (result.liteSkipped) - never quietly.
+      let wantLite = body.lite === true || body.lite === 'auto';
+      if (body.lite === 'auto') {
+        try {
+          const a = require('./lite/pack.js').autoLite(result.dest);
+          if (a.over) {
+            wantLite = false;
+            result.liteSkipped = { bytes: a.bytes, max: a.max };
+            console.log(`lite: not made - the game data is ${(a.bytes / 1e6).toFixed(0)} MB, over ${(a.max / 1e6).toFixed(0)} MB; this is the full build (tick Lite build to make it lite anyway)`);
+          }
+        } catch (e) { /* no pak to measure: the lite step says why below */ }
+      }
+      if (wantLite) {
+        let last = '';
+        try {
+          result.lite = await require('./lite/pack.js').liteInPlace(result.dest, {
+            ffmpeg: layout.FFMPEG,
+            log: (m) => console.log('lite: ' + m),
+            status: (s) => {
+              mine.now = s;
+              // the log names each step once, and the long wait for the
+              // last pieces when it starts
+              const tail = s.step === 'compress' && s.bigMb >= 64 && (s.total - s.done <= s.busy || s.bigMb >= 128);
+              const key = s.step + (tail ? ':tail' : '');
+              if (key !== last) {
+                last = key;
+                if (tail) console.log(`lite: compressing, ${s.total - s.done} of ${s.total} jobs left; a big piece (${s.bigMb} MB) is still running and can take a few minutes`);
+                else console.log('lite: step ' + s.step + (s.total ? ` (${s.total} jobs)` : ''));
+              }
+            },
+          });
+        } catch (e) {
+          console.warn('lite: ' + (e && e.message || e));
+          result.lite = { failed: String(e && e.message || e) };
+        }
+      }
       // The result card: the id for Open folder, Play this export and Make
       // upload .zip, the folder's size, and whether this build carries a
       // leaderboard (a private build of a bundle that has one), which is when
@@ -3752,6 +3954,9 @@ async function handleApi(req, res, pathname) {
         result.notes = require('./exportnotes.js').forExport({ kind: 'web', roster: r, charFixes: result.charFixes });
       } catch (e) { result.notes = null; }
       return json(res, 200, { ok: true, result });
+      } finally {
+        if (exportStatus === mine) exportStatus = null;
+      }
     }
 
     json(res, 404, { error: 'unknown api route ' + pathname });

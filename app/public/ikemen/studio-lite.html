@@ -246,6 +246,7 @@
 <!-- The .wmbuild container for Send / Import a build. Shared with the
      headless test, so the file the Studio writes is the file it reads. -->
 <script src="./build-bundle.js"></script>
+<script src="./lite.js"></script>
 <script src="./vfs.js"></script>
 <script src="./sffpal-core.js"></script>
 <script src="./charconst-core.js"></script>
@@ -1302,6 +1303,7 @@
     try { const r = await fetch('./ikemen-fs/base-select.def', { cache: 'no-cache' }); if (r.ok) return new Uint8Array(await r.arrayBuffer()); } catch (e) {}
     try { const r = await fetch('./ikemen-fs/file/' + SELECT_VPATH); if (r.ok) return new Uint8Array(await r.arrayBuffer()); } catch (e) {}
     const man = await fetch('./ikemen-fs/manifest.json', { cache: 'no-cache' }).then(r => r.json());
+    if (man.lite && man.files[SELECT_VPATH]) return await liteFile(man, SELECT_VPATH);
     if (man.pack && man.files[SELECT_VPATH]) {
       const [off, len] = man.files[SELECT_VPATH];
       const res = await fetch('./ikemen-fs/' + man.pack, { headers: { Range: `bytes=${off}-${off + len - 1}` } });
@@ -1512,6 +1514,10 @@
   }
   async function loadShipped() {
     try { shipped = parseShipped(latin1(await fetchBase())); } catch (e) { shipped = { chars: [], stages: [], music: [] }; }
+    // The roster is on screen as soon as select.def is read; the sizes and
+    // tracks below fill in on the second render. On a lite build they read
+    // stage defs out of game.lite, which took 7 to 18 s before the list showed.
+    render();
     try { shipped.music = await shippedTracks(); } catch (e) { shipped.music = []; }
     // Same reason the char sizes are resolved here: setting them from a
     // promise inside renderShipped raced the next render.
@@ -2152,6 +2158,13 @@
     return out;
   }
 
+  // A LITE BUILD has no game.pak: one file comes out of game.lite (lite.js),
+  // at the address the game page uses, so the copy the browser kept when the
+  // game was played is the one read.
+  async function liteFile(man, vpath) {
+    if (typeof ikemenLiteReadFile !== 'function') throw new Error('lite.js did not load; re-upload the site with all of its files');
+    return ikemenLiteReadFile('./ikemen-fs/' + man.lite + '?v=' + encodeURIComponent((man.stamp || '') + '.' + (man.liteId || '')), vpath);
+  }
   function shippedManifest() {
     if (!manifestPromise) manifestPromise = fetch('./ikemen-fs/manifest.json', { cache: 'no-cache' }).then(r => r.json());
     return manifestPromise;
@@ -2161,6 +2174,7 @@
   async function fetchShipped(vpath) {
     try { const r = await fetch('./ikemen-fs/file/' + vpath, { cache: 'no-cache' }); if (r.ok) return new Uint8Array(await r.arrayBuffer()); } catch (e) {}
     const man = await shippedManifest();
+    if (man.lite && man.files[vpath]) return await liteFile(man, vpath);
     if (man.pack && man.files[vpath]) {
       const [off, len] = man.files[vpath];
       const res = await fetch('./ikemen-fs/' + man.pack, { headers: { Range: `bytes=${off}-${off + len - 1}` } });
@@ -2700,6 +2714,23 @@
   // both have to be read; the box simply stays hidden until it has a number,
   // rather than flashing a wrong one.
   let backfilled = false;
+  // A lite site's download: { bytes } (0 when the host does not say), or null
+  // for a full build. Asked once per visit - the header redraws on every change.
+  let liteDownloadP = null;
+  function liteDownload() {
+    if (!liteDownloadP) {
+      liteDownloadP = shippedManifest().then(async (man) => {
+        if (!man.lite) return null;
+        let bytes = 0;
+        try {
+          const r = await fetch('./ikemen-fs/' + man.lite + '?v=' + encodeURIComponent((man.stamp || '') + '.' + (man.liteId || '')), { method: 'HEAD' });
+          if (r.ok) bytes = Number(r.headers.get('content-length')) || 0;
+        } catch (e) { /* no figure: the line names the file without one */ }
+        return { bytes };
+      }, () => null);
+    }
+    return liteDownloadP;
+  }
   async function refreshBuildSize() {
     const box = $('#buildSize');
     if (!box) return;
@@ -2715,10 +2746,27 @@
     box.textContent = '';
     const b = document.createElement('b'); b.textContent = mb(t.total); box.appendChild(b);
     const sp = document.createElement('span'); sp.textContent = 'build size'; box.appendChild(sp);
-    box.title = 'All the game data this build ships: ' + t.files + ' files, ' + mb(t.total) + '.' + String.fromCharCode(10)
-      + 'This is what a player downloads before the game starts, and what both'
-      + ' players wait for online. The engine itself is a separate, much smaller'
-      + ' download on top of it.' + String.fromCharCode(10)
+    // A LITE SITE DOWNLOADS ONE COMPRESSED FILE, not the files counted here
+    // (their unpacked size; an SFF with PNG sprites can be written again a
+    // little bigger). The tooltip used to call that total the download - 487.7
+    // MB for a site whose game.lite is 154.6 MB. Its size is asked of the
+    // host, at the address the game reads it from.
+    const nl = String.fromCharCode(10);
+    const lite = await liteDownload();
+    let tip;
+    if (lite) {
+      const liteBytes = lite.bytes;
+      tip = 'All the game data this build holds: ' + t.files + ' files, ' + mb(t.total) + ' once unpacked.' + nl
+        + 'This site is a lite build: a player downloads it as one compressed file, game.lite'
+        + (liteBytes ? ' (' + mb(liteBytes) + ')' : '') + ', with the engine inside. The browser unpacks it'
+        + ' and keeps it, so a second visit downloads nothing.' + nl;
+    } else {
+      tip = 'All the game data this build ships: ' + t.files + ' files, ' + mb(t.total) + '.' + nl
+        + 'This is what a player downloads before the game starts, and what both'
+        + ' players wait for online. The engine itself is a separate, much smaller'
+        + ' download on top of it.' + nl;
+    }
+    box.title = tip
       + 'Removing a built-in character does not shrink it - that hides the character,'
       + ' but its files are still inside the pack.';
   }
@@ -3749,7 +3797,7 @@
     const shipped = new Map();
     for (const k of Object.keys(files)) shipped.set(k, manifestBytes(files[k]));
     const has = (p) => keys.includes(p) || Object.prototype.hasOwnProperty.call(files, p);
-    if (!man.pack) {
+    if (!man.pack && !man.lite) {
       for (const k of keys) shipped.delete(k);
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);

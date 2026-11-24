@@ -30,8 +30,24 @@
 //     own. In a build whose add004 tag switch is on, a human side's Simul
 //     partners take the side's controller instead - the stock setup already
 //     routes that controller to them, only the CPU level is set to 0. Only
-//     then, and never in co-op or Training: in plain Simul three human-driven
+//     then, and never in co-op (nor in Training on the older engine, whose
+//     setup already did it - opts.v2 below): in plain Simul three human-driven
 //     fighters on one controller would all move together.
+//
+// opts.v2: the text for the modern-input engine (IKEMEN_V2 builds; our web
+// engine and upstream's official build alike). Its start.f_remapAI hands a
+// side's controls to its leader's input after side select (or the automatic
+// assignment that stands in for it), which need not be the side's own number,
+// so the partners take the leader's input too. Without v2 the text is the one
+// every build before the modern-input engine carried.
+//
+// v2 also covers TRAINING. The older engine's setup gave a Simul side's
+// partners that side's controller everywhere, Training included, so the mod
+// left Training alone. The modern-input engine's setup gives them no input at
+// all after side select (only the leader and Tag members get one), so in an
+// add004 tag build the partner you tagged in during Training stood still: no
+// CPU, and an empty controller. The v2 text hands Training's partners the
+// leader's input too; the dummy side is the CPU's and is left alone.
 
 const fs = require('fs');
 
@@ -86,6 +102,7 @@ function add004TagForBundle(statesFile) {
 
 function teamPlayLua(opts = {}) {
   const add004 = !!opts.add004Tag;
+  const v2 = !!opts.v2;
   const out = [];
   const L = (...lines) => out.push(...lines);
 
@@ -181,14 +198,30 @@ function teamPlayLua(opts = {}) {
       'if start and start.f_remapAI then',
       '\tlocal stockRemapAI = start.f_remapAI',
       '\tstart.f_remapAI = function(ai)',
-      '\t\tstockRemapAI(ai)',
-      "\t\tif main.coop or gameMode('training') then return end",
+      '\t\tstockRemapAI(ai)');
+    if (v2) {
+      // Training too: this engine's setup gives a Simul partner no input in
+      // Training (the older one gave it the side's controller).
+      L('\t\tif main.coop then return end');
+    } else {
+      L("\t\tif main.coop or gameMode('training') then return end");
+    }
+    L(
       '\t\tfor side = 1, 2 do',
       '\t\t\tlocal human = (not main.cpuSide[side]) or start.challenger > 0',
-      '\t\t\tif human and start.p[side].teamMode == 1 then --Simul',
-      '\t\t\t\tfor i = side + 2, #start.p[side].t_selected * 2 do',
+      '\t\t\tif human and start.p[side].teamMode == 1 then --Simul');
+    if (v2) {
+      L('\t\t\t\t-- the input the stock setup gave the leader (side select, or the',
+        '\t\t\t\t-- automatic assignment, can put a side on another player\'s input)',
+        '\t\t\t\tlocal src = side',
+        '\t\t\t\tif main.sideSelectDone then',
+        '\t\t\t\t\tlocal ok, leader = pcall(getRemapInput, side)',
+        '\t\t\t\t\tif ok and type(leader) == \'number\' and leader > 0 then src = leader end',
+        '\t\t\t\tend');
+    }
+    L('\t\t\t\tfor i = side + 2, #start.p[side].t_selected * 2 do',
       '\t\t\t\t\tif (i - 1) % 2 + 1 == side then',
-      '\t\t\t\t\t\tremapInput(i, side)',
+      v2 ? '\t\t\t\t\t\tremapInput(i, src)' : '\t\t\t\t\t\tremapInput(i, side)',
       '\t\t\t\t\t\tsetCom(i, 0)',
       "\t\t\t\t\t\tprint('[team-play] P' .. i .. ' follows side ' .. side .. ' controls')",
       '\t\t\t\t\tend',

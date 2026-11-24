@@ -23,6 +23,9 @@
 //                                   address (lobbies); any other method 405.
 //                                   The game page asks it once to know whether
 //                                   its server has lobbies (kit 1.2.0 and up).
+//                                   ?build=<Build ID>: only that build's
+//                                   lobbies, plus {build, other} (how many are
+//                                   on other builds), cached per build.
 //   GET  /mugen/identity/check      -> the Ladder object (ladder.js)
 //   POST /mugen/identity/claim      -> the Ladder, rate limited per IP
 //   POST /mugen/identity/recover    -> the Ladder, rate limited per IP
@@ -67,14 +70,15 @@
 // No `cloudflare:workers` import and no Node APIs, so Node can load this file
 // for tests (tools/test-hostkit-worker.js).
 
-import { handleRelay, addrHash, randomHex, refuseSocket, DIR_NAME } from './relay.js';
+import { handleRelay, addrHash, randomHex, refuseSocket, DIR_NAME, lobbyListBuild, LOBBY_LIST_BUILDS } from './relay.js';
 import { ladderStub } from './ladder.js';
 import { sameSecret, KIT_NAME } from './ladder-core.js';
 
 // ---------------------------------------------------------------- settings --
 // Read by hostkit/deploy.js (kitVersion in its result) and by GET /. 1.2.0:
-// lobbies, watching a room's matches and the list of open lobbies.
-export const KIT_VERSION = '1.2.0';
+// lobbies, watching a room's matches and the list of open lobbies. 1.2.1: the
+// list by build (?build=) and a lobby's title, set by its creator.
+export const KIT_VERSION = '1.2.1';
 export const KIT_PARTS = Object.freeze(['relay', 'queue', 'ladder']);
 
 // How long this instance keeps the body of GET /lobbies before it asks the
@@ -235,8 +239,9 @@ export function createWorker(opts) {
   // Worker may make random values only while handling a request), held in
   // this instance's memory only.
   let salt = '';
-  // GET /lobbies, as last read from the directory object: { at, body }.
-  let listCache = null;
+  // GET /lobbies, as last read from the directory object, per build ('' = the
+  // whole list; see lobbyListBuild): build -> { at, body }.
+  const listCache = new Map();
 
   function over(ruleName, request, name) {
     const rule = limits[ruleName];
@@ -258,7 +263,10 @@ export function createWorker(opts) {
   // GET /lobbies (the reference relay's route, the same replies): 405 for
   // another method, 429 {t:'slowdown'} past the read limit, the directory's
   // body (cached LIST_CACHE_MS), or 503 with an empty list when the directory
-  // cannot be asked and nothing is cached.
+  // cannot be asked and nothing is cached. ?build=<Build ID> (lobbyListBuild):
+  // only that build's lobbies plus `other`, cached per build (at most
+  // LOBBY_LIST_BUILDS builds, the oldest dropped first); without it, or with
+  // a value that is not a Build ID, the whole list as before.
   async function lobbies(request, env) {
     const h = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
     if (request.method !== 'GET') return new Response('GET only', { status: 405, headers: h });
@@ -266,16 +274,22 @@ export function createWorker(opts) {
       return new Response('{"t":"slowdown"}', { status: 429, headers: Object.assign({ 'Retry-After': '20' }, h) });
     }
     const t = now();
-    if (!listCache || t - listCache.at >= LIST_CACHE_MS) {
+    const build = lobbyListBuild(new URL(request.url).searchParams.get('build'));
+    let c = listCache.get(build);
+    if (!c || t - c.at >= LIST_CACHE_MS) {
       let body = null;
       try {
-        const r = await env.ROOM.get(env.ROOM.idFromName(DIR_NAME)).fetch('https://do/dir/list');
+        const r = await env.ROOM.get(env.ROOM.idFromName(DIR_NAME)).fetch('https://do/dir/list' + (build ? '?build=' + build : ''));
         if (r.ok) body = await r.text();
       } catch { body = null; }
-      if (body !== null) listCache = { at: t, body };
-      else if (!listCache) return new Response('{"t":"lobbies","list":[]}', { status: 503, headers: h });
+      if (body !== null) {
+        c = { at: t, body };
+        listCache.delete(build);
+        listCache.set(build, c);
+        while (listCache.size > LOBBY_LIST_BUILDS) listCache.delete(listCache.keys().next().value);
+      } else if (!c) return new Response('{"t":"lobbies","list":[]}', { status: 503, headers: h });
     }
-    return new Response(listCache.body, { headers: Object.assign({ 'Cache-Control': 'max-age=5' }, h) });
+    return new Response(c.body, { headers: Object.assign({ 'Cache-Control': 'max-age=5' }, h) });
   }
 
   // Reads a body under the cap. Resolves to {text, data} or a Response to send.

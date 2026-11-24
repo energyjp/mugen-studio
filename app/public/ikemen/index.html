@@ -473,7 +473,9 @@ window.IKEMEN_BRAND = {
     s.setProperty('height', h + 'px', 'important');
     s.setProperty('margin', '0', 'important');
     s.setProperty('border', '0', 'important');
-    s.imageRendering = 'pixelated';
+    // whole pixels when the picture is drawn larger, smoothed when smaller
+    // (ikemenCanvasRendering, below)
+    s.imageRendering = w < canvas.width ? 'auto' : 'pixelated';
     s.display = 'block';
   };
 
@@ -969,9 +971,17 @@ function ikemenFitCanvas() {
     'min(calc(100vw - 26px - ' + __reserveRight + 'px), calc((100vh - ' + reserve + 'px) * ' + aspect + '))', 'important');
   canvas.style.setProperty('height', 'auto', 'important');
   canvas.style.setProperty('aspect-ratio', canvas.width + ' / ' + canvas.height, 'important');
-  canvas.style.imageRendering = 'pixelated';
   canvas.style.display = 'block';
   canvas.style.margin = '0 auto';
+  // WHOLE PIXELS ONLY WHEN THE PICTURE IS DRAWN LARGER. 'pixelated' keeps the
+  // nearest pixel: drawn larger, the art keeps its hard pixels; drawn smaller
+  // (a 1280x720 picture in an 854-wide window: 807 px), whole rows and
+  // columns of pixels are dropped, so thin strokes break - the Command
+  // List's arrows lost their tips and the letters on its 15 px buttons
+  // smeared. Smaller, the browser smooths instead (the animation editor's
+  // rule for its zoom).
+  var shown = canvas.getBoundingClientRect().width;
+  canvas.style.imageRendering = shown > 0 && shown < canvas.width - 0.5 ? 'auto' : 'pixelated';
   var boot = document.getElementById('boot');
   // Exactly 5 lines at the pinned 16px line-height: a cap that isn't a
   // multiple of the line height leaves a half-sliced line at the top edge.
@@ -1069,6 +1079,7 @@ window.__panics = [];
 </script>
 <script src="./build-id.js"></script>
 <script src="./build-compare.js"></script>
+<script src="./lite.js"></script>
 <script src="./vfs.js"></script>
 <script src="./lobby-look.js"></script>
 <script src="./webrtc.js"></script>
@@ -1101,6 +1112,14 @@ window.__panics = [];
       if (window.ikemenGameOnlyUI) window.ikemenGameOnlyUI.progress(got, total);
     });
     log(`VFS ready: ${nFiles} files.`);
+    // A lite build (lite.js) says what it did: how long the unpacking took,
+    // and whether this visit downloaded anything at all.
+    const li = globalThis.ikemenLiteInfo;
+    if (li) {
+      log(`Lite build: game data unpacked in ${li.seconds.toFixed(1)} s` +
+        (li.cached ? ', from the copy this browser kept (nothing downloaded).' : '; this browser keeps it for next time.') +
+        (li.sound && li.sound.failed ? ` ${li.sound.failed} of ${li.sound.tracks} sound tracks could not be decoded here; those sounds are silent.` : ''));
+    }
 
     // Build ID: covers the shipped content, every browser-side mod, and the
     // theme pick - computed by vfs.js during init (the same value the netplay
@@ -1318,15 +1337,20 @@ window.__panics = [];
       }
     };
 
+    // A LITE BUILD carries the engine inside game.lite, rebuilt by lite.js
+    // with the game files; it hands it over as a Response with the wasm type,
+    // so everything below - streaming compile, the Engine ID from the bytes -
+    // works as it does for a fetched ikemen.wasm.
+    const fetchEngine = () => (globalThis.ikemenLiteEngine ? globalThis.ikemenLiteEngine() : fetch(wasmUrl, { cache: 'no-cache' }));
     let result;
     try {
-      const res = await fetch(wasmUrl, { cache: 'no-cache' });
+      const res = await fetchEngine();
       const forHash = res.clone();
       result = await WebAssembly.instantiateStreaming(res, go.importObject);
       await noteEngine(forHash);
     } catch (e) {
       console.warn('instantiateStreaming failed, buffering instead:', e.message);
-      const resp = await fetch(wasmUrl, { cache: 'no-cache' });
+      const resp = await fetchEngine();
       const bytes = await resp.arrayBuffer();
       globalThis.ikemenEngineId = engineHash(bytes.slice(0));
       showEngineId(globalThis.ikemenEngineId);

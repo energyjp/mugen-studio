@@ -121,8 +121,49 @@ function defText(metrics) {
     '; DotGothic16-OFL.txt beside this file.',
     '[Def]', 'Type = truetype',
     'Size = ' + m.size[0] + ',' + m.size[1], 'Spacing = ' + m.spacing[0] + ',' + m.spacing[1], 'Offset = 0,0',
-    'File = ' + TTF, 'Blend = 1', '',
+    'File = ' + TTF, 'Blend = 1',
+    ...(m.bold > 0 ? ['; one font pixel heavier, as the row font it stands in for (modern-input engine)', 'Bold = ' + m.bold] : []),
+    '',
   ].join('\r\n');
+}
+// THE WEIGHT. DotGothic16 has one weight: strokes one pixel wide on its
+// 16-pixel grid. A pack's bitmap row font is often heavier (Capcom vs. SNK 2's
+// namefnt.fnt: bold italic capitals, 3 px stems in 16 px cells), and a
+// Japanese name drawn thin between such rows read as a lighter, smaller font.
+// The modern-input engine draws a TrueType font `Bold = n` times more, one
+// font pixel further right each time (font.go). boldFor measures the row
+// font's stem: the most common width of the bright runs (luma 128 or more;
+// an outline or shading is not stem) along the rows of a MUGEN .fnt (v1,
+// its PCX); it returns 1 when that is at least 2 font pixels per 16 of the
+// font's height (DotGothic16's own stem is 1), else 0. One at most: complex
+// kanji close up at two. A TrueType row font, or a file this cannot read: 0.
+function boldFor(fntBuf, metrics) {
+  try {
+    const b = Buffer.isBuffer(fntBuf) ? fntBuf : Buffer.from(fntBuf || []);
+    if (b.length < 32 || b.toString('latin1', 0, 11) !== 'ElecbyteFnt') return 0;
+    const po = b.readUInt32LE(16), ps = b.readUInt32LE(20);
+    if (po + 128 > b.length || ps < 128 + 769) return 0;
+    const p = b.subarray(po, Math.min(b.length, po + ps));
+    const w = p.readUInt16LE(8) - p.readUInt16LE(4) + 1, h = p.readUInt16LE(10) - p.readUInt16LE(6) + 1, bpl = p.readUInt16LE(66);
+    if (p[3] !== 8 || w <= 0 || h <= 0 || w > 16384 || h > 4096 || bpl < w) return 0;
+    if (p[p.length - 769] !== 0x0c) return 0;
+    const pal = p.subarray(p.length - 768);
+    const { rlePcxDecode } = require('./public/ikemen/sffdec-core.js');
+    const px = rlePcxDecode(p.subarray(128, p.length - 769), w, h, bpl);
+    const bright = (i) => i !== 0 && pal[i * 3] * 0.3 + pal[i * 3 + 1] * 0.59 + pal[i * 3 + 2] * 0.11 >= 128;
+    const runs = new Map();
+    for (let y = 0; y < h; y++) {
+      let run = 0;
+      for (let x = 0; x <= w; x++) {
+        if (x < w && bright(px[y * w + x])) run++;
+        else if (run) { runs.set(run, (runs.get(run) || 0) + 1); run = 0; }
+      }
+    }
+    let stem = 0, most = 0;
+    for (const [len, n] of runs) if (n > most || (n === most && len < stem)) { stem = len; most = n; }
+    const height = metrics && metrics.size && metrics.size[1] > 0 ? metrics.size[1] : 16;
+    return stem * 16 / height >= 2 ? 1 : 0;
+  } catch (e) { return 0; }
 }
 // { [vpath]: Buffer } for a build
 function files(metrics) {
@@ -169,7 +210,30 @@ function fontMetrics(defText) {
   const pair = (k) => { const m = new RegExp('^[ \\t]*' + k + '[ \\t]*=[ \\t]*(-?\\d+)[ \\t]*,[ \\t]*(-?\\d+)', 'mi').exec(sec[1]); return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null; };
   const size = pair('size');
   if (!size || !(size[1] > 0)) return null;
-  return { size, spacing: pair('spacing') || [0, 0] };
+  const out = { size, spacing: pair('spacing') || [0, 0] };
+  if (/^[ \t]*type[ \t]*=[ \t]*truetype\b/mi.test(sec[1])) out.truetype = true;
+  return out;
+}
+// THE SIZE BESIDE A TRUETYPE ROW FONT (V2 builds). The modern-input engine
+// draws a name the row font cannot draw in DotGothic16 at the size of its .def
+// (fontN.fallback), and a TrueType Size is the font's line, not its letters':
+// at the same Size, DotGothic16's kana fill nearly the whole line and Open
+// Sans' capitals two thirds of it. On the stock ikemen1 (Open_Sans.def, Size
+// 27) the Japanese names measured 24-25 px against 18 px capitals at
+// 1280x720. Beside a TrueType row font the .def gets 0.74 of its Size, so a
+// kana is about as tall as a capital (DotGothic16's own 16 px grid makes the
+// exact height round to the nearest pixel). A bitmap row font (a MUGEN .fnt,
+// whose Size is its cell): unchanged.
+// The weight too: at that size DotGothic16's strokes are one of its pixels
+// (1.25 px at 1280x720) beside Open Sans' 2 px, and the names read a size
+// smaller and greyer than "recovery" next to them. Beside a TrueType row font
+// the .def also gets Bold = 1 (one font pixel heavier, the engine's [Def]
+// bold, as beside a bold bitmap row font).
+const TRUETYPE_FIT = 0.74;
+function trueTypeFit(metrics) {
+  if (!metrics || !metrics.truetype || !metrics.size) return metrics;
+  const fit = (v) => Math.max(1, Math.round(v * TRUETYPE_FIT));
+  return Object.assign({}, metrics, { size: [fit(metrics.size[0]), fit(metrics.size[1])], bold: Math.max(1, metrics.bold || 0) });
 }
 // The build's copy of a motif with the Command List's text drawn in the font:
 // a new [Files] fontN (one past the highest index the motif uses) and
@@ -217,4 +281,164 @@ function patchMotif(text) {
   return { text: t, index };
 }
 
-module.exports = { DIR, TTF, LICENSE, DEF_FILE, VPATHS, DEFAULT_SIZE, coverage, fontDraws, stockDraws, drawable, needed, available, defText, files, commandListFont, fontMetrics, patchMotif, sections };
+// ---- the modern-input engine (V2 builds) -----------------------------------------------
+// The new pause menu draws the Command List as menu rows: `movelist.menu.item.font`
+// and `movelist.menu.item.active.font`, which inherit [Pause Menu]'s
+// `menu.item.font` / `menu.item.active.font` when the pack does not set them
+// (motif.go: a pack's own movelist key, else its menu key, else the engine
+// default `Open_Sans.def, ..., -1`). `movelist.text.font` is gone. So the
+// English rows keep the pack's own look (CvS2's bitmap name font, ikemen1's
+// Open_Sans), the build's copy does not repoint the rows: it gives every font
+// they use a fallback, `fontN.fallback = M` in [Files] (engine font.go
+// fallbackFor): a row with a character above ASCII that font N cannot draw is
+// drawn whole in DotGothic16 (slot M); every other row as before. A row font
+// named by file (the default) gets a [Files] slot of that file and height,
+// which the engine's inline font lookup reuses (motif.go reserveFontSlots); a
+// slot the pack already has for it is used instead (the first, as the engine
+// picks), and the engine's own font0 (Open_Sans.def) when the pack keeps it.
+// The list's title (`movelist.title.font`, else the pause menu's `title.font`)
+// prints the character's display name and gets the same fallback, after the
+// rows (a title with no font, -1, gets none).
+// -> the row fonts, then the title's, as { section, key, value, file, height }.
+const V2_DEFAULT = { file: 'Open_Sans.def', height: -1 };
+function rowFontRefs(text) {
+  const t = String(text || '');
+  const secs = sections(t);
+  const body = (s) => t.slice(s.bodyStart, s.end);
+  const val = (s, key) => { if (!s) return null; const m = keyRe(key).exec(body(s)); return m ? String(m[2]).trim() : null; };
+  const pm = secs.find((s) => s.name === 'pause menu');
+  const tm = secs.find((s) => s.name === 'training pause menu');
+  const out = [];
+  for (const [dst, src] of [['movelist.menu.item.font', 'menu.item.font'], ['movelist.menu.item.active.font', 'menu.item.active.font'], ['movelist.title.font', 'title.font']]) {
+    const pv = val(pm, dst) || val(pm, src);
+    out.push({ section: 'pause menu', key: dst, value: pv });
+    // [Training Pause Menu] inherits [Pause Menu] unless it sets its own
+    const tv = val(tm, dst) || val(tm, src);
+    if (tv) out.push({ section: 'training pause menu', key: dst, value: tv });
+  }
+  return out.map((r) => {
+    if (!r.value) return Object.assign(r, V2_DEFAULT);
+    const parts = r.value.split(',').map((p) => p.trim());
+    const h = parts.length > 7 && /^-?\d+$/.test(parts[7]) ? parseInt(parts[7], 10) : -1;
+    return Object.assign(r, /^-?\d+$/.test(parts[0]) ? { slot: parseInt(parts[0], 10), height: h } : { file: parts[0].replace(/^"|"$/g, ''), height: h });
+  });
+}
+// [Files] fonts: index -> { file, height } (latin1 text), in file order.
+function filesFonts(text) {
+  const t = String(text || '');
+  const fsec = sections(t).find((s) => s.name === 'files');
+  const out = new Map();
+  if (!fsec) return out;
+  const body = t.slice(fsec.bodyStart, fsec.end);
+  for (const m of body.matchAll(/^[ \t]*font(\d+)[ \t]*=[ \t]*([^;\r\n]*?)[ \t]*(?:;.*)?$/gmi)) {
+    const i = parseInt(m[1], 10);
+    if (!out.has(i)) out.set(i, { file: m[2].trim().replace(/^"|"$/g, ''), height: -1 });
+  }
+  for (const m of body.matchAll(/^[ \t]*font(\d+)\.height[ \t]*=[ \t]*(-?\d+)/gmi)) {
+    const f = out.get(parseInt(m[1], 10));
+    if (f) f.height = parseInt(m[2], 10);
+  }
+  return out;
+}
+// A font file as the engine finds it, for comparing two names (font/ is searched).
+const fontKey = (file) => String(file || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/^font\//i, '').toLowerCase();
+// The first row font's file, for the DotGothic16 .def's size (the inactive rows).
+function commandListFontV2(text) {
+  const r = rowFontRefs(text)[0];
+  if (r.slot === undefined) return r.file;
+  const f = filesFonts(text).get(r.slot);
+  return f ? f.file : null;
+}
+// The build's copy of a motif for the modern-input engine: DotGothic16 as a new
+// [Files] slot, and `fontN.fallback` on every font the Command List rows use.
+// Nothing else changes. -> { text, index, slots }
+function patchMotifV2(text) {
+  let t = String(text);
+  const eol = /\r\n/.test(t) ? '\r\n' : '\n';
+  const fonts = filesFonts(t);
+  let max = -1;
+  for (const m of t.matchAll(/^[ \t]*font(\d+)[ \t]*=/gmi)) max = Math.max(max, parseInt(m[1], 10));
+  // past the pack's own slots and the engine's font0 and font1 (defaultMotif.ini)
+  const index = Math.max(max + 1, 2);
+  let next = index + 1;
+  const lines = ['font' + index + ' = ' + DEF_FILE + ' ;the Command List\'s Japanese names, written by the export'];
+  const slots = [];
+  const added = new Map();
+  for (const r of rowFontRefs(t)) {
+    let slot = r.slot;
+    if (slot !== undefined && slot < 0) continue;
+    if (slot === undefined) {
+      const k = fontKey(r.file) + '|' + r.height;
+      for (const [i, f] of fonts) if (slot === undefined && fontKey(f.file) + '|' + f.height === k) slot = i;
+      // the engine's own font0 = Open_Sans.def (height -1), unless the pack replaced it
+      if (slot === undefined && k === fontKey(V2_DEFAULT.file) + '|-1' && !fonts.has(0)) slot = 0;
+      if (slot === undefined && added.has(k)) slot = added.get(k);
+      if (slot === undefined) {
+        slot = next++;
+        added.set(k, slot);
+        lines.push('font' + slot + ' = ' + r.file + ' ;the Command List rows\' font, given a slot for its fallback');
+        if (r.height !== -1) lines.push('font' + slot + '.height = ' + r.height);
+      }
+    }
+    if (slots.includes(slot) || slot === index) continue;
+    if (new RegExp('^[ \\t]*font' + slot + '\\.fallback[ \\t]*=', 'mi').test(t)) continue;
+    slots.push(slot);
+  }
+  for (const s of slots) lines.push('font' + s + '.fallback = ' + index);
+  const block = lines.join(eol) + eol;
+  const fsec = sections(t).find((s) => s.name === 'files');
+  // At the top of [Files]: a key's first value wins, and the new slots are past the pack's own.
+  if (fsec) t = t.slice(0, fsec.bodyStart) + block + t.slice(fsec.bodyStart);
+  else t = '[Files]' + eol + block + eol + t;
+  return { text: t, index, slots };
+}
+
+// THE DESKTOP EXPORT ON UPSTREAM'S OFFICIAL ENGINE. \`fontN.fallback\` is our
+// web engine's (font.go fallbackFor); upstream's modern-input build has no such
+// key and draws a name its row font cannot draw as nothing. So the desktop
+// build's copy draws the Command List's rows and title in DotGothic16 itself,
+// as the 1.0 desktop build did through movelist.text.font: the motif's
+// DotGothic16 slot (patchMotifV2 put it there) on movelist.menu.item.font,
+// movelist.menu.item.active.font and movelist.title.font in [Pause Menu] (and
+// [Training Pause Menu] where it sets its own), each keeping its bank,
+// alignment and color; the fallback lines that point at the slot go (a key the
+// engine does not know). Only for a build whose list has names the stock fonts
+// cannot draw (the caller decides, as for the web). -> { text, index, keys }
+const V2_ROW_DEFAULTS = {
+  'movelist.menu.item.font': ['0', '1', '191', '191', '191', '255'],
+  'movelist.menu.item.active.font': ['0', '1', '255', '255', '255', '255'],
+  'movelist.title.font': ['0', '0', '255', '255', '255', '255'],
+};
+const ROWS_MARK = ';the Command List\'s Japanese names (this engine has no font fallback), written by the export';
+function pointRowsV2(text) {
+  let t = String(text);
+  const eol = /\r\n/.test(t) ? '\r\n' : '\n';
+  const hit = [...filesFonts(t)].find(([, f]) => fontKey(f.file) === fontKey(DEF_FILE));
+  if (!hit) return { text: t, index: null, keys: [] };
+  const index = hit[0];
+  t = t.replace(new RegExp('^[ \\t]*font\\d+\\.fallback[ \\t]*=[ \\t]*' + index + '[ \\t]*(?:;[^\\r\\n]*)?\\r?\\n', 'gmi'), '');
+  const keys = [];
+  for (const r of rowFontRefs(t)) {
+    if (r.slot !== undefined && r.slot < 0) continue;      // a title with no font prints nothing
+    if (r.slot === index) continue;                        // already there
+    const parts = r.value ? r.value.split(',').map((p) => p.trim()) : [''].concat(V2_ROW_DEFAULTS[r.key]);
+    parts[0] = String(index);
+    if (parts.length > 7) parts[7] = '-1';                 // the DotGothic16 def's own size
+    const val = parts.join(', ');
+    const sec = sections(t).find((s) => s.name === r.section);
+    const head = r.section === 'pause menu' ? '[Pause Menu]' : '[Training Pause Menu]';
+    if (!sec) {
+      t = t.replace(/\s*$/, '') + eol + eol + head + eol + r.key + ' = ' + val + ' ' + ROWS_MARK + eol;
+    } else {
+      const body = t.slice(sec.bodyStart, sec.end);
+      const re = keyRe(r.key);
+      const nb = re.test(body) ? body.replace(re, (m, a, b, c) => a + val + ' ' + ROWS_MARK) : r.key + ' = ' + val + ' ' + ROWS_MARK + eol + body;
+      t = t.slice(0, sec.bodyStart) + nb + t.slice(sec.end);
+    }
+    keys.push(r.section + ': ' + r.key);
+  }
+  return { text: t, index, keys };
+}
+
+module.exports = { boldFor, trueTypeFit, TRUETYPE_FIT, DIR, TTF, LICENSE, DEF_FILE, VPATHS, DEFAULT_SIZE, coverage, fontDraws, stockDraws, drawable, needed, available, defText, files, commandListFont, fontMetrics, patchMotif, sections,
+  rowFontRefs, filesFonts, commandListFontV2, patchMotifV2, pointRowsV2, ROWS_MARK };

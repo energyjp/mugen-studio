@@ -37,54 +37,54 @@ app\ - the scripts and pages
 
 app\Dependencies\ikemen-go-src\bin\ikemen-v2.wasm - Ikemen GO, the web engine
   Ikemen GO  (MIT, see [3])
-  Go runtime and standard library (go1.26.5)  (BSD-3-Clause, see [2])
-  github.com/ebitengine/oto/v3 v3.2.0  (Apache-2.0, see [15])
+  Go runtime and standard library (go1.27.4)  (BSD-3-Clause, see [2])
+  github.com/ebitengine/oto/v3 v3.3.2 (built from the engine's own copy in third_party/oto)  (Apache-2.0, see [15])
   github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [16])
   github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [17])
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [18])
   github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [15])
-  github.com/icza/bitio v1.1.0  (Apache-2.0, see [19])
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [20])
+  github.com/icza/bitio v1.1.0  (Apache-2.0, see [18])
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2  (MIT, see [19])
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e (built from the engine's own copy in third_party/ggpo)  (MIT, see [20])
   github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [21])
   github.com/jfreymuth/vorbis v1.0.2  (MIT, see [21])
   github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [22])
   github.com/lukegb/dds v0.0.0-20190402175749-8b7170e64003  (Apache-2.0, see [23])
   github.com/mdouchement/hdr v0.2.4  (MIT, see [24])
   github.com/mewkiz/flac v1.0.12  (Unlicense (public domain), see [25])
-  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14  (Unlicense (public domain), see [26])
+  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 (built from the engine's own copy in third_party/mewkiz-pkg)  (Unlicense (public domain), see [26])
   github.com/pkg/errors v0.9.1  (BSD-2-Clause, see [27])
   github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [28])
   github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [29])
-  github.com/tidwall/gjson v1.18.0  (MIT, see [30])
+  github.com/tidwall/gjson v1.20.2  (MIT, see [30])
   github.com/tidwall/match v1.1.1  (MIT, see [30])
-  github.com/tidwall/pretty v1.2.0  (MIT, see [31])
-  github.com/tidwall/sjson v1.2.5  (MIT, see [30])
-  github.com/yuin/gopher-lua v1.1.0  (MIT, see [32])
+  github.com/tidwall/pretty v1.3.0  (MIT, see [31])
+  github.com/tidwall/sjson v1.2.9  (MIT, see [30])
+  github.com/yuin/gopher-lua v1.1.0 (built from the engine's own copy in third_party/gopher-lua)  (MIT, see [32])
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498  (BSD-3-Clause, see [8])
-  golang.org/x/image v0.22.0  (BSD-3-Clause, see [2])
+  golang.org/x/image v0.48.0  (BSD-3-Clause, see [2])
   golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a  (BSD-3-Clause, see [8])
-  golang.org/x/text v0.20.0  (BSD-3-Clause, see [2])
+  golang.org/x/text v0.44.0  (BSD-3-Clause, see [2])
   gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [33])
 
-app\Dependencies\Ikemen_GO-v1.0.0-windows.zip - Ikemen GO for Windows, the official release, unmodified
+app\Dependencies\Ikemen_GO-modern-input-windows.zip - Ikemen GO for Windows, the official modern-input pre-release, GitHub release branch-modern-input of ikemen-engine/Ikemen-GO, unmodified
     Its own notices are LICENSES.txt inside the zip, and every Desktop export
     unpacks that file beside the engine: Ikemen GO (MIT), its CC BY 3.0 and CC
     BY-NC 3.0 art, FFmpeg (LGPL-2.1; 7 DLLs in lib\), libvpx (BSD-3-Clause),
     libxmp (MIT) and SDL2 (zlib). The FFmpeg source is on the Ikemen GO
     release page (src_ffmpeg.tar.gz). Also in the zip, and not in that file
     (every Desktop export carries these in its own THIRD-PARTY-NOTICES.txt):
-  Go runtime and standard library in Ikemen_GO.exe (go1.20.14)  (BSD-3-Clause, see [2])
-  github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b  (MIT, see [34])
+  Go runtime and standard library in Ikemen_GO.exe (go1.27.4)  (BSD-3-Clause, see [2])
+  github.com/Eiton/vulkan v0.0.0-20260924123253-b670409ed96a  (MIT, see [34])
   github.com/TheTitanrain/w32 v0.0.0-20200114052255-2654d97dbd3d  (BSD-3-Clause, see [35])
   github.com/flopp/go-findfont v0.1.0  (MIT, see [36])
   github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71  (MIT, see [37])
   github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [16])
   github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [17])
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [18])
   github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [15])
-  github.com/icza/bitio v1.1.0  (Apache-2.0, see [19])
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [20])
-  github.com/ikemen-engine/reisen v0.1.10-0.20260911210321-7972c2bbc957  (MIT, see [38])
+  github.com/icza/bitio v1.1.0  (Apache-2.0, see [18])
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2  (MIT, see [19])
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e  (MIT, see [20])
+  github.com/ikemen-engine/reisen v0.1.10-0.20261002224432-3a7df23d0df2  (MIT, see [38])
   github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [21])
   github.com/jfreymuth/vorbis v1.0.2  (MIT, see [21])
   github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [22])
@@ -96,17 +96,17 @@ app\Dependencies\Ikemen_GO-v1.0.0-windows.zip - Ikemen GO for Windows, the offic
   github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [28])
   github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [29])
   github.com/sqweek/dialog v0.0.0-20220809060634-e981b270ebbf  (ISC, see [39])
-  github.com/tidwall/gjson v1.18.0  (MIT, see [30])
+  github.com/tidwall/gjson v1.20.2  (MIT, see [30])
   github.com/tidwall/match v1.1.1  (MIT, see [30])
-  github.com/tidwall/pretty v1.2.0  (MIT, see [31])
-  github.com/tidwall/sjson v1.2.5  (MIT, see [30])
+  github.com/tidwall/pretty v1.3.0  (MIT, see [31])
+  github.com/tidwall/sjson v1.2.9  (MIT, see [30])
   github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12  (BSD-3-Clause, see [40])
   github.com/yuin/gopher-lua v1.1.0  (MIT, see [32])
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498  (BSD-3-Clause, see [8])
-  golang.org/x/image v0.22.0  (BSD-3-Clause, see [2])
+  golang.org/x/image v0.48.0  (BSD-3-Clause, see [2])
   golang.org/x/mobile v0.0.0-20221110043201-43a038452099  (BSD-3-Clause, see [8])
-  golang.org/x/sys v0.18.0  (BSD-3-Clause, see [8])
-  golang.org/x/text v0.20.0  (BSD-3-Clause, see [2])
+  golang.org/x/sys v0.50.0  (BSD-3-Clause, see [2])
+  golang.org/x/text v0.44.0  (BSD-3-Clause, see [2])
   gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [33])
   lib\libgcc_s_seh-1.dll, lib\libstdc++-6.dll (the GCC runtime)  (GPL-3.0 with the GCC Runtime Library Exception, see [41] and [42])
   lib\libwinpthread-1.dll (mingw-w64)  (MIT, see [43])
@@ -115,21 +115,23 @@ app\Dependencies\release, release-v2 and ikemen-go-src\data, font, external
   Ikemen GO's data and scripts; the default-3x5 font by Gacel and the engine icon by Cylia Margatroid  (MIT, CC BY 3.0, see [3])
   the screenpack, lifebars and sounds (data\ikemen1 and the rest)  (CC BY 3.0, see [4])
   Elecbyte's screens, sounds, fonts and Kung Fu Man  (CC BY-NC 3.0, see [5])
+  the controller and keyboard button pictures (Kenney Input Prompts) (engine-data\data\glyphs.sff)  (CC0 1.0, see [44])
+  the controller diagrams (General Arcade) (engine-data\data\glyphs.sff)  (MIT, see [45])
   Open Sans (font\Open_Sans)  (Apache-2.0, see [23])
 
 app\starter - the starter; the first start makes Content\default from it
   Kung Fu Man and his stage (Elecbyte)  (CC BY-NC 3.0, non-commercial, see [5])
 
 app\public\ikemen\vendor\libarchive\2.0.2 - the Mod Studio's .rar and .7z unpacker, which studio-lite.html loads the first time one is added
-  libarchive.js 2.0.2, in libarchive.js, worker-bundle.js  (MIT, see [44])
-  Comlink 4.4.1, in libarchive.js, worker-bundle.js (built into both)  (Apache-2.0, see [45])
-  libarchive 3.7.2, in libarchive.wasm  (BSD-2-Clause, see [46])
-  zlib 1.2.13, in libarchive.wasm  (Zlib, see [47])
-  bzip2 1.0.6, in libarchive.wasm  (bzip2 (BSD-style), see [48])
-  liblzma (XZ Utils) 5.2.11, in libarchive.wasm  (public domain, see [49])
-  OpenSSL (libcrypto) 1.0.2s, in libarchive.wasm  (OpenSSL and SSLeay (BSD-style), see [50])
-  Emscripten's runtime, in libarchive.wasm, worker-bundle.js  (MIT or NCSA, see [51])
-  musl, Emscripten's C library, in libarchive.wasm  (MIT, see [52])
+  libarchive.js 2.0.2, in libarchive.js, worker-bundle.js  (MIT, see [46])
+  Comlink 4.4.1, in libarchive.js, worker-bundle.js (built into both)  (Apache-2.0, see [47])
+  libarchive 3.7.2, in libarchive.wasm  (BSD-2-Clause, see [48])
+  zlib 1.2.13, in libarchive.wasm  (Zlib, see [49])
+  bzip2 1.0.6, in libarchive.wasm  (bzip2 (BSD-style), see [50])
+  liblzma (XZ Utils) 5.2.11, in libarchive.wasm  (public domain, see [51])
+  OpenSSL (libcrypto) 1.0.2s, in libarchive.wasm  (OpenSSL and SSLeay (BSD-style), see [52])
+  Emscripten's runtime, in libarchive.wasm, worker-bundle.js  (MIT or NCSA, see [53])
+  musl, Emscripten's C library, in libarchive.wasm  (MIT, see [54])
 
 
 LICENSE TEXTS
@@ -170,11 +172,12 @@ Applies to:
   The Go runtime and standard library
   public\ikemen\wasm_exec.js
   The Go runtime in the web engine
-  golang.org/x/image v0.22.0 (the web engine)
-  golang.org/x/text v0.20.0 (the web engine)
+  golang.org/x/image v0.48.0 (the web engine)
+  golang.org/x/text v0.44.0 (the web engine)
   The Go runtime in Ikemen_GO.exe
-  golang.org/x/image v0.22.0 (Ikemen_GO.exe)
-  golang.org/x/text v0.20.0 (Ikemen_GO.exe)
+  golang.org/x/image v0.48.0 (Ikemen_GO.exe)
+  golang.org/x/sys v0.50.0 (Ikemen_GO.exe)
+  golang.org/x/text v0.44.0 (Ikemen_GO.exe)
 
 Copyright 2009 The Go Authors.
 
@@ -283,7 +286,7 @@ Screenpack, lifebars, sounds and fonts
 ======================================
 
 This build's data and font folders come from Ikemen GO. From the LICENSES.txt
-of Ikemen_GO-v1.0.0-windows, section 2:
+of Ikemen_GO-modern-input-windows, section 2:
 
 Screenpack license from Ikemen-GO-Screenpack/LICENCE.txt:
 
@@ -386,7 +389,6 @@ Applies to:
   golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a (the web engine)
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498 (Ikemen_GO.exe)
   golang.org/x/mobile v0.0.0-20221110043201-43a038452099 (Ikemen_GO.exe)
-  golang.org/x/sys v0.18.0 (Ikemen_GO.exe)
 
 Copyright (c) 2009 The Go Authors. All rights reserved.
 
@@ -3748,7 +3750,7 @@ leaderboard-fonts folder beside leaderboard.html.
 [15] Apache-2.0
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/ebitengine/oto/v3 v3.2.0 (the web engine)
+  github.com/ebitengine/oto/v3 v3.3.2 (built from the engine's own copy in third_party/oto) (the web engine)
   github.com/hajimehoshi/go-mp3 v0.3.4 (the web engine)
   github.com/hajimehoshi/go-mp3 v0.3.4 (Ikemen_GO.exe)
 
@@ -4176,36 +4178,7 @@ Legal Terms
 --- end of FTL.TXT ---
 
 --------------------------------------------------------------------------------
-[18] MIT - github.com/gopxl/beep/v2
---------------------------------------------------------------------------------
-Applies to:
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99 (the web engine)
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99 (Ikemen_GO.exe)
-
-MIT License
-
-Copyright (c) 2017 Michal Štrba
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---------------------------------------------------------------------------------
-[19] Apache-2.0 - github.com/icza/bitio
+[18] Apache-2.0 - github.com/icza/bitio
 --------------------------------------------------------------------------------
 Applies to:
   github.com/icza/bitio v1.1.0 (the web engine)
@@ -4414,11 +4387,40 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
+[19] MIT - github.com/ikemen-engine/beep/v2
+--------------------------------------------------------------------------------
+Applies to:
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2 (the web engine)
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2 (Ikemen_GO.exe)
+
+MIT License
+
+Copyright (c) 2017 Michal Štrba
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
 [20] MIT - github.com/ikemen-engine/ggpo
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2 (the web engine)
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2 (Ikemen_GO.exe)
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e (built from the engine's own copy in third_party/ggpo) (the web engine)
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e (Ikemen_GO.exe)
 
 MIT License
 
@@ -4764,7 +4766,7 @@ For more information, please refer to <http://unlicense.org/>
 [26] Unlicense (public domain) - github.com/mewkiz/pkg
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 (the web engine)
+  github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 (built from the engine's own copy in third_party/mewkiz-pkg) (the web engine)
   github.com/mewkiz/pkg v0.0.0-20230226050401-4010bf0fec14 (Ikemen_GO.exe)
 
 This is free and unencumbered software released into the public domain.
@@ -4893,12 +4895,12 @@ SOFTWARE.
 [30] MIT
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/tidwall/gjson v1.18.0 (the web engine)
+  github.com/tidwall/gjson v1.20.2 (the web engine)
   github.com/tidwall/match v1.1.1 (the web engine)
-  github.com/tidwall/sjson v1.2.5 (the web engine)
-  github.com/tidwall/gjson v1.18.0 (Ikemen_GO.exe)
+  github.com/tidwall/sjson v1.2.9 (the web engine)
+  github.com/tidwall/gjson v1.20.2 (Ikemen_GO.exe)
   github.com/tidwall/match v1.1.1 (Ikemen_GO.exe)
-  github.com/tidwall/sjson v1.2.5 (Ikemen_GO.exe)
+  github.com/tidwall/sjson v1.2.9 (Ikemen_GO.exe)
 
 The MIT License (MIT)
 
@@ -4925,8 +4927,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 [31] MIT - github.com/tidwall/pretty
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/tidwall/pretty v1.2.0 (the web engine)
-  github.com/tidwall/pretty v1.2.0 (Ikemen_GO.exe)
+  github.com/tidwall/pretty v1.3.0 (the web engine)
+  github.com/tidwall/pretty v1.3.0 (Ikemen_GO.exe)
 
 The MIT License (MIT)
 
@@ -4953,7 +4955,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 [32] MIT - github.com/yuin/gopher-lua
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/yuin/gopher-lua v1.1.0 (the web engine)
+  github.com/yuin/gopher-lua v1.1.0 (built from the engine's own copy in third_party/gopher-lua) (the web engine)
   github.com/yuin/gopher-lua v1.1.0 (Ikemen_GO.exe)
 
 The MIT License (MIT)
@@ -5181,7 +5183,7 @@ third-party archives.
 [34] MIT - github.com/Eiton/vulkan
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b (Ikemen_GO.exe)
+  github.com/Eiton/vulkan v0.0.0-20260924123253-b670409ed96a (Ikemen_GO.exe)
 
 The MIT License (MIT)
 Copyright © 2016-2017 Maxim Kupriianov <max@kc.vc>
@@ -5294,7 +5296,7 @@ SOFTWARE.
 [38] MIT - github.com/ikemen-engine/reisen
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/ikemen-engine/reisen v0.1.10-0.20260911210321-7972c2bbc957 (Ikemen_GO.exe)
+  github.com/ikemen-engine/reisen v0.1.10-0.20261002224432-3a7df23d0df2 (Ikemen_GO.exe)
 
 MIT License
 
@@ -6199,7 +6201,47 @@ DEALINGS IN THE SOFTWARE.
  */
 
 --------------------------------------------------------------------------------
-[44] MIT - libarchive.js
+[44] CC0 1.0 - Kenney Input Prompts
+--------------------------------------------------------------------------------
+Applies to:
+  the controller and keyboard button pictures (Kenney Input Prompts) (data\glyphs.sff)
+
+Kenney Input Prompts
+Author: Kenney (https://kenney.nl)
+License: CC0 1.0 Universal (public domain)
+Source: https://kenney.nl/assets/input-prompts
+License terms: https://creativecommons.org/publicdomain/zero/1.0/
+
+--------------------------------------------------------------------------------
+[45] MIT - General Arcade
+--------------------------------------------------------------------------------
+Applies to:
+  the controller diagrams (General Arcade) (data\glyphs.sff)
+
+MIT License
+
+Copyright (c) 2016-2026 General Arcade
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
+[46] MIT - libarchive.js
 --------------------------------------------------------------------------------
 Applies to:
   libarchive.js 2.0.2 (vendor/libarchive/2.0.2)
@@ -6227,7 +6269,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-[45] Apache-2.0 - Comlink
+[47] Apache-2.0 - Comlink
 --------------------------------------------------------------------------------
 Applies to:
   Comlink 4.4.1 (vendor/libarchive/2.0.2)
@@ -6436,7 +6478,7 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
-[46] BSD-2-Clause - libarchive
+[48] BSD-2-Clause - libarchive
 --------------------------------------------------------------------------------
 Applies to:
   libarchive 3.7.2 (vendor/libarchive/2.0.2)
@@ -6545,7 +6587,7 @@ which carries this notice too:
  */
 
 --------------------------------------------------------------------------------
-[47] Zlib - zlib
+[49] Zlib - zlib
 --------------------------------------------------------------------------------
 Applies to:
   zlib 1.2.13 (vendor/libarchive/2.0.2)
@@ -6574,7 +6616,7 @@ Copyright notice:
   jloup@gzip.org          madler@alumni.caltech.edu
 
 --------------------------------------------------------------------------------
-[48] bzip2 (BSD-style) - bzip2
+[50] bzip2 (BSD-style) - bzip2
 --------------------------------------------------------------------------------
 Applies to:
   bzip2 1.0.6 (vendor/libarchive/2.0.2)
@@ -6623,7 +6665,7 @@ bzip2/libbzip2 version 1.0.6 of 6 September 2010
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
-[49] public domain - liblzma (XZ Utils)
+[51] public domain - liblzma (XZ Utils)
 --------------------------------------------------------------------------------
 Applies to:
   liblzma (XZ Utils) 5.2.11 (vendor/libarchive/2.0.2)
@@ -6694,7 +6736,7 @@ XZ Utils Licensing
     information.
 
 --------------------------------------------------------------------------------
-[50] OpenSSL and SSLeay (BSD-style) - OpenSSL (libcrypto)
+[52] OpenSSL and SSLeay (BSD-style) - OpenSSL (libcrypto)
 --------------------------------------------------------------------------------
 Applies to:
   OpenSSL (libcrypto) 1.0.2s (vendor/libarchive/2.0.2)
@@ -6827,7 +6869,7 @@ Applies to:
  */
 
 --------------------------------------------------------------------------------
-[51] MIT or NCSA - Emscripten's runtime
+[53] MIT or NCSA - Emscripten's runtime
 --------------------------------------------------------------------------------
 Applies to:
   Emscripten's runtime (vendor/libarchive/2.0.2)
@@ -6935,7 +6977,7 @@ used by default, but certain options use it (e.g., the optional closure compiler
 flag will run closure compiler from third_party/).
 
 --------------------------------------------------------------------------------
-[52] MIT - musl, Emscripten's C library
+[54] MIT - musl, Emscripten's C library
 --------------------------------------------------------------------------------
 Applies to:
   musl, Emscripten's C library (vendor/libarchive/2.0.2)

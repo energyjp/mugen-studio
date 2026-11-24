@@ -120,39 +120,102 @@
   }
   globalThis.__ikemenIniSectionOf = iniSectionOf;
 
-  // KEYS A WEBSITE NEVER RUNS WITH ON, whatever a config says. Netplay
-  // Rollback.LogsEnabled makes the engine write a rollback log (ggpo logs
-  // several lines a frame and a packet) into save/logs/, which in a browser is
-  // memory nobody can open, and the writing itself slowed online matches. The
-  // Studio no longer writes it into a website build (settings-schema.js,
-  // applies 'desktop', webOff), but a returning player's saved config.ini is
-  // loaded over the shipped one whole, so a value that reached a browser once
-  // would stay. Each key here is set to its value, inside its section, every
-  // boot; a config that does not name the key is left alone (the engine's own
-  // default is off). It is sync:"host" in the engine, so the host's value
-  // decides for both players: forcing it on every page covers both.
-  const WEB_FORCED = [['Netplay', 'Rollback.LogsEnabled', '0']];
+  // KEYS A WEBSITE ALWAYS RUNS WITH ONE VALUE, whatever a config says.
+  // - Netplay rollback logging: Rollback.LogsEnabled (the 2.4 engine) and
+  //   Rollback.StateLogsEnabled + Rollback.GgpoLogsEnabled (the engine from 2.5
+  //   on, which split it) make the engine write a rollback log (ggpo logs
+  //   several lines a frame and a packet) into save/logs/, which in a browser is
+  //   memory nobody can open, and the writing itself slowed online matches. The
+  //   Studio no longer writes LogsEnabled into a website build (settings-schema.js,
+  //   applies 'desktop', webOff). They are sync:"host" in the engine, so the
+  //   host's value decides for both players: forcing it on every page covers
+  //   both. A config that does not name one is left alone (the engine's own
+  //   default is off).
+  // - Sound FocusLossVolume = 100: from 2.5 the engine sees real window focus in
+  //   the browser and turns the sound down to this percentage whenever the
+  //   window loses it (engine default 50). A website plays at full volume
+  //   (Decision 33). A config that does not name it gets the line ADDED in
+  //   [Sound] (the 4th field), since the engine's own default would duck.
+  // A returning player's saved config.ini is loaded over the shipped one whole,
+  // so a value that reached a browser once would stay: each key here is set to
+  // its value, inside its section, every boot.
+  const WEB_FORCED = [
+    ['Netplay', 'Rollback.LogsEnabled', '0', false],
+    ['Netplay', 'Rollback.StateLogsEnabled', '0', false],
+    ['Netplay', 'Rollback.GgpoLogsEnabled', '0', false],
+    ['Sound', 'FocusLossVolume', '100', true],
+  ];
   // Line by line, so a file comes back byte for byte apart from the value:
-  // its line endings, spacing, comments and final newline stay.
-  function forceWebKeys(text) {
+  // its line endings, spacing, comments and final newline stay. A key that is
+  // added goes after the last setting of the first such section (or right
+  // under its header), with that line's ending; a file without the section
+  // gets it at the end, the way stampIniSection appends one. Returns the text
+  // and the keys it set ("Sec.Key = val").
+  function forceWebKeysWhy(text) {
     const src = String(text);
-    const lines = src.split(String.fromCharCode(10));
-    let sec = null, changed = false;
+    const LF = String.fromCharCode(10), CR = String.fromCharCode(13);
+    const lines = src.split(LF);
+    const crlf = src.indexOf(CR + LF) >= 0;
+    let sec = null;
+    const set = [];
+    const found = new Set();
+    const slots = new Map(); // section (lower case) -> { at: line to add after, open }
     for (let i = 0; i < lines.length; i++) {
       const cr = /\r$/.test(lines[i]);
       const line = cr ? lines[i].slice(0, -1) : lines[i];
-      if (/^\s*\[/.test(line)) { const h = /^\s*\[\s*([^\]]*?)\s*\]/.exec(line); sec = h ? h[1].toLowerCase() : ''; continue; }
+      if (/^\s*\[/.test(line)) {
+        const h = /^\s*\[\s*([^\]]*?)\s*\]/.exec(line); sec = h ? h[1].toLowerCase() : '';
+        if (!slots.has(sec)) slots.set(sec, { at: i, open: true });
+        else slots.get(sec).open = false; // a repeated header: additions go to the first
+        continue;
+      }
+      const slot = slots.get(sec);
+      if (slot && slot.open && line.trim() !== '' && !/^\s*;/.test(line)) slot.at = i;
       for (const [s, key, val] of WEB_FORCED) {
         if (sec !== s.toLowerCase()) continue;
         const m = new RegExp('^([ \\t]*' + key.replace(/[.]/g, '\\.') + '[ \\t]*=[ \\t]*)([^;]*?)([ \\t]*;.*)?$', 'i').exec(line);
-        if (!m || m[2].trim() === val) continue;
-        lines[i] = m[1] + val + (m[3] || '') + (cr ? String.fromCharCode(13) : '');
-        changed = true;
+        if (!m) continue;
+        found.add(s + '.' + key);
+        if (m[2].trim() === val) continue;
+        lines[i] = m[1] + val + (m[3] || '') + (cr ? CR : '');
+        set.push(s + '.' + key + ' = ' + val);
       }
     }
-    return changed ? lines.join(String.fromCharCode(10)) : src;
+    const adds = new Map(); // line index -> settings to insert after it
+    const tail = [];
+    for (const [s, key, val, add] of WEB_FORCED) {
+      if (!add || found.has(s + '.' + key)) continue;
+      const slot = slots.get(s.toLowerCase());
+      const kv = key + ' = ' + val;
+      if (slot) { if (!adds.has(slot.at)) adds.set(slot.at, []); adds.get(slot.at).push(kv); }
+      else tail.push([s, kv]);
+      set.push(s + '.' + key + ' = ' + val);
+    }
+    if (!set.length) return { text: src, set };
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const more = adds.get(i);
+      if (!more) { out.push(lines[i]); continue; }
+      const last = i === lines.length - 1;
+      // The new lines take this line's ending. After the last line of a file
+      // with no final newline, that line gets the file's ending and the last
+      // new line ends without one.
+      const cr = last ? crlf : /\r$/.test(lines[i]);
+      out.push(last && cr && !/\r$/.test(lines[i]) ? lines[i] + CR : lines[i]);
+      more.forEach((kv, j) => out.push(kv + (cr && !(last && j === more.length - 1) ? CR : '')));
+    }
+    let res = out.join(LF);
+    if (tail.length) {
+      const NL = crlf ? CR + LF : LF;
+      if (res.length && !/\n$/.test(res)) res += NL;
+      const bySec = new Map();
+      for (const [s, kv] of tail) { if (!bySec.has(s)) bySec.set(s, []); bySec.get(s).push(kv); }
+      for (const [s, kvs] of bySec) res += '[' + s + ']' + NL + kvs.join(NL) + NL;
+    }
+    return { text: res, set };
   }
-  globalThis.__ikemenWebForced = { keys: WEB_FORCED.map(([s, k, v]) => [s, k, v]), apply: forceWebKeys };
+  function forceWebKeys(text) { return forceWebKeysWhy(text).text; }
+  globalThis.__ikemenWebForced = { keys: WEB_FORCED.map(([s, k, v, a]) => [s, k, v, a]), apply: forceWebKeys, why: forceWebKeysWhy };
 
   // THE PAK, READ INTO ONE BUFFER. The whole build arrives as one file and
   // stays in memory while the game runs. Collected as chunks and then copied
@@ -698,7 +761,21 @@
     const stamp = data.stamp ? '?v=' + encodeURIComponent(data.stamp) : '';
     globalThis.ikemenAssetStamp = data.stamp || '';
 
-    if (data.pack) {
+    if (data.lite) {
+      // A LITE BUILD (the export's Lite build option, lite/pack.js): one
+      // compressed file in place of game.pak and ikemen.wasm, fetched once
+      // and kept in Cache Storage, rebuilt here by lite.js into the same files
+      // game.pak would have held. Its address carries the lite file's own id
+      // too, so a build packed again is never served from a kept copy.
+      if (typeof globalThis.ikemenLiteLoad !== 'function') throw new Error('lite.js did not load; re-upload the site with all of its files');
+      const liteUrl = manifestUrl.replace(/manifest\.json$/, data.lite) + '?v=' + encodeURIComponent((data.stamp || '') + '.' + (data.liteId || ''));
+      const lite = await globalThis.ikemenLiteLoad(liteUrl, onProgress);
+      for (const [vpath, bytes] of lite.files) {
+        contents.set(vpath, bytes);
+        packedIndex.set(vpath, bytes.length);
+        registerDirsFor(vpath);
+      }
+    } else if (data.pack) {
       const packUrl = manifestUrl.replace(/manifest\.json$/, data.pack) + stamp;
       const packRes = await fetch(packUrl, { cache: 'no-cache' });
       const { pak } = await readPak(packRes, onProgress);
@@ -852,16 +929,16 @@
       }
     } catch (e) { /* leave config as shipped */ }
 
-    // The keys a website never runs with on (WEB_FORCED above): put back over
+    // The keys a website always runs with one value (WEB_FORCED above): put back over
     // the saved config, like the theme and the match shape.
     try {
       const cfg = contents.get('save/config.ini');
       if (cfg) {
         const text = new TextDecoder().decode(cfg);
-        const patched = forceWebKeys(text);
-        if (patched !== text) {
-          contents.set('save/config.ini', new TextEncoder().encode(patched));
-          console.log('[vfs] turned off for the website: ' + WEB_FORCED.map((k) => k[1]).join(', '));
+        const r = forceWebKeysWhy(text);
+        if (r.text !== text) {
+          contents.set('save/config.ini', new TextEncoder().encode(r.text));
+          console.log('[vfs] set for the website: ' + r.set.join(', '));
         }
       }
     } catch (e) { /* leave config as restored */ }
@@ -1123,7 +1200,7 @@
     // file mid-fight (a sound effect, a hit spark sheet) blocks the game
     // loop on a network fetch - felt as a random tiny freeze. Limited
     // concurrency so boot-critical fetches still win the bandwidth race.
-    if (!data.pack) {
+    if (!data.pack && !data.lite) {
       const pending = [...manifest.keys()];
       // Each file's size as it is NOW, the same numbers the total is made of:
       // the engine writes files during boot (save/config.ini), and a write

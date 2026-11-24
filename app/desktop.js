@@ -1,19 +1,26 @@
 'use strict';
 //
-// THE DESKTOP BUILD: this project as a CONTENT MANAGER for stock Ikemen GO.
+// THE DESKTOP BUILD: this project as a CONTENT MANAGER for upstream's official
+// Ikemen GO.
 //
-// The web export ships our own wasm engine - our work, carrying elements of
-// Ikemen GO v1.0.0-rc.2 - and nothing here touches it. A desktop build is a
-// different thing entirely: the LATEST OFFICIAL Ikemen GO, unmodified, with the
-// roster this Studio manages laid into it. Netplay and ranked live only in the
-// wasm build; putting them in the native engine is later work that may not pan
-// out, so a desktop build makes no claim to them.
+// The web export ships our own wasm engine (WebMUGEN: upstream's modern-input
+// engine with the browser port, netplay and lobbies), and nothing here touches
+// it. A desktop build is a different thing entirely: upstream's OFFICIAL
+// modern-input build, unmodified - the GitHub pre-release branch-modern-input
+// (Ikemen_GO-modern-input-windows.zip), later the versioned release that
+// replaces it; never 1.0.x again and never an engine of ours (Decision 24,
+// docs/UPSTREAM-MODERN-INPUT-PLAN.md) - with the roster this Studio manages
+// laid into it. Only CONTENT is shared between the two. Netplay, lobbies,
+// ranked and watching live only in the web build, so a desktop build makes no
+// claim to them: our main.lua (the WebRTC JOIN, the lobby and watch calls) and
+// onlinename.lua (the ranked result calls) are web-only and never ship here,
+// and every Lua file this export writes calls only functions the official
+// engine has (tools/test-desktop-sandbox.js checks the texts).
 //
 // THE ENGINE IS SHIPPED INTACT. Its own data/, external/, font/ and lib/ are
 // extracted from the official zip and never overwritten, because our repo's
-// data/ and external/ come from the V2 branch our wasm is built from and would
-// quietly replace a stock file (rc.5, 1.0.0, whichever zip is here) with a
-// different engine's version. Only USER
+// data/ and external/ come from the branch our wasm is built from and would
+// quietly replace a stock file with a different engine's version. Only USER
 // CONTENT is laid on top:
 //
 //   cache/<folder>  -> chars/<mountAs>     the roster's characters
@@ -21,7 +28,9 @@
 //   music/          -> sound/              the music library
 //   (generated)     -> data/select.def     the roster itself
 //   themes/<f>      -> data/<f>            the chosen screenpack
-//   (generated)     -> save/config.ini     pointing at that screenpack
+//   (generated)     -> save/config.ini     pointing at that screenpack, with
+//                                          the build's keyboards and setup in
+//                                          the format the zip's engine reads
 //
 // which is exactly the set a player would drop into an install by hand.
 
@@ -38,11 +47,10 @@ const layout = require('./layout');
 const CACHE = layout.dir('cache');
 const THEMES = layout.dir('themes');
 
-// The official release to build against, newest first by name. Kept as a
-// pattern rather than a constant so dropping the next rc in beside it is all
-// that upgrading takes.
-// One rule for every caller (enginezip.js via layout.engineZip): newest by
-// version, which the Settings > Engine card reports.
+// The official zip to build against: upstream's modern-input pre-release, or a
+// versioned release newer than 1.0.x once one exists; 1.0.x and any other zip
+// are never picked. One rule for every caller (enginezip.js via
+// layout.engineZip), which the Settings > Engine card reports.
 function findEngineZip() {
   return layout.engineZip();
 }
@@ -1097,6 +1105,30 @@ function fixCopiedCharacters(copied) {
   return changed;
 }
 
+// The Command Lists this build's characters carry, as text: each copied def's
+// [Files] movelist, the Studio's (cmdlist.js, written above) or the
+// character's own, once per file (cmdlistfit.js measures their rows).
+function buildMovelists(copied) {
+  const out = [], seen = new Set();
+  const BTN = require('./buttonstyle.js');
+  for (const c of copied || []) {
+    for (const defName of c.defNames || []) {
+      const defAbs = path.join(c.dir, ...String(defName).split('/'));
+      let t;
+      try { t = fs.readFileSync(defAbs, 'latin1'); } catch (e) { continue; }
+      const f = BTN.sections(t).find((s) => s.name === 'files');
+      const m = f && /^[ \t]*movelist[ \t]*=[ \t]*([^;\r\n]*?)[ \t]*(?:;.*)?$/mi.exec(t.slice(f.bodyStart, f.end));
+      const rel = m ? m[1].trim().replace(/^"|"$/g, '').replace(/\\/g, '/') : '';
+      if (!rel) continue;
+      const abs = path.resolve(path.dirname(defAbs), ...rel.split('/'));
+      if (seen.has(abs.toLowerCase())) continue;
+      seen.add(abs.toLowerCase());
+      try { out.push(fs.readFileSync(abs, 'utf8')); } catch (e) { /* named but missing: nothing to measure */ }
+    }
+  }
+  return out;
+}
+
 // system.def's logo.storyboard pointed at `want`: the custom logo in its own
 // folder, or the engine's own logo.def again - which is still there precisely
 // because nothing overwrites it any more. With no logo.storyboard line at all,
@@ -1150,25 +1182,63 @@ function exportDesktop(opts = {}) {
   let vfsListFont = null;
   // vfsButtons: the Command List buttons the build decided on (buttonstyle.js; below)
   let vfsButtons = null;
-  try { const built = vfslib.build(); generated = built.generated || {}; vfsListFont = built.commandListFont || null; vfsButtons = built.commandListButtons || null; } catch (e) { generated = {}; }
+  // `desktop: true` asks for what a desktop build shares with the website's and
+  // a plain build() leaves out: upstream's side select screen in a pack
+  // without one (motifcompat.sideSelect, the bundle's Theme tab option).
+  try { const built = vfslib.build({ desktop: true }); generated = built.generated || {}; vfsListFont = built.commandListFont || null; vfsButtons = built.commandListButtons || null; } catch (e) { generated = {}; }
 
   WRITTEN.clear();
   GENERATED.clear();
   const zip = opts.engineZip || findEngineZip();
   if (!zip || !fs.existsSync(zip)) {
-    throw new Error('no official Ikemen GO zip found - put Ikemen_GO-<version>-windows.zip'
+    throw new Error('no official Ikemen GO zip found - put upstream\'s Ikemen_GO-modern-input-windows.zip'
       + ' in the project folder');
   }
   const dest = resolveDest(opts);
   const engineName = path.basename(zip, '.zip');
+  // WHICH CONFIG FORMAT THIS ENGINE READS, from its own exe (read, never run):
+  // the keyboards and the setup are written under the names it knows, and an
+  // engine whose format cannot be told - 1.0.x, or a build that names none of
+  // them - is refused here, before the folder is touched, never exported with
+  // a config it would ignore.
+  const EZ = require('./enginezip.js');
+  const engineFmt = EZ.engineFormat(zip);
+  if (engineFmt && engineFmt.id === 'keys') {
+    throw new Error(path.basename(zip) + ' reads the old controls ([Keys_Pn]): the desktop export now builds on upstream\'s modern-input engine - put upstream\'s Ikemen_GO-modern-input-windows.zip in the project folder instead');
+  }
+  if (!engineFmt) {
+    throw new Error(path.basename(zip) + ' has an Ikemen_GO.exe that names none of the control sections the desktop export writes - put upstream\'s Ikemen_GO-modern-input-windows.zip in the project folder instead');
+  }
+  // One format for web and desktop (keylib FORMAT_V2, plan 1.28): an earlier
+  // pre-release that still reads [ButtonMapping_*] / [ControllerSetup_*] would
+  // ignore every control the export writes.
+  if (engineFmt.id !== keylib.FORMAT_V2.id) {
+    throw new Error(path.basename(zip) + ' is an earlier modern-input pre-release that reads [ButtonMapping_*] and [ControllerSetup_*]: the export writes [ControllerMapping_*] and [ButtonSetup_*] - download the current Ikemen_GO-modern-input-windows.zip');
+  }
+  const cfgFmt = keylib.formatV2(engineFmt.id);
 
   // THE ENGINE IS EXTRACTED ONCE. Re-extracting 60MB on every export to change
   // a character is wasteful, so it is redone only when the folder has no engine
-  // or a DIFFERENT one - which is also what makes dropping in the next rc work:
-  // the stamp changes, so the engine is replaced rather than half-updated.
+  // or a DIFFERENT one - which is also what makes dropping in the next release
+  // work: the stamp changes, so the engine is replaced rather than half-updated.
+  // The stamp is the zip's name, its sha256 and the config format: upstream
+  // republishes the pre-release under the SAME name, and only the hash tells
+  // the new one from the old.
   const stampFile = path.join(dest, 'save', '.engine');
-  const have = fs.existsSync(stampFile) ? fs.readFileSync(stampFile, 'utf8').trim() : null;
+  const stampLines = fs.existsSync(stampFile) ? fs.readFileSync(stampFile, 'utf8').split(/\r?\n/).map((l) => l.trim()) : [];
+  const have = stampLines[0] || null;
+  const haveSha = (/^sha256 ([0-9a-f]{64})$/.exec(stampLines.find((l) => l.startsWith('sha256 ')) || '') || [])[1] || null;
+  const haveFmt = (/^format (\S+)$/.exec(stampLines.find((l) => l.startsWith('format ')) || '') || [])[1] || null;
+  const zipSha = require('crypto').createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
   let extracted = false;
+  // THE PLAYER'S CONFIG OUTLIVES A NEW BUILD OF THE SAME FORMAT. Replacing the
+  // engine empties the folder; when the old engine read the same config format
+  // (a republished pre-release, a release of the same line), save/config.ini -
+  // the player's volumes, remaps and setups - is put back afterwards, and the
+  // keys this build decides are written into it as on any re-export. Across
+  // formats (1.0.x to modern-input) it is not: the old file's sections mean
+  // nothing to the new engine.
+  let carriedConfig = null, carriedRecord = null;
   // An export folder that still carries the 2026-09-13 TEXT patches to the
   // stock scripts (main.lua/start.lua/training.zss, superseded the same day by
   // the sandbox's own files) goes back to the zip, so the scripts are stock.
@@ -1180,7 +1250,11 @@ function exportDesktop(opts = {}) {
     } catch (e) { return false; }
   })();
   if (stalePatch) console.log('desktop: export folder carries superseded script patches - re-extracting the engine');
-  if (have !== engineName || stalePatch || !fs.existsSync(path.join(dest, 'Ikemen_GO.exe'))) {
+  if (have !== engineName || (haveSha && haveSha !== zipSha) || stalePatch || !fs.existsSync(path.join(dest, 'Ikemen_GO.exe'))) {
+    if (haveFmt && haveFmt === engineFmt.id) {
+      try { carriedConfig = fs.readFileSync(path.join(dest, 'save', 'config.ini'), 'latin1'); } catch (e) { carriedConfig = null; }
+      try { carriedRecord = fs.readFileSync(path.join(dest, 'save', '.studio-controls.json'), 'utf8'); } catch (e) { carriedRecord = null; }
+    }
     rmrf(dest);
     fs.mkdirSync(dest, { recursive: true });
     // THE PATHS GO IN AS DATA, through the environment (modlib's extractZip
@@ -1435,7 +1509,8 @@ function exportDesktop(opts = {}) {
     let stale = false;
     // ...or the Command List's buttons at an earlier export's style (buttonstyle.js, below)
     let staleFont = false;
-    try { if (abs && !WRITTEN.has(writtenKey(abs))) { const t = fs.readFileSync(abs, 'latin1'); staleFont = /^font\d+ = DotGothic16\.def ;/m.test(t); stale = staleFont || require('./buttonstyle.js').patched(t); } } catch (e) { stale = false; }
+    // ...or the Command List's window an earlier export fitted (cmdlistfit.js, below)
+    try { if (abs && !WRITTEN.has(writtenKey(abs))) { const t = fs.readFileSync(abs, 'latin1'); staleFont = /^font\d+ = DotGothic16\.def ;/m.test(t); stale = staleFont || require('./buttonstyle.js').patched(t) || require('./cmdlistfit.js').marked(t); } } catch (e) { stale = false; }
     if (stale) {
       const z = zip ? zipRead(zip, [rel], dest) : null;
       const orig = z && z.files && z.files.get(rel.toLowerCase());
@@ -1612,8 +1687,11 @@ function exportDesktop(opts = {}) {
   // The engine merges a partial config into its own defaults - it kept our
   // Motif and filled in the other 550 lines itself - so this says only what
   // this build actually decides, and every line it does say has to be true
-  // natively. The controls do: the stock [Keys_P1] takes the same names and values
-  // ours does, so the bindings you set in the Studio are the bindings you get.
+  // natively. The controls do: the two keyboard controllers and the setup of
+  // Settings > Controls (keylib.js), in the modern-input engine's sections
+  // under the names THIS zip's engine reads (cfgFmt, from its exe), take the
+  // same key names the web build's do, so the layouts you set in the Studio
+  // are the layouts you get. No [Keys_Pn] / [Joystick_Pn]: that was 1.0.x.
   //
   // Most of the web config does NOT. `RenderMode = WebGL 2` is meaningless to a
   // native renderer, the debug font is a bitmap face chosen because browsers
@@ -1621,49 +1699,56 @@ function exportDesktop(opts = {}) {
   // WebGL renderer draws no model shadows, and the whole Netplay block is our rollback
   // build. Copying those over would be shipping browser workarounds to a
   // desktop that does not need them.
-  // The sections keylib decides for this build, which is the two keyboard
-  // layouts plus anything bound in Settings > Controls. A slot nobody touched
-  // is not listed and therefore not written, so the engine's own default for
-  // it stands - which is the whole reason a partial config works at all
-  // (config.go:311-315).
-  const carry = keylib.sectionsWritten(roster.keys, vfslib.playersOf(roster));
+  // The sections keylib decides for this build: [Input] (each keyboard
+  // controller's setup and side), both keyboard controllers whole (the engine
+  // overlays the user file key by key, so a missing control would fall through
+  // to upstream's own keys, the arrows and Z X A S), and the Standard setup
+  // whole only when the bundle changed it (once the user file has a setup
+  // section, the engine drops every setup it does not name). The same model the
+  // web build writes (keylib.controlsOf: roster.controls, or an older bundle's
+  // Keys_P1 / Keys_P2 carried through the Standard setup).
+  const controls = keylib.controlsOf(roster);
+  const carry = keylib.sectionsWrittenV2(controls, cfgFmt);
   // EVERY key this build owns, not only the overridden ones - see the note on
-  // settingsFor. Anything the panel can set, the exported config states.
-  const settings = require('./settings-schema').settingsFor(roster.settings, 'desktop', true);
+  // settingsFor. Anything the panel can set, the exported config states. The
+  // modern-input list ('v2'), checked key by key against upstream's
+  // defaultConfig.ini; every key of it is in the official zip's own defaults.
+  const settings = require('./settings-schema').settingsFor(roster.settings, 'desktop', true, 'v2');
   //
-  // FirstRun MUST BE 0 OR THE CONTROLS ARE THROWN AWAY BEFORE THE PLAYER SEES A
-  // MENU. The stock zip ships FirstRun = 1 (rc.5 and 1.0.0 embed the same
-  // defaultConfig.ini, checked 2026-09-12); options.lua runs f_keyDefault() at module
-  // load when it is set, which calls uiSetConfigDefaults and rewrites every
-  // Keys_P<n> and Joystick_P<n> button from the engine's own table, then saves.
-  // Measured on the shipped export: our w/s/a/d + k/l/SEMICOLON came back as
-  // UP/DOWN/LEFT/RIGHT + z/x/c, and the 39-line file came back as 543. Motif and
-  // MasterVolume survived, because first-run only touches input - which is
-  // exactly what made it look like the config was being honored.
-  //
-  // The web build has always set this (vfslib's save/config.json, with the same
-  // note); the fix simply never reached this product.
+  // FirstRun = 0: on the modern-input engine it only opens the welcome info box
+  // (main.lua shows it once and clears the key); the web build sets the same.
+  // (On 1.0.x it was much sharper: options.lua rewrote every Keys_P<n> and
+  // Joystick_P<n> from the engine's own table at first run, which threw the
+  // build's controls away before the player saw a menu.)
   const lines = [];
   //
   // Sections are COLLECTED rather than appended, because the engine's ini reader
   // is first-wins on a repeated key: emitting [Sound] twice - once carried from
   // the web config, once from the settings panel - would quietly hand the win to
   // whichever was written first instead of to the deliberate choice.
-  // THE THREE THE PLAYER OWNS ONCE THEY HAVE SET THEM.
+  // WHAT THE PLAYER OWNS ONCE THEY HAVE SET IT.
   //
   // The Studio owns every key its panel exposes - that is what makes the
-  // exported config equal what the panel shows. These three are the exception,
-  // and the engine's own options menu is what defines them: options.lua:205-208
-  // adjusts exactly Sound.MasterVolume, Sound.WavVolume and Sound.BGMVolume,
-  // and deliberately leaves PauseMasterVolume and MaxBGMVolume commented out.
-  // A volume slider a player moved in game is theirs.
+  // exported config equal what the panel shows. These are the exception, and
+  // the engine's own options menu is what defines them: the three volumes its
+  // sound menu adjusts (Sound.MasterVolume, WavVolume and BGMVolume; it leaves
+  // PauseMasterVolume and MaxBGMVolume alone), and the controls its Input
+  // Settings edit and save - each keyboard controller's mapping, every setup,
+  // and the per-device lines in [Input] (which setup and side a device last
+  // used, its glyphs, its rumble). A slider a player moved, a key they
+  // remapped, a setup they made in game is theirs.
   //
   // "Preserve if PRESENT", not "never write": a fresh folder has no player
   // preference to protect, so a first export still states the panel's choice.
-  // Only an existing line is left alone.
+  // Only an existing line (a whole existing section, for a mapping or a setup)
+  // is left alone. Both families of names count - the engine our web build is
+  // pinned to and the official zip's - so a player's sections are never
+  // overwritten by a rename either.
   const PLAYER_OWNED = new Set([
     'Sound.MasterVolume', 'Sound.WavVolume', 'Sound.BGMVolume',
   ]);
+  const PLAYER_OWNED_SECTION = /^(ButtonMapping|ControllerMapping|ControllerSetup|ButtonSetup)_/i;
+  const PLAYER_OWNED_INPUT = /^(ControllerSetup|ButtonSetup|PreferredSide|ControllerGlyphs|ControllerRumble)\./i;
 
   const bySec = new Map();
   const put = (sec, key, val) => {
@@ -1703,8 +1788,12 @@ function exportDesktop(opts = {}) {
     const web = (generated['save/config.ini'] || '').toString('latin1').split(/\r?\n/);
     const vol = web.find((l) => /^\s*MasterVolume\s*=/i.test(l));
     if (vol) put('Sound', 'MasterVolume', vol.split('=').slice(1).join('=').trim());
+    // The control sections come from keylib itself, not from the web config:
+    // the web build's lines name the sections of the engine IT is pinned to,
+    // and the official zip's engine may name them differently (cfgFmt).
+    const controlLines = keylib.iniLinesV2(controls, cfgFmt);
     let on = null;
-    for (const l of web) {
+    for (const l of controlLines) {
       const sec = /^\s*\[([^\]]+)\]/.exec(l);
       if (sec) { on = carry.includes(sec[1]) ? sec[1] : null; continue; }
       const kv = on && /^\s*([^=;#\[][^=]*?)\s*=\s*(.*)$/.exec(l);
@@ -1758,32 +1847,113 @@ function exportDesktop(opts = {}) {
   // has an opinion about the several hundred it was never asked about.
   const cfgPath = path.join(saveDir, 'config.ini');
   let cfg;
-  const prior = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'latin1') : null;
+  const prior = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'latin1') : carriedConfig;
+  // What this export kept of the player's (the result says so).
+  const playerKept = [];
+  // WHAT THE LAST EXPORT WROTE FOR THE CONTROLS, so the player's edits can be
+  // told from the build's own: save/.studio-controls.json (JSON, which the
+  // engine never reads) holds the values this exporter last wrote for each
+  // mapping, setup and per-device [Input] line. A section or line that still
+  // holds exactly that was not touched in the game, so it follows the Studio
+  // again (a layout changed in Settings > Controls reaches the folder); one
+  // that differs, or that no record covers (a folder from before the record),
+  // is the player's and is kept.
+  const recordPath = path.join(saveDir, '.studio-controls.json');
+  let lastRecord = null;
+  try { lastRecord = JSON.parse(fs.existsSync(recordPath) ? fs.readFileSync(recordPath, 'utf8') : carriedRecord); } catch (e) { lastRecord = null; }
+  if (!lastRecord || typeof lastRecord !== 'object') lastRecord = {};
+  const record = { sections: Object.assign({}, lastRecord.sections || {}), input: Object.assign({}, lastRecord.input || {}) };
+  const norm = (v) => { const s = String(v === undefined || v === null ? '' : v).trim(); return s === '' ? '-' : s; };
+  const sameMap = (a, b) => {
+    const ka = Object.keys(a), kb = Object.keys(b || {});
+    return ka.length === kb.length && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && norm(a[k]) === norm(b[k]));
+  };
+  const keyRe = (k) => new RegExp('^(\\s*' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*=\\s*).*$', 'i');
+  // THE ENGINE'S OWN DEFAULTS FOR THE CONTROL SECTIONS (read out of the zip's
+  // exe). The engine overlays save/config.ini on them and writes the merged set
+  // back on every start, so after one launch the file holds sections the export
+  // never wrote - a whole [ButtonSetup_Standard] equal to upstream's - and a
+  // written section gains any key the export left out. Both are still nobody's
+  // edit, so they are compared the way the engine reads them: the defaults
+  // with the file's keys on top.
+  const setupSec = keylib.setupSection(cfgFmt);
+  const shipped = EZ.defaultSections(zip, keylib.KEYBOARD_IDS.map((id) => keylib.mappingSection(id, cfgFmt)).concat(setupSec));
+  const effective = (sec, m) => Object.assign({}, shipped[sec.toLowerCase()] || {}, m || {});
+  // The Standard setup in full as this build wants it (upstream's when the
+  // bundle left it alone), for a folder whose file already has the section.
+  const fullSetup = new Map();
+  {
+    let on = false;
+    for (const l of keylib.iniLinesV2(Object.assign({}, controls, { setup: keylib.setupMap(controls) }), cfgFmt)) {
+      const h = /^\s*\[([^\]]+)\]/.exec(l);
+      if (h) { on = h[1] === setupSec; continue; }
+      const kv = on && /^\s*([^=;#\[][^=]*?)\s*=\s*(.*)$/.exec(l);
+      if (kv) fullSetup.set(kv[1], kv[2].trimEnd());
+    }
+  }
   if (prior && /\[Config\]/i.test(prior)) {
     const out = prior.split(/\r?\n/);
+    // A SETUP THE FILE HAS IS CHECKED EVEN WHEN THIS BUILD WOULD NOT WRITE ONE.
+    // The build writes [ButtonSetup_Standard] only while the bundle changes it,
+    // but the file can hold one anyway: an earlier export's (the bundle has
+    // since gone back to upstream's setup) or the engine's own save of its
+    // defaults. Left alone, either one binds buttons the Studio no longer
+    // shows. Untouched, it is rewritten as the build's setup (upstream's, in
+    // full); changed in the game, it stays the player's, like any other.
+    if (!bySec.has(setupSec) && out.some((l) => new RegExp('^\\s*\\[' + setupSec + '\\]\\s*$', 'i').test(l))) bySec.set(setupSec, fullSetup);
     for (const [sec, kv] of bySec) {
       let at = out.findIndex((l) => new RegExp('^\\s*\\[' + sec + '\\]\\s*$', 'i').test(l));
-      if (at < 0) { out.push('', '[' + sec + ']'); at = out.length - 1; }
       let end = at + 1;
-      while (end < out.length && !/^\s*\[[^\]]+\]\s*$/.test(out[end])) end++;
+      if (at >= 0) while (end < out.length && !/^\s*\[[^\]]+\]\s*$/.test(out[end])) end++;
+      // A mapping or a setup the file already has is the player's, whole -
+      // unless it is what the last export wrote (as written, or as the engine
+      // saves it back with its defaults filled in), or a setup no export wrote
+      // that equals the engine's own (its save on start, not an edit).
+      if (at >= 0 && PLAYER_OWNED_SECTION.test(sec)) {
+        const have = {};
+        for (let i = at + 1; i < end; i++) { const m = /^\s*([^;=\s][^=]*?)\s*=\s*(.*?)\s*$/.exec(out[i]); if (m && !Object.prototype.hasOwnProperty.call(have, m[1].toLowerCase())) have[m[1].toLowerCase()] = m[2]; }
+        const rec = record.sections[sec.toLowerCase()];
+        const def = shipped[sec.toLowerCase()];
+        const untouched = rec
+          ? (sameMap(have, rec) || (!!def && sameMap(effective(sec, have), effective(sec, rec))))
+          : (sec === setupSec && !!def && sameMap(effective(sec, have), def));
+        if (!untouched) { playerKept.push('[' + sec + ']'); continue; }
+      }
+      if (at < 0) { out.push('', '[' + sec + ']'); at = out.length - 1; end = out.length; }
       for (const [k, v] of kv) {
         // Replace only the VALUE, so the engine's own column alignment survives
         // and the file still reads like the one it wrote.
-        const re = new RegExp('^(\\s*' + k.replace(/[.]/g, '\\.') + '\\s*=\\s*).*$', 'i');
+        const re = keyRe(k);
         let hit = -1;
         for (let i = at + 1; i < end; i++) if (re.test(out[i])) { hit = i; break; }
         // Already in the destination AND the player's to set: leave it.
         if (hit >= 0 && PLAYER_OWNED.has(sec + '.' + k)) continue;
-        if (hit >= 0) out[hit] = out[hit].replace(re, '$1' + v);
+        if (hit >= 0 && sec === 'Input' && PLAYER_OWNED_INPUT.test(k)) {
+          const cur = (/=\s*(.*?)\s*$/.exec(out[hit]) || [])[1];
+          if (record.input[k.toLowerCase()] === undefined || norm(cur) !== norm(record.input[k.toLowerCase()])) { playerKept.push(sec + '.' + k); continue; }
+        }
+        if (hit >= 0) out[hit] = out[hit].replace(re, (m, head) => head + v);
         else { out.splice(end, 0, k + ' = ' + v); end++; }
+        if (sec === 'Input' && PLAYER_OWNED_INPUT.test(k)) record.input[k.toLowerCase()] = v;
       }
+      if (PLAYER_OWNED_SECTION.test(sec)) record.sections[sec.toLowerCase()] = Object.fromEntries([...kv].map(([k, v]) => [k.toLowerCase(), v]));
     }
+    // The record speaks only for sections the file still has: one the file
+    // lost (removed by hand) has nothing of ours left to recognize, and a stale
+    // entry would make the engine's next save of its defaults look like an edit.
+    const inFile = new Set(out.map((l) => (/^\s*\[([^\]]+)\]\s*$/.exec(l) || [])[1]).filter(Boolean).map((s) => s.toLowerCase()));
+    for (const s of Object.keys(record.sections)) if (!inFile.has(s)) delete record.sections[s];
     cfg = out.join('\r\n');
     if (!cfg.endsWith('\r\n')) cfg += '\r\n';
   } else {
+    // A new file: the record is what this export writes, and nothing older.
+    record.sections = {};
+    record.input = {};
     for (const [sec, kv] of bySec) {
       lines.push('', '[' + sec + ']');
       for (const [k, v] of kv) lines.push(k + ' = ' + v);
+      if (PLAYER_OWNED_SECTION.test(sec)) record.sections[sec.toLowerCase()] = Object.fromEntries([...kv].map(([k, v]) => [k.toLowerCase(), v]));
+      if (sec === 'Input') for (const [k, v] of kv) if (PLAYER_OWNED_INPUT.test(k)) record.input[k.toLowerCase()] = v;
     }
     // `lines` opens with the separator that used to sit between [Config] and
     // the first carried section; with Config now coming from bySec there is
@@ -1835,7 +2005,9 @@ function exportDesktop(opts = {}) {
   }
 
   writeOut(cfgPath, cfg, 'latin1');
-  writeOut(stampFile, engineName);
+  writeOut(recordPath, JSON.stringify({ note: 'Mugen Studio: the control values the last desktop export wrote into config.ini, to tell the player\'s own edits from the build\'s. Safe to delete (the export then keeps every control section it finds).', sections: record.sections, input: record.input }, null, 1) + '\n', 'utf8');
+  if (playerKept.length) console.log('desktop: save/config.ini keeps the player\'s own ' + playerKept.join(', ') + ' (set in the game; a re-export does not overwrite them)');
+  writeOut(stampFile, engineName + '\nsha256 ' + zipSha + '\nformat ' + engineFmt.id + '\n');
   // Beside Ikemen_GO.exe and the zip's own LICENSES.txt (copyNotices).
   const licenses = copyNotices(dest, engineName);
 
@@ -1902,17 +2074,27 @@ function exportDesktop(opts = {}) {
     const outFiles = Object.values(JP.VPATHS).map((v) => path.join(dest, ...v.split('/')));
     if (clNames.length && JP.needed(clNames) && JP.available() && fs.existsSync(sysDef)) {
       let text = fs.readFileSync(sysDef, 'latin1');
-      const fontName = String(JP.commandListFont(text) || '').replace(/\\/g, '/');
-      const ours = fontName.toLowerCase() === JP.DEF_FILE.toLowerCase();
+      // The modern-input engine draws the list as menu rows in the motif's row
+      // fonts (jpfont.commandListFontV2). vfslib's generated copy already names
+      // DotGothic16 in [Files] (jpfont.patchMotifV2): ours; the zip's own motif
+      // gets the same slot here.
+      const fontName = String(JP.commandListFontV2(text) || '').replace(/\\/g, '/');
+      const ours = [...JP.filesFonts(text).values()].some((f) => f.file.toLowerCase() === JP.DEF_FILE.toLowerCase());
       // the font the list was drawn in: when vfslib already pointed the motif, the one it named before
       const orig = (ours ? (vfsListFont && vfsListFont.from) : fontName) || 'Open_Sans.def';
       const isFile = (f) => { try { return fs.statSync(f).isFile(); } catch (e) { return false; } };
       const found = [path.join(spDir, orig), path.join(dest, 'font', orig), path.join(dest, orig), path.join(dest, 'data', orig)].find(isFile);
       const metrics = (found && JP.fontMetrics(fs.readFileSync(found, 'latin1'))) || JP.DEFAULT_SIZE;
       for (const [vp, buf] of Object.entries(JP.files(metrics))) { writeOut(path.join(dest, ...vp.split('/')), buf); files++; }
-      if (!ours) { text = JP.patchMotif(text).text; writeOut(sysDef, text, 'latin1'); }
-      commandListFont = { def: JP.VPATHS.def, motif: motifRel, size: metrics.size, from: orig, names: clNames.filter((n) => !JP.stockDraws(n) && JP.fontDraws(n)).length };
-      console.log('desktop: the Command List font (DotGothic16, ' + metrics.size.join(',') + ') ships for ' + commandListFont.names + ' names; ' + motifRel + ' points the pause menus\' list at it');
+      if (!ours) text = JP.patchMotifV2(text).text;
+      // Upstream's official engine has no `fontN.fallback` (ours, font.go): the
+      // rows and the title are pointed at DotGothic16 themselves (jpfont.pointRowsV2).
+      const rows = JP.pointRowsV2(text);
+      text = rows.text;
+      writeOut(sysDef, text, 'latin1');
+      commandListFont = { def: JP.VPATHS.def, motif: motifRel, size: metrics.size, from: orig, names: clNames.filter((n) => !JP.stockDraws(n) && JP.fontDraws(n)).length, keys: rows.keys };
+      console.log('desktop: the Command List font (DotGothic16, ' + metrics.size.join(',') + ') ships for ' + commandListFont.names + ' names; ' + motifRel
+        + ' draws the pause menus\' list in it (' + rows.keys.join(', ') + '; this engine has no font fallback)');
     } else {
       // An install several bundles export into (one folder, a screenpack folder
       // per bundle): another bundle's motif may still point its list at the
@@ -1948,6 +2130,27 @@ function exportDesktop(opts = {}) {
   // "earlier export" block above put it back first. Any picture file of ours
   // beside the motif that the motif does not name is an earlier export's and goes.
   let commandListButtons = null;
+  // THE PICTURES FOLLOW THE SETUP THE ENGINE WILL BIND: the Standard setup as
+  // the config.ini just written states it (a player's kept setup included),
+  // over the engine's own defaults, the way the engine reads it - not the
+  // Studio's setting, which a kept section overrides. A device the player moved
+  // to another setup in the game is not followed: the pictures show Standard.
+  const boundSetup = (() => {
+    const sec = {};
+    let on = false;
+    for (const raw of cfg.split(/\r?\n/)) {
+      const h = /^\s*\[([^\]]+)\]\s*$/.exec(raw);
+      if (h) { on = h[1].toLowerCase() === setupSec.toLowerCase(); continue; }
+      const kv = on && /^\s*([^;=\s][^=]*?)\s*=\s*(.*?)\s*$/.exec(raw);
+      if (kv && !Object.prototype.hasOwnProperty.call(sec, kv[1].toLowerCase())) sec[kv[1].toLowerCase()] = kv[2];
+    }
+    const out = Object.assign({}, keylib.STANDARD_SETUP, shipped[setupSec.toLowerCase()] || {}, sec);
+    delete out.name;
+    return out;
+  })();
+  const studioSetup = keylib.setupMap(controls);
+  const setupFromPlayer = keylib.SETUP_BUTTONS.some((b) => String(boundSetup[b]) !== String(studioSetup[b]));
+  let builtOnBound = false;
   {
     const BTN = require('./buttonstyle.js');
     if (fs.existsSync(sysDef)) {
@@ -1963,14 +2166,19 @@ function exportDesktop(opts = {}) {
         try { return fs.statSync(p).isFile() ? fs.readFileSync(p) : null; } catch (e) { return null; }
       };
       if (BTN.styleOf(roster) !== BTN.DEFAULT_STYLE) {
+        // vfslib's generated copy is patched against the glyph file of the
+        // engine the WEB build runs (release-v2/data/glyphs.sff); this engine's
+        // is the zip's own data/glyphs.sff, and one glyph file serves both the
+        // Command List and the controller art (motif.go GlyphsSff; the zip of
+        // 2026-11-17 folded input.sff's diagrams into it). So the style is laid
+        // again here, on the motif without those lines, against the files THIS
+        // build has: a picture file that keeps every sprite of the zip's file.
+        if (BTN.patched(text) && WRITTEN.has(writtenKey(sysDef))) text = BTN.unpatch(text);
         if (BTN.patched(text)) {
-          // vfslib's generated copy: its picture file, from the same build
-          const vb = vfsButtons && vfsButtons.file ? vfsButtons : null;
-          const buf = vb && generated[vb.file];
-          if (vb && buf) { writeOut(path.join(dest, ...vb.file.split('/')), buf); files++; }
-          commandListButtons = vb || (vfsButtons ? Object.assign({}, vfsButtons) : { style: BTN.styleOf(roster) });
+          commandListButtons = vfsButtons ? Object.assign({}, vfsButtons) : { style: BTN.styleOf(roster) };
         } else {
-          const done = BTN.forBuild(motifRel, text, readDest, roster);
+          builtOnBound = true;
+          const done = BTN.forBuild(motifRel, text, readDest, roster, { pads: { v2: { setup: boundSetup } } });
           if (done && done.info && Object.keys(done.info.overrides).length) {
             text = done.text;
             writeOut(sysDef, text, 'latin1');
@@ -1980,6 +2188,9 @@ function exportDesktop(opts = {}) {
             commandListButtons = Object.assign({ motif: motifRel }, done.info);
           }
         }
+        // which setup the pictures show, and whether it is the player's own
+        if (builtOnBound && commandListButtons) commandListButtons.setup = { from: setupFromPlayer ? 'player' : 'studio', d: boundSetup.d, w: boundSetup.w };
+        if (builtOnBound && commandListButtons && setupFromPlayer) console.log('desktop: the Command List pictures follow the player\'s own ' + keylib.SETUP_NAME + ' setup kept in save/config.ini, not the Studio\'s');
         if (commandListButtons) console.log('desktop: the Command List buttons in the ' + commandListButtons.style + ' style' + (commandListButtons.file ? ', pictures in ' + commandListButtons.file : '') + (commandListButtons.notes && commandListButtons.notes.length ? ' (' + commandListButtons.notes.join('; ') + ')' : ''));
       }
       // an earlier export's picture files the motif does not name now
@@ -1990,6 +2201,32 @@ function exportDesktop(opts = {}) {
           if (e.isFile() && BTN.FILE_RE.test(e.name) && e.name.toLowerCase() !== keep) removeFile(path.join(spDir, e.name));
         }
       } catch (e) { /* no folder */ }
+    }
+  }
+
+  // ---- the Command List fitted to its rows (cmdlistfit.js) -----------------
+  // Upstream's engine anchors a list's commands at its window's width, so the
+  // window must be as wide as the widest row of this build's lists, or the
+  // commands draw over the names (the stock ikemen1 copy keeps the engine's
+  // 290). Measured on the motif as the blocks above left it (the rows' font,
+  // the glyph file of the button style), lines first in the pause menus only
+  // where a list does not fit. After the font and the buttons, which change
+  // what the rows measure.
+  let commandListFit = null;
+  if (fs.existsSync(sysDef)) {
+    const CF = require('./cmdlistfit.js');
+    const readBuild = (rel) => { try { const p = path.join(dest, ...String(rel).split('/')); return fs.statSync(p).isFile() ? fs.readFileSync(p) : null; } catch (e) { return null; } };
+    const before = fs.readFileSync(sysDef, 'latin1');
+    let r = null;
+    try { r = CF.fit(motifRel, before, buildMovelists(copied.copied), readBuild); } catch (e) { console.log('desktop: the Command List could not be measured (' + e.message + '); its window is the pack\'s'); r = null; }
+    if (r) {
+      if (r.text !== before) writeOut(sysDef, r.text, 'latin1');
+      commandListFit = r.info;
+      for (const [name, s] of Object.entries(r.info.sections)) {
+        console.log('desktop: the Command List in [' + name + '] ' + (s.fits ? 'fits its window (' + s.need + ' of ' + s.width + ')'
+          : s.mirrored ? 'window ' + s.newWidth + ', ending as far from the right edge as it starts from the left (was ' + s.width + '; its widest row needs ' + s.need + ')'
+          : 'widened to ' + s.newWidth + ' at x ' + s.x + ' (its widest row needs ' + s.need + ', the window was ' + s.width + (s.shrink ? '; rows drawn at ' + s.shrink + ' of their size to fit the screen' : '') + ')'));
+      }
     }
   }
 
@@ -2085,6 +2322,11 @@ function exportDesktop(opts = {}) {
     dest,
     engine: engineName,
     engineExtracted: extracted,
+    // the engine's config format (enginezip.engineFormat) and the zip's sha256
+    engineFormat: engineFmt.id,
+    engineSha256: zipSha,
+    // the player's own control sections and [Input] lines a re-export kept
+    playerKept,
     characters: chars,
     // The count people care about is what THEY changed, not the 130 keys the
     // build now states outright.
@@ -2094,6 +2336,8 @@ function exportDesktop(opts = {}) {
     charFixes,
     commandListFont,
     commandListButtons,
+    // the Command List's window as this build fits it (cmdlistfit.js): per pause menu, its need and width
+    commandListFit,
     // the build's own state files this engine refused, one plain line each
     commonReport: (ownCommon && ownCommon.report) || [],
     files,

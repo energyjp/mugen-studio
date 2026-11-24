@@ -163,7 +163,7 @@ const SETTINGS_DIR = typeof PROGRAM.settings === 'string' && PROGRAM.settings ? 
 // Settings mode only these are read from studio-settings.json: the rest of the
 // layout is the program's, so a stale folder key can never outlive the version
 // that wrote it.
-const USER_KEYS = ['bundle', 'downloadFolder'];
+const USER_KEYS = ['bundle', 'downloadFolder', 'ffmpeg'];
 const USER_FILE = SETTINGS_DIR ? path.join(SETTINGS_DIR, 'studio-settings.json') : LAYOUT_FILE;
 const LOCAL_CONFIG_FILE = path.join(SETTINGS_DIR || APP, 'local-config.json');
 const LOGS_DIR = path.join(SETTINGS_DIR || APP, 'logs');
@@ -438,6 +438,22 @@ function setDownloadFolder(value) {
   return value ? path.resolve(APP, String(value)) : '';
 }
 
+// WHERE FFMPEG IS (Options > MP3 encoder): the folder, or the program, a
+// lite Website export uses to make character sounds into MP3. The Studio ships
+// none; empty means "look on PATH", and with none found a lite build keeps its
+// sounds lossless. A key a person sets, kept like downloadFolder.
+const ffmpegSetting = () => (cfg.ffmpeg ? String(cfg.ffmpeg) : '');
+function setFfmpeg(value) {
+  const raw = readUserFile();
+  if (value) raw.ffmpeg = String(value);
+  else delete raw.ffmpeg;
+  if (SETTINGS_DIR) writeJsonWhole(USER_FILE, raw);
+  else fs.writeFileSync(USER_FILE, JSON.stringify(raw, null, 2) + '\n');
+  if (value) cfg.ffmpeg = String(value);
+  else delete cfg.ffmpeg;
+  return ffmpegSetting();
+}
+
 // A SIBLING of the program folder in the repo, INSIDE Dependencies/ in a
 // portable copy. The repo sibling is checked first so a checkout keeps
 // behaving exactly as it always has.
@@ -635,4 +651,6 @@ module.exports = {
   // said {} and /api/studio still reported the path. Read cfg every time.
   get DOWNLOAD_FOLDER() { return downloadFolder(); },
   setDownloadFolder,
+  get FFMPEG() { return ffmpegSetting(); },
+  setFfmpeg,
 };

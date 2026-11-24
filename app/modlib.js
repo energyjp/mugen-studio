@@ -5198,12 +5198,34 @@ local function svMapSet(i, name, value)
   end
 end
 
+-- The controls every slot had when the viewer turned on, put back when it
+-- turns off. Not the identity: the modern-input engine's fight setup puts the
+-- leader on the input the player got at side select (not always 1) and gives
+-- a slot nobody plays no input (0), and team-play.lua gives an add004 tag
+-- build's partners the leader's input. Resetting to the identity took the
+-- leader's controls away and left a tagged-in partner standing still.
+local function svSaveBase()
+  sv.base = {}
+  for i = 1, MAXP do
+    local ok, v = pcall(getRemapInput, i)
+    sv.base[i] = (ok and type(v) == 'number') and v or i
+  end
+end
+
+local function svRestoreBase()
+  for i = 1, MAXP do remapInput(i, (sv.base and sv.base[i]) or i) end
+end
+
 local function svApply()
-  -- reset input map, then give the keyboard (input 1) to the focused char
+  -- every slot on its own number, then the player's input (the leader's when
+  -- the viewer turned on; 1 before) to the focused char, swapped with the
+  -- slot that held it
+  local human = (sv.base and sv.base[1]) or 1
+  if human < 1 then human = 1 end
   for i = 1, MAXP do remapInput(i, i) end
-  if sv.focus ~= 1 then
-    remapInput(1, sv.focus)
-    remapInput(sv.focus, 1)
+  if sv.focus ~= human then
+    if human <= MAXP then remapInput(human, sv.focus) end
+    remapInput(sv.focus, human)
   end
   -- Focused char is human; everyone else stands idle (AI 0 + no input).
   local oldid = id()
@@ -5223,6 +5245,7 @@ function SceneViewerCycle()
     sv.on = true
     sv.focus = 1
     if not svExists(sv.focus) then sv.on = false return end
+    svSaveBase()
     svApply()
     return
   end
@@ -5237,12 +5260,28 @@ function SceneViewerOff()
   if not sv.on then return end
   sv.on = false
   sv.focus = 1
-  for i = 1, MAXP do remapInput(i, i) end
+  svRestoreBase()
+  sv.base = nil
   -- clear all lock-on targets (releases the noAutoTurn enforcement)
   for i = 1, MAXP do
     if svExists(i) then svMapSet(i, '_sv_target', 0) end
   end
   sv.target = {}
+end
+
+-- A new fight's setup gives every slot its controls again, so a viewer left
+-- on ends with the fight it was opened in: its saved controls belong to that
+-- fight. It changes no mapping itself, so the order the mods wrap this
+-- function in does not matter.
+if start and start.f_remapAI then
+  local svStockRemapAI = start.f_remapAI
+  start.f_remapAI = function(...)
+    sv.on = false
+    sv.focus = 1
+    sv.base = nil
+    sv.target = {}
+    return svStockRemapAI(...)
+  end
 end
 
 -- CAPSLOCK: lock-on targeting for the focused character. Cycles through the
@@ -10963,7 +11002,7 @@ function validateEngineExe(exe) {
 // character scan - because E-Select asks before every Launch.
 //
 // engine.version is the version of the engine ZIP the desktop export builds
-// with (enginezip's pick: newest by version), read from its name and never
+// with (enginezip's pick: the modern-input zip, or a newer release), read from its name and never
 // from inside it. The export folder is layout.DESKTOP_EXPORT, the only one
 // the Studio knows: a build exported with "Export to folder…" is reached
 // through the Engine executable preference instead (`custom`).
@@ -10974,8 +11013,8 @@ function eselectInfo(exe) {
   try {
     const ez = require('./enginezip.js');
     const picked = ez.pick(ez.listIn(layout.DEPS));
-    const v = picked ? ez.parseVersion(picked) : null;
-    version = v ? v.text : null;
+    // '1.1.0', or 'modern-input (pre-release)' for upstream's pre-release zip
+    version = picked ? ez.versionText(picked) : null;
   } catch (e) { version = null; }
   const dest = layout.DESKTOP_EXPORT;
   const exportExe = path.join(dest, 'Ikemen_GO.exe');

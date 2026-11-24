@@ -17,7 +17,15 @@
 //   playstation the same buttons by position: a dark ball with a blue cross,
 //               red circle, pink square, green triangle; L1 / R1 / L2 / R2 pills
 //   strength    the 6-button Street Fighter convention: x y z = LP MP HP,
-//               a b c = LK MK HK - the engine's own glyphs.sff sprites 57-62
+//               a b c = LK MK HK - balls in the colors of the engine's own
+//               glyphs.sff sprites 57-62 (green, yellow, red), drawn here
+// THE STRENGTH BALLS are drawn here too. The engine's own (57-62) put white
+// letters on every ball, as wide as the ball itself: on the yellow medium balls
+// the letters measured 1.65:1 against it, and at the 20-22 px a Command List
+// row draws them at, "LP" ran past the ball's edge and the yellow ones read as
+// blobs. Here the two letters fit inside the ring, dark on the green and
+// yellow balls, white with a black outline on the red ones. A pack that maps
+// ^LP..^HK to art of its own keeps its art.
 // The Xbox and PlayStation art is drawn HERE, in code (`icon`): generic shapes,
 // colors and letters at the stock sprites' size and style (a ball with a 2 px
 // black ring, a white letter with a black outline), anti-aliased by 4 x 4
@@ -29,6 +37,12 @@
 // save/config.ini. The menu's [Glyphs] table is one for both players, so it
 // follows player 1. A button bound to something with no picture here (Start,
 // Back, the d-pad, a stick direction, nothing) keeps its stock ball.
+// ON THE MODERN-INPUT ENGINE (IKEMEN_V2) there is no Joystick_P1: a pad maps
+// every control to itself and the controller setup puts an engine button on a
+// control, so the button a style draws is the setup's (keylib.setupPadMap:
+// this build's [ControllerSetup_Standard], else upstream's Standard - a = A,
+// b = B, c = RT, x = X, y = Y, z = RB, d = LT, w = LB, d and w the other way
+// round from the old Joystick_P1). `padSource` picks which.
 //
 // THE TOKENS THAT STAND FOR SEVERAL BUTTONS (`extras`): ^P any punch and ^K
 // any kick (the strengths merge in cmdlist.js and most characters' own lists:
@@ -63,6 +77,10 @@ const STYLES = [
   { id: 'playstation', label: 'PlayStation', note: 'The same buttons by position: cross, circle, square, triangle, L1 R1 L2 R2. Any punch / any kick show their three buttons.' },
   { id: 'strength', label: 'Strength', note: 'LP MP HP for x y z, LK MK HK for a b c: the 6-button convention (any punch / kick stay P and K). A character wired differently (4-button KOF style) shows the convention, not its own wiring.' },
 ];
+// On the modern-input engine the pad styles follow the button setup (padSource).
+const NOTES_V2 = {
+  xbox: 'The pad button each one is on in the button setup: A B X Y, LB RB LT RT. Any punch / any kick show their three buttons.',
+};
 const STYLE_IDS = STYLES.map((s) => s.id);
 const DEFAULT_STYLE = 'arcade';
 const normalize = (s) => (STYLE_IDS.includes(String(s || '').toLowerCase()) ? String(s).toLowerCase() : DEFAULT_STYLE);
@@ -92,10 +110,26 @@ const EXTRAS = [
   { button: 's', token: '^S', start: true, stock: 51, word: 'start' },
 ];
 
+// What padMap reads for a roster: its old slots (roster.keys), or on the
+// modern-input engine its controls ({ v2: keylib.controlsOf(roster) }).
+function padSource(roster) {
+  if (!process.env.IKEMEN_V2) return roster && roster.keys;
+  let keylib = null;
+  try { keylib = require('./keylib.js'); } catch (e) { keylib = null; }
+  return { v2: keylib ? keylib.controlsOf(roster) : {} };
+}
+
 // Player 1's pad binding for each MUGEN button (and `start`), as this build writes it.
+// `keys` is roster.keys, or padSource's { v2: controls } (the controller setup).
 function padMap(keys, list) {
   let keylib = null;
   try { keylib = require('./keylib.js'); } catch (e) { keylib = null; }
+  if (keys && keys.v2 && keylib && keylib.setupPadMap) {
+    const m = keylib.setupPadMap(keys.v2, list || BUTTONS);
+    const out = {};
+    for (const b of list || BUTTONS) out[b] = String(m[b]);
+    return out;
+  }
   const def = (keylib && keylib.DEFAULTS && keylib.DEFAULTS.joystick_p1) || { a: 'A', b: 'B', c: 'RT', x: 'X', y: 'Y', z: 'RB', d: 'LB', w: 'LT', start: 'START' };
   const set = (keys && keys.joystick_p1) || {};
   const out = {};
@@ -113,7 +147,7 @@ function mapping(style, keys) {
     const row = { button: b, token: TOKEN(b), pad: pads[b] };
     if (st === 'strength') {
       const s = STRENGTH[b];
-      if (s) { row.stock = s.group; row.label = s.label; } else row.label = b.toUpperCase();
+      if (s) { row.stock = s.group; row.label = s.label; row.icon = 'strength:' + s.label; } else row.label = b.toUpperCase();
       return row;
     }
     if ((st === 'xbox' || st === 'playstation') && PAD_ICON[pads[b]]) {
@@ -201,6 +235,10 @@ const LETTERS = {
   R: { w: 0.74, p: [[[0, 1], [0, 0], [0.45, 0], ...arc(0.45, 0.25, 0.25, -90, 90, 10).slice(1), [0, 0.5]], [[0.36, 0.5], [0.74, 1]]] },
   T: { w: 0.76, p: [[[0, 0], [0.76, 0]], [[0.38, 0], [0.38, 1]]] },
   S: { w: 0.7, p: [[[0.68, 0.12], ...arc(0.35, 0.25, 0.25, -20, -250, 14).slice(1), ...arc(0.35, 0.75, 0.25, -90, 140, 16).slice(1)]] },
+  P: { w: 0.66, p: [[[0, 1], [0, 0], [0.4, 0], ...arc(0.4, 0.26, 0.26, -90, 90, 10).slice(1), [0, 0.52]]] },
+  M: { w: 0.92, p: [[[0, 1], [0, 0], [0.46, 0.6], [0.92, 0], [0.92, 1]]] },
+  H: { w: 0.72, p: [[[0, 0], [0, 1]], [[0.72, 0], [0.72, 1]], [[0, 0.5], [0.72, 0.5]]] },
+  K: { w: 0.72, p: [[[0, 0], [0, 1]], [[0.72, 0], [0.04, 0.62]], [[0.27, 0.42], [0.74, 1]]] },
   1: { w: 0.42, p: [[[0, 0.22], [0.32, 0], [0.32, 1]]] },
   2: { w: 0.68, p: [[...arc(0.34, 0.3, 0.3, 200, 360, 12), [0.62, 0.48], [0, 1], [0.68, 1]]] },
   3: { w: 0.66, p: [[...arc(0.33, 0.25, 0.25, 210, 450, 14), [0.3, 0.5]], [[0.3, 0.5], ...arc(0.33, 0.75, 0.25, -90, 150, 14)]] },
@@ -319,6 +357,24 @@ function drawPsFace(name) {
     { d: sym, color: SYM[name] },
   ]);
 }
+// THE STRENGTH BALLS: the engine's colors (light green, medium yellow, heavy
+// red, measured on its sprites 57-62), the two letters inside the ring.
+const STRENGTH_FILL = { L: [66, 210, 1], M: [246, 208, 0], H: [246, 0, 0] };
+function drawStrength(label) {
+  const fill = STRENGTH_FILL[label[0]];
+  const dark = label[0] !== 'H';
+  // letters 22 tall, narrowed, their strokes 3 px apart: the wider pair (MP,
+  // MK) with its stroke stays inside the ring at the letters' top and bottom
+  const lines = labelLines(label, C, C + 0.5, 22, 9.5, 0.8);
+  const hw = 3.2;
+  return rasterize([
+    { d: dCircle(C, C, R), color: BLACK },
+    { d: dCircle(C, C, R - RING), color: ballFill(fill) },
+    ...(dark
+      ? [{ d: dStroke(lines, hw), color: BLACK }]
+      : [{ d: dStroke(lines, hw + 2.0), color: BLACK }, { d: dStroke(lines, hw), color: WHITE }]),
+  ]);
+}
 const XBOX_FACE = { A: hex('#4fae32'), B: hex('#e2342f'), X: hex('#2f78dc'), Y: hex('#f2bd0f') };
 const SHOULDER_KIND = { LB: 'bumper', RB: 'bumper', LT: 'trigger', RT: 'trigger', LS: 'stick', RS: 'stick' };
 // THE PICTURES OF SEVERAL BUTTONS ('xbox:X/Y/RB', 'xbox:X+Y+RB'): each one's own
@@ -356,6 +412,7 @@ function drawn(id) {
   else if (style === 'playstation' && PS_NAME[pad]) px = drawPsFace(PS_NAME[pad]);
   else if (style === 'playstation' && pad === 'START') px = drawShoulder('bumper', null, true);
   else if (style === 'playstation' && SHOULDER_KIND[pad]) px = drawShoulder(SHOULDER_KIND[pad], PS_LABEL[pad], true);
+  else if (style === 'strength' && /^[LMH][PK]$/.test(pad || '')) px = drawStrength(pad);
   if (!px) throw new Error('no button picture ' + id);
   const r = { px, w };
   ICONS.set(id, r);
@@ -453,6 +510,12 @@ const markOf = (style) => ';' + MARK + ' (' + style + '), written by the export'
 const patched = (text) => new RegExp(';' + MARK + ' \\((?:xbox|playstation|strength)\\), written by the export').test(String(text || ''));
 const FILE_RE = /^cmdlist-buttons-(xbox|playstation|strength)\.sff$/i;
 const fileFor = (style) => 'cmdlist-buttons-' + style + '.sff';
+// The motif without this file's lines (every line carrying the mark, of any
+// style): the desktop export lays the style again on the engine zip's own
+// glyph file. A [Glyphs] header the patch added stays, empty, which the
+// engine reads as no keys.
+const unpatch = (text) => String(text || '').replace(
+  new RegExp('^[^\\r\\n]*;' + MARK + ' \\((?:xbox|playstation|strength)\\), written by the export[ \\t]*\\r?\\n', 'gm'), '');
 
 function sections(text) {
   const out = [];
@@ -535,23 +598,20 @@ function plan(style, keys, base, stock, own) {
   const ref = (nodes && (has.get('1,0') || nodes.find((n) => n.w && n.h))) || null;
   const axisFor = (w) => (ref && ref.w && ref.h ? [Math.round(ref.axisX * w / ref.w), Math.round(ref.axisY * SIZE / ref.h)] : [0, SIZE]);
   if (st === 'strength') {
-    const stockNodes = stock ? sffNodes(stock) : null;
+    // the pack's own ^LP..^HK line, when the sprite it names is in its file: the picture the pack draws for that strength
     for (const r of rows) {
       if (!r.stock) continue;
-      // the pack's own ^LP..^HK line, when the sprite it names is in its file: the picture the pack draws for that strength
       const mine = own && own['^' + r.label];
-      if (mine && has.has(mine[0] + ',' + mine[1]) && has.get(mine[0] + ',' + mine[1]).len) { overrides[r.token] = [mine[0], mine[1]]; continue; }
-      const key = r.stock + ',0';
-      if (has.has(key) && has.get(key).len) { overrides[r.token] = [r.stock, 0]; continue; }
-      // the pack's own glyph file has no such sprite: the engine's own goes in beside the rest
-      const sn = stockNodes && stockNodes.find((n) => n.group === r.stock && n.index === 0);
-      const data = sn && spriteData(stock, sn);
-      if (!nodes || !sn || !data || !(sn.fmt === 11 || sn.fmt === 12)) { notes.push(r.token + ' keeps its picture: no ' + r.label + ' sprite (' + key + ') to use'); continue; }
-      if (!sprites.some((s) => s.group === r.stock)) sprites.push({ group: r.stock, index: 0, w: sn.w, h: sn.h, axisX: sn.axisX, axisY: sn.axisY, fmt: sn.fmt, depth: sn.depth, data: Buffer.from(data) });
-      overrides[r.token] = [r.stock, 0];
-      needFile = true;
+      if (mine && has.has(mine[0] + ',' + mine[1]) && has.get(mine[0] + ',' + mine[1]).len) { overrides[r.token] = [mine[0], mine[1]]; delete r.icon; }
     }
-    return { style: st, overrides, sprites, needFile, rows, notes };
+    // a glyph file this cannot add to: the engine's own sprites, where the file has them
+    if (!nodes) {
+      for (const r of rows) {
+        if (!r.icon) continue;
+        notes.push(r.token + ' keeps its picture: the glyph file is not an SFF v2 this export can add pictures to');
+      }
+      return { style: st, overrides, sprites, needFile, rows, notes };
+    }
   }
   if (!nodes) {
     notes.push('the glyph file is not an SFF v2 this export can add pictures to; the buttons keep their pictures');
@@ -574,7 +634,8 @@ function plan(style, keys, base, stock, own) {
     take(r);
   }
   // any punch / any kick / all three / Start: one picture of the bound buttons
-  for (const e of extras(st, keys)) {
+  // (Strength keeps the stock P and K: the notation's own "any punch / kick")
+  for (const e of st === 'strength' ? [] : extras(st, keys)) {
     if (!e.icon) { if (e.keeps !== undefined) notes.push(e.token + ' (' + e.word + ') keeps its picture: ' + e.keeps); continue; }
     take(e);
   }
@@ -590,7 +651,10 @@ function plan(style, keys, base, stock, own) {
 // ONE BUILD: the motif text as the build has it so far, a reader for the
 // build's files by path (relative to its root; -> Buffer | null), the roster.
 // -> null, or { text: the patched motif, file: { vpath, buf } | null, info }
-function forBuild(motifVpath, motifText, read, roster) {
+// opts.pads: what padMap reads instead of the roster's own (padSource), for a
+// build whose engine binds a setup other than the Studio's (the desktop export:
+// the setup in the config.ini it writes, a player's kept one included).
+function forBuild(motifVpath, motifText, read, roster, opts) {
   const style = styleOf(roster);
   if (style === DEFAULT_STYLE) return null;
   if (patched(motifText)) return null;      // already done (the generated copy the desktop writes)
@@ -598,7 +662,7 @@ function forBuild(motifVpath, motifText, read, roster) {
   let baseAt = null, base = null;
   for (const c of glyphsCandidates(motifVpath, value)) { const b = read(c); if (b) { baseAt = c; base = b; break; } }
   const stock = read('data/glyphs.sff');
-  const p = plan(style, roster && roster.keys, base, stock, ownGlyphs(motifText));
+  const p = plan(style, (opts && opts.pads) || padSource(roster), base, stock, ownGlyphs(motifText));
   if (!p || !Object.keys(p.overrides).length) return { text: motifText, file: null, info: { style, overrides: {}, base: baseAt, notes: (p && p.notes) || [] } };
   const dir = String(motifVpath).replace(/\\/g, '/').replace(/[^/]*$/, '');
   let file = null;
@@ -621,8 +685,9 @@ function preview(keys, stock) {
   };
   const drawnPic = (id) => { try { return { src: 'data:image/png;base64,' + iconPng(id).toString('base64'), w: iconWidth(id), h: SIZE }; } catch (e) { return { src: null, w: SIZE, h: SIZE }; } };
   const ARCADE = { a: 1, b: 2, c: 3, d: 4, w: 23, x: 24, y: 25, z: 26 };
+  const v2 = !!(keys && keys.v2);
   return STYLES.map((s) => ({
-    id: s.id, label: s.label, note: s.note,
+    id: s.id, label: s.label, note: (v2 && NOTES_V2[s.id]) || s.note,
     buttons: [
       ...mapping(s.id, keys).map((r) => {
         const pic = r.icon ? drawnPic(r.icon) : stockPic(r.stock || ARCADE[r.button]);
@@ -638,7 +703,7 @@ function preview(keys, stock) {
 
 module.exports = {
   STYLES, STYLE_IDS, DEFAULT_STYLE, BUTTONS, STRENGTH, EXTRAS, SIZE, MARK, FILE_RE,
-  normalize, styleOf, padMap, mapping, extras, icon, iconWidth, iconPng, encodePng, rasterize,
+  normalize, styleOf, padSource, padMap, mapping, extras, icon, iconWidth, iconPng, encodePng, rasterize,
   isV2, sffNodes, spriteData, appendSprites, pngSprite,
-  patched, fileFor, sections, glyphsFile, glyphsCandidates, ownGlyphs, patchMotif, plan, forBuild, preview,
+  patched, unpatch, fileFor, sections, glyphsFile, glyphsCandidates, ownGlyphs, patchMotif, plan, forBuild, preview,
 };

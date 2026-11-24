@@ -122,6 +122,12 @@ https://<server name>.<your workers.dev name>.workers.dev
   lobby without a password). The game's online menu shows **LOBBY** and **WATCH
   A MATCH** only when its relay has them, so a server set up before 1.2.0 needs
   **Update my servers** (below) for them to appear.
+- The list of open lobbies shows each player only the lobbies on their own
+  build (a lobby admits only its own build), with a **Show all** switch for the
+  rest. That needs servers put up or updated by a Studio that has it: after
+  you update the Studio, press **Update my servers** once, then export and
+  upload your site. Done the other way round nothing breaks, the list simply
+  shows every lobby, as before, until both are updated.
 
 **What it costs:** nothing, on Cloudflare's free Workers plan, for a
 friends-and-regulars community. The free plan has daily limits, and the servers

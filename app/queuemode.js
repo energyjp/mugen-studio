@@ -47,6 +47,25 @@ function handlerSet(v) {
 }
 const handlerClear = 'main.queueTeam = nil';
 
+// The VERSUS 2P pick in both queue handlers (the same depth as handlerSet).
+// The modern-input engine's VERSUS 2P turns on versus results: a rematch menu
+// after the victory screen, which would hold a match inside game() where the
+// ranked set's start.exit cannot end it, so each match is not one result. Its
+// Esc opens a pause menu. A queue match takes neither: after the pick both are
+// off (with no pause menu, Esc by either player ends the match for both, and
+// an unfinished match is never reported). The engine before modern-input has
+// neither, so v2 false gives the line unchanged.
+const VERSUS_PICK = "\t\t\t\tlocal versus = main.t_itemname.netplayversus({{itemname = 'netplayversus', displayname = 'VERSUS 2P'}}, 1)";
+function versusPick(v2) {
+  if (!v2) return VERSUS_PICK;
+  return [
+    VERSUS_PICK,
+    '\t\t\t\t-- one match, one result: no rematch menu, no pause menu',
+    '\t\t\t\tmain.versusResults = false',
+    '\t\t\t\tmain.pauseMenu = false',
+  ].join('\n');
+}
+
 // The select-screen hook, for the online mod. Plain Lua, no backtick, no ${.
 function hookLua() {
   return [
@@ -83,4 +102,4 @@ function hookLua() {
   ].join('\n');
 }
 
-module.exports = { MODES, LABELS, SIZES, normalize, toRoster, handlerSet, handlerClear, hookLua };
+module.exports = { MODES, LABELS, SIZES, normalize, toRoster, handlerSet, handlerClear, versusPick, hookLua };

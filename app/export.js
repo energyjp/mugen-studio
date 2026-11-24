@@ -50,12 +50,13 @@ AddType application/json .json
 # header. Deliberately NOT "immutable + stamp only": clients holding a
 # pre-stamp cached page would then pin the old engine at the unstamped URL.
 <IfModule mod_headers.c>
-  <FilesMatch "\\.(html|js|json|pak|wasm)$">
+  <FilesMatch "\\.(html|js|json|pak|lite|wasm)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
 </IfModule>
-# Game data files may contain anything; serve as opaque bytes.
-<FilesMatch "\\.(sff|snd|air|cns|cmd|def|zss|act|st)$">
+# Game data files may contain anything; serve as opaque bytes. (game.lite is a
+# lite build's one data file; a host that would compress it gains nothing.)
+<FilesMatch "\\.(sff|snd|air|cns|cmd|def|zss|act|st|lite)$">
   ForceType application/octet-stream
 </FilesMatch>
 # Optional: password-protect by uncommenting and creating an .htpasswd.
@@ -584,10 +585,12 @@ function exportSite({ pack = false, v2 = false, public: isPublic = false, dest }
     // the itch one included, never has.)
     require('./lifebars.js').rmFile(path.join(DIST, 'identity.js'));     // checked, as above
     haveIdentity = false;
-    // Bundle the self-hosting guide and the field guide with the build.
-    for (const doc of ['DEPLOYMENT.md', 'GRAIL.md']) {
-      // The docs live in docs/ now; they still ship at the top of the build,
-      // where someone unpacking a redistributable will actually find them.
+    // Bundle the self-hosting guide with the build. GRAIL.md no longer ships
+    // (2.5): it is the project's knowledge base and lives beside the source on
+    // GitHub, not in every copy of a game.
+    for (const doc of ['DEPLOYMENT.md']) {
+      // The doc lives in docs/; it ships at the top of the build, where someone
+      // unpacking a redistributable will actually find it.
       const p = path.join(ROOT, 'docs', doc);
       if (fs.existsSync(p)) copy(p, path.join(DIST, doc));
     }
@@ -635,8 +638,10 @@ function exportSite({ pack = false, v2 = false, public: isPublic = false, dest }
   const themesKeep = themeFolder ? new Set([themeFolder]) : null;
   // privateMenu is opt-in (vfslib.js): the author's own private site build gets
   //
+  // build (the side select screen, motifcompat.sideSelect); desktop.js never
+  // passes it.
   const built = build({
-    publicOnly: isPublic, privateMenu: !isPublic, __themesKeep: themesKeep,
+    publicOnly: isPublic, privateMenu: !isPublic, web: true, __themesKeep: themesKeep,
   });
   const { generated, index } = built;
   let bytes = 0, count = 0, skipped = 0;

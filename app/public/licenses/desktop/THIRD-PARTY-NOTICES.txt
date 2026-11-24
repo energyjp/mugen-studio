@@ -1,13 +1,19 @@
 LICENSES AND NOTICES FOR THIS GAME
 ==================================
 
-This game runs on Ikemen GO for Windows (Ikemen_GO-v1.0.0-windows, the
-official release, unmodified) and was built with Mugen Studio. Two files carry
-its notices:
+This game runs on Ikemen GO for Windows (Ikemen_GO-modern-input-windows, the
+official modern-input pre-release, GitHub release branch-modern-input of
+ikemen-engine/Ikemen-GO, unmodified) and was built with Mugen Studio. Two
+files carry its notices:
 
   LICENSES.txt             Ikemen GO's own: the engine (MIT), its CC BY 3.0
                            and CC BY-NC 3.0 art, FFmpeg, libvpx, libxmp, SDL2
   THIRD-PARTY-NOTICES.txt  this file: what is in this folder and not in that one
+
+FFmpeg (lib\av*.dll, lib\sw*.dll) is used under the GNU LGPL v2.1, as
+LICENSES.txt section 3 says: its exact corresponding source is
+src_ffmpeg.tar.gz on the same GitHub release page as the engine zip
+(https://github.com/ikemen-engine/Ikemen-GO/releases/tag/branch-modern-input).
 
 Characters, stages, music and screenpacks added to a build belong to their
 authors and come with their own terms, usually in a readme beside them.
@@ -17,18 +23,18 @@ WHAT IS HERE
 ------------
 
 Ikemen_GO.exe
-  Go runtime and standard library (go1.20.14)  (BSD-3-Clause, see [1])
-  github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b  (MIT, see [2])
+  Go runtime and standard library (go1.27.4)  (BSD-3-Clause, see [1])
+  github.com/Eiton/vulkan v0.0.0-20260924123253-b670409ed96a  (MIT, see [2])
   github.com/TheTitanrain/w32 v0.0.0-20200114052255-2654d97dbd3d  (BSD-3-Clause, see [3])
   github.com/flopp/go-findfont v0.1.0  (MIT, see [4])
   github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71  (MIT, see [5])
   github.com/go-gl/mathgl v1.0.0  (BSD-3-Clause, see [6])
   github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0  (FreeType License, see [7])
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99  (MIT, see [8])
-  github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [9])
-  github.com/icza/bitio v1.1.0  (Apache-2.0, see [10])
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2  (MIT, see [11])
-  github.com/ikemen-engine/reisen v0.1.10-0.20260911210321-7972c2bbc957  (MIT, see [12])
+  github.com/hajimehoshi/go-mp3 v0.3.4  (Apache-2.0, see [8])
+  github.com/icza/bitio v1.1.0  (Apache-2.0, see [9])
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2  (MIT, see [10])
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e  (MIT, see [11])
+  github.com/ikemen-engine/reisen v0.1.10-0.20261002224432-3a7df23d0df2  (MIT, see [12])
   github.com/jfreymuth/oggvorbis v1.0.5  (MIT, see [13])
   github.com/jfreymuth/vorbis v1.0.2  (MIT, see [13])
   github.com/lucasb-eyer/go-colorful v1.2.0  (MIT, see [14])
@@ -40,17 +46,17 @@ Ikemen_GO.exe
   github.com/qmuntal/gltf v0.24.2  (BSD-2-Clause, see [20])
   github.com/samhocevar/go-meltysynth v0.0.0-20230403180939-aca4a036cb16  (MIT, see [21])
   github.com/sqweek/dialog v0.0.0-20220809060634-e981b270ebbf  (ISC, see [22])
-  github.com/tidwall/gjson v1.18.0  (MIT, see [23])
+  github.com/tidwall/gjson v1.20.2  (MIT, see [23])
   github.com/tidwall/match v1.1.1  (MIT, see [23])
-  github.com/tidwall/pretty v1.2.0  (MIT, see [24])
-  github.com/tidwall/sjson v1.2.5  (MIT, see [23])
+  github.com/tidwall/pretty v1.3.0  (MIT, see [24])
+  github.com/tidwall/sjson v1.2.9  (MIT, see [23])
   github.com/veandco/go-sdl2 v0.5.0-alpha.7.0.20250220045537-7f43f67a3a12  (BSD-3-Clause, see [25])
   github.com/yuin/gopher-lua v1.1.0  (MIT, see [26])
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498  (BSD-3-Clause, see [27])
-  golang.org/x/image v0.22.0  (BSD-3-Clause, see [1])
+  golang.org/x/image v0.48.0  (BSD-3-Clause, see [1])
   golang.org/x/mobile v0.0.0-20221110043201-43a038452099  (BSD-3-Clause, see [27])
-  golang.org/x/sys v0.18.0  (BSD-3-Clause, see [27])
-  golang.org/x/text v0.20.0  (BSD-3-Clause, see [1])
+  golang.org/x/sys v0.50.0  (BSD-3-Clause, see [1])
+  golang.org/x/text v0.44.0  (BSD-3-Clause, see [1])
   gopkg.in/ini.v1 v1.67.0  (Apache-2.0, see [28])
 
 lib\ - the DLLs LICENSES.txt does not name
@@ -73,8 +79,9 @@ LICENSE TEXTS
 --------------------------------------------------------------------------------
 Applies to:
   The Go runtime and standard library in Ikemen_GO.exe
-  golang.org/x/image v0.22.0
-  golang.org/x/text v0.20.0
+  golang.org/x/image v0.48.0
+  golang.org/x/sys v0.50.0
+  golang.org/x/text v0.44.0
 
 Copyright 2009 The Go Authors.
 
@@ -108,7 +115,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 [2] MIT - github.com/Eiton/vulkan
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/Eiton/vulkan v0.0.0-20251125114215-6585a2a8590b
+  github.com/Eiton/vulkan v0.0.0-20260924123253-b670409ed96a
 
 The MIT License (MIT)
 Copyright © 2016-2017 Maxim Kupriianov <max@kc.vc>
@@ -437,35 +444,7 @@ Legal Terms
 --- end of FTL.TXT ---
 
 --------------------------------------------------------------------------------
-[8] MIT - github.com/gopxl/beep/v2
---------------------------------------------------------------------------------
-Applies to:
-  github.com/gopxl/beep/v2 v2.1.1-0.20240921133731-defe79638e99
-
-MIT License
-
-Copyright (c) 2017 Michal Štrba
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
---------------------------------------------------------------------------------
-[9] Apache-2.0 - github.com/hajimehoshi/go-mp3
+[8] Apache-2.0 - github.com/hajimehoshi/go-mp3
 --------------------------------------------------------------------------------
 Applies to:
   github.com/hajimehoshi/go-mp3 v0.3.4
@@ -673,7 +652,7 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
-[10] Apache-2.0 - github.com/icza/bitio
+[9] Apache-2.0 - github.com/icza/bitio
 --------------------------------------------------------------------------------
 Applies to:
   github.com/icza/bitio v1.1.0
@@ -881,10 +860,38 @@ Applies to:
    limitations under the License.
 
 --------------------------------------------------------------------------------
+[10] MIT - github.com/ikemen-engine/beep/v2
+--------------------------------------------------------------------------------
+Applies to:
+  github.com/ikemen-engine/beep/v2 v2.1.2-0.20260920031044-d7bdc24ec9d2
+
+MIT License
+
+Copyright (c) 2017 Michal Štrba
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------------
 [11] MIT - github.com/ikemen-engine/ggpo
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/ikemen-engine/ggpo v0.0.0-20260413180701-b08e7d27b7f2
+  github.com/ikemen-engine/ggpo v0.0.0-20261103095520-f34b113e3c3e
 
 MIT License
 
@@ -912,7 +919,7 @@ SOFTWARE.
 [12] MIT - github.com/ikemen-engine/reisen
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/ikemen-engine/reisen v0.1.10-0.20260911210321-7972c2bbc957
+  github.com/ikemen-engine/reisen v0.1.10-0.20261002224432-3a7df23d0df2
 
 MIT License
 
@@ -1398,9 +1405,9 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 [23] MIT
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/tidwall/gjson v1.18.0
+  github.com/tidwall/gjson v1.20.2
   github.com/tidwall/match v1.1.1
-  github.com/tidwall/sjson v1.2.5
+  github.com/tidwall/sjson v1.2.9
 
 The MIT License (MIT)
 
@@ -1427,7 +1434,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 [24] MIT - github.com/tidwall/pretty
 --------------------------------------------------------------------------------
 Applies to:
-  github.com/tidwall/pretty v1.2.0
+  github.com/tidwall/pretty v1.3.0
 
 The MIT License (MIT)
 
@@ -1516,7 +1523,6 @@ SOFTWARE.
 Applies to:
   golang.org/x/exp v0.0.0-20220609121020-a51bd0440498
   golang.org/x/mobile v0.0.0-20221110043201-43a038452099
-  golang.org/x/sys v0.18.0
 
 Copyright (c) 2009 The Go Authors. All rights reserved.
 

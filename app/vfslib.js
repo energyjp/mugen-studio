@@ -282,6 +282,9 @@ function playersOf(roster) {
   return Number.isInteger(n) && n >= 1 ? n : 4;
 }
 
+// `keys` is roster.keys (the [Keys_Pn] / [Joystick_Pn] slots), or on the
+// modern-input engine (IKEMEN_V2) keylib.controlsOf(roster); null = this
+// build's shipped layout either way.
 // `commonConst` is the vpath of a const file this build adds beside the
 // engine's own, or null. It is only ever passed when that file is actually in
 // the build: a [Common] Const entry naming a file that is not there fails
@@ -323,6 +326,19 @@ function buildConfigIni(motif, settings, keys, players, commonConst, commonState
     '; tested default; players can raise it in Options (their saved config',
     '; wins over this shipped default on every later boot).',
     'MasterVolume = 50',
+    '; Full volume when another window has focus. The engine turns the sound',
+    '; down to this percentage while its window is unfocused (its default is',
+    '; 50), and in the browser it sees real focus. vfs.js puts 100 back over a',
+    '; saved config that lacks it or says otherwise (WEB_FORCED).',
+    'FocusLossVolume = 100',
+    // DECISION 9: the modern-input engine ships resample quality 4; the
+    // browser build keeps 1 (one mixer thread shared with the game). The
+    // engine also puts 1 back at every boot (audio_js.go
+    // platformAudioResampleQuality), so a saved config cannot raise it.
+    ...(process.env.IKEMEN_V2 ? [
+      '; Cheapest resampling: the browser runs the mixer on the game thread.',
+      'AudioResampleQuality = 1',
+    ] : []),
     '',
     '[Common]',
     '; Pure Lua run on EVERY frame during a match. This is what calls loop(),',
@@ -434,7 +450,12 @@ function buildConfigIni(motif, settings, keys, players, commonConst, commonState
     // table. With nothing bound in the Studio this emits exactly the two
     // sections it always did, byte for byte - a generated file that changes
     // size changes the Build ID, and an untouched build keeps its number.
-    ...keylib.iniLines(keys, players),
+    // THE MODERN-INPUT ENGINE (IKEMEN_V2) reads none of [Keys_Pn] /
+    // [Joystick_Pn]: there `keys` is keylib.controlsOf(roster) and this is
+    // [Input] plus both keyboard controllers' Controller Mapping (and the
+    // Standard button setup when the build changed it), under the names the
+    // web engine and the desktop zip both read (keylib FORMAT_V2).
+    ...(process.env.IKEMEN_V2 ? keylib.iniLinesV2(keys) : keylib.iniLines(keys, players)),
   ].concat(buildRulesLine(settings)), settings).join('\n'));
 }
 
@@ -581,7 +602,7 @@ function makeGeneratedFiles(roster, ext) {
     'data/select.def': buildSelectDef(roster),
     'save/config.ini': buildConfigIni(roster.motif,
       require('./settings-schema').settingsFor(roster.settings, 'web'),
-      roster.keys, playersOf(roster),
+      process.env.IKEMEN_V2 ? keylib.controlsOf(roster) : roster.keys, playersOf(roster),
       ownConsts ? engineconst.BUILD_CONST_VPATH : null,
       ownStates ? ownStates.vpath : null,
       commonLines,
@@ -641,22 +662,16 @@ function makeGeneratedFiles(roster, ext) {
     files[g.GALLERY_ZSS_VPATH] = gallery.zss;
   }
 
-  // The screenpacks reference TrueType fonts (Open_Sans, infofont), which
-  // the js/wasm build cannot render. Shadow them with a BITMAP font.
-  if (process.env.IKEMEN_V2) {
-    // The V2 ikemen1 motif is HD (localcoord 1280x720); the tiny 6x9 font
-    // renders as unreadable specks. Substitute the motif's own 18px "Pixel"
-    // font (full ASCII, sized for this motif) and ship its SFF under font/
-    // so the .def's File reference resolves.
-    const pixelSff = fs.readFileSync(path.join(layout.dir('release-v2'), 'data', 'ikemen1', 'fonts', 'pixel.sff'));
-    const pixelDef = Buffer.from(
-      '[FNT v2]\nfntversion = 2,00\nname = "Pixel"\n[Def]\n' +
-      'Type = bitmap\nBankType = palette\nSize = 18,18\nSpacing = 0,4\nOffset = 0,0\n' +
-      'File = menusub.sff\n');
-    files['font/menusub.sff'] = pixelSff;
-    files['font/Open_Sans.def'] = pixelDef;
-    files['font/infofont.def'] = pixelDef;
-  } else {
+  // The screenpacks reference TrueType fonts (Open_Sans, infofont).
+  // V2 builds ship them as they are (Decision 26 of the modern-input plan):
+  // the browser engine draws TrueType at its on-screen size (font_webgl.go),
+  // and release-v2's font/Open_Sans.def, infofont.def and
+  // font/Open_Sans/*.ttf with their LICENSE.txt already ride the release-v2
+  // font/ walk, so nothing is generated here. The 18px pixel font that stood
+  // in for them until then was drawn at the TrueType font's text scales and
+  // made the new screens overflow (the Setup name keyboard, device names,
+  // hint rows; DEVLOG 2026-11-16).
+  if (!process.env.IKEMEN_V2) {
     // v1 release screenpack is low-res; f-6x9 matches its expected sizes.
     files['font/Open_Sans.def'] = fs.readFileSync(path.join(layout.dir('release'), 'font', 'f-6x9.def'));
     files['font/infofont.def'] = fs.readFileSync(path.join(layout.dir('release'), 'font', 'f-6x9.def'));
@@ -1397,7 +1412,7 @@ function assemble(opts, roster, view) {
       const bi = require('./buildimport');
       const statesFile = bi.buildStates() ? bi.buildStatesPath() : null;
       const tag = teamplay.add004TagForBundle(statesFile);
-      generated[teamplay.TEAM_PLAY_VPATH] = Buffer.from(teamplay.teamPlayLua({ add004Tag: tag.tag }), 'latin1');
+      generated[teamplay.TEAM_PLAY_VPATH] = Buffer.from(teamplay.teamPlayLua({ add004Tag: tag.tag, v2: !!process.env.IKEMEN_V2 }), 'latin1');
     }
   } catch (e) {
     console.warn('team play mod generation failed:', e.message);
@@ -1482,6 +1497,18 @@ function assemble(opts, roster, view) {
     //
     walkDir(path.join(layout.dir('release-v2'), 'stages'), 'stages', map,
       (vpath) => !MODEL_FILE.test(vpath) && !/(^|\/)stage3d[^/]*$/i.test(vpath));
+    // Layer 3a (V2 only): the modern-input engine's controller art, which no
+    // bundle above carries: upstream's glyphs.sff (button and key pictures
+    // for every device, and since the 2026-11-17 pre-release also the
+    // Controller Mapping and Button Setup diagrams that were input.sff),
+    // copied unmodified from the official pre-release zip (07c692fb), the
+    //
+    // Command List pictures) are the same sprites as the older copy; the
+    // device art (1000 and up) was renumbered with the engine's motif, so it
+    // must match the engine. Without it the hints print their tokens as text
+    // and the Mapping and Setup screens draw no controller.
+    // engine-data/ holds them with their license texts.
+    walkDir(path.join(__dirname, 'engine-data', 'data'), 'data', map, notWork);
   }
   // Layer 3: engine repo - Lua scripts, engine data, default fonts (version-
   // matched to the wasm binary; overrides same-named files from the release)
@@ -1606,7 +1633,9 @@ function assemble(opts, roster, view) {
   try {
     if (addOnOn(roster, 'net-menu')) {
       const nm = require('./netmenu.js');
-      generated[nm.NET_MENU_VPATH] = Buffer.from(nm.netMenuLua({ online: wantOnlineName }), 'latin1');
+      // The modern-input engine (IKEMEN_V2) has no getInput: its text reads
+      // the menu actions. Without IKEMEN_V2 the text is unchanged.
+      generated[nm.NET_MENU_VPATH] = Buffer.from(nm.netMenuLua({ online: wantOnlineName, v2: !!process.env.IKEMEN_V2 }), 'latin1');
       // Its font: the engine's 6x9 under a name no screenpack can shadow.
       generated[nm.NET_MENU_FONT_VPATH] = Buffer.from(nm.netMenuFontDef(), 'latin1');
     }
@@ -1618,17 +1647,39 @@ function assemble(opts, roster, view) {
   // both exports get it - the desktop export ships the generated motif: a pack
   // whose select faces are per-member keys 1.0 does not read (Infinite Legacy
   // X), a pack without the hidden menu a lobby opens (every MUGEN-era pack),
-  // and a pack carrying the NETWORK lines an older install grafted.
+  // and a pack carrying the NETWORK lines an older install grafted. And, for
+  // the modern-input engine (V2 builds), a large pack whose pause menu would
+  // inherit the engine's 320x240 clip margins (motifcompat.pauseMargins) - the
+  // default motif too - and a pack whose Command List would take the engine's
+  // ikemen1 scroll arrow sprites and 320x240 width (motifcompat.pauseMovelist).
+  // And, for the modern-input engine's web and desktop builds (the Studio's
+  // own game and the Website export pass opts.web, the Desktop export
+  // opts.desktop), upstream's side select screen in a pack that has no
+  // [Side Select Info] of its own (motifcompat.sideSelect), unless the
+  // bundle's Theme tab option turned it off (roster.sideSelect === false);
+  // and, for WEB builds only, the rematch menu after a versus match in a pack
+  // without [Rematch Info] (motifcompat.rematchInfo: on, as the engine had it
+  // before 07c692fb).
+  // And, for the modern-input engine (V2 builds), the pack's own menu keys
+  // (`.key` / `.keycode` lines that differ from 1.0's defaults) as the
+  // `.action` lines that engine reads (motifcompat.keyActions); its
+  //
   const motifCompat = require('./motifcompat.js');
+  let needsPauseMargins = false, needsSideSelect = false, needsPauseMovelist = false, needsKeyActions = false, needsRematchInfo = false;
   const needsCompat = (() => {
-    if (!roster.motif) return false;
-    const want = String(roster.motif).toLowerCase();
-    const k = map.has(roster.motif) ? roster.motif : [...map.keys()].find((x) => x.toLowerCase() === want);
+    const name = roster.motif || DEFAULT_MOTIF;
+    const want = String(name).toLowerCase();
+    const k = map.has(name) ? name : [...map.keys()].find((x) => x.toLowerCase() === want);
     const p = k ? map.get(k) : null;
     if (!p || typeof p !== 'string') return false;
     try {
       const t = fs.readFileSync(p, 'latin1');
-      return motifCompat.needsMemberFaces(t) || motifCompat.needsServerGroup(t) || motifCompat.hasNetworkGraft(t);
+      needsKeyActions = !!process.env.IKEMEN_V2 && motifCompat.needsKeyActions(t);
+      needsPauseMargins = !!process.env.IKEMEN_V2 && motifCompat.needsPauseMargins(t);
+      needsPauseMovelist = !!process.env.IKEMEN_V2 && motifCompat.needsPauseMovelist(t);
+      needsSideSelect = !!process.env.IKEMEN_V2 && (opts.web === true || opts.desktop === true) && roster.sideSelect !== false && motifCompat.needsSideSelect(t);
+      needsRematchInfo = !!process.env.IKEMEN_V2 && opts.web === true && motifCompat.needsRematchInfo(t);
+      return !!roster.motif && (motifCompat.needsMemberFaces(t) || motifCompat.needsServerGroup(t) || motifCompat.hasNetworkGraft(t));
     } catch (e) { return false; }
   })();
   // roster.siteVersion is a reason of its own: the F1 box's version is stamped
@@ -1636,7 +1687,7 @@ function assemble(opts, roster, view) {
   // name, so without it the engine's screenpack was never regenerated and the
   // box said what the file said - "(v1.9)" in the 2.0 itch cut.
   if (roster.titleMusic || roster.selectMusic || wantOnlineName || logoDef || (lifebarMix && lifebarMix.fightKey) || needsCompat || view
-    || roster.siteVersion) {
+    || roster.siteVersion || needsPauseMargins || needsSideSelect || needsPauseMovelist || needsKeyActions || needsRematchInfo) {
     // The motif config.ini names, matched without regard to case (a roster's
     // `data/<name>/system.def` may be spelled differently from the file on
     // disk, which is how the map is keyed). Never a different motif: a fight
@@ -1676,6 +1727,11 @@ function assemble(opts, roster, view) {
       // GAME line gone they have no anchor in a MUGEN pack, and the online
       // menu add-on shows them there instead.
       if (needsCompat) def = motifCompat.serverGroup(motifCompat.dropNetworkGraft(motifCompat.memberFaces(def)));
+      if (needsKeyActions) def = motifCompat.keyActions(def);
+      if (needsPauseMargins) def = motifCompat.pauseMargins(def);
+      if (needsPauseMovelist) def = motifCompat.pauseMovelist(def);
+      if (needsSideSelect) def = motifCompat.sideSelect(def);
+      if (needsRematchInfo) def = motifCompat.rematchInfo(def);
 
       //
       //
@@ -1744,6 +1800,32 @@ function assemble(opts, roster, view) {
     }
   }
 
+  // THE SCREENPACK'S STORYBOARDS' KEYS (motifcompat.storyboardActions): the
+  // modern-input engine (V2 builds) reads [SceneDef] done.action and
+  // cancel.action, not 1.0's key.skip and key.cancel. The build's copy of each
+  // storyboard in the build's screenpack folder (its logo, intro, credits,
+  // game over and ending storyboards live there) whose keys differ from 1.0's
+  // defaults gets them as action lines. The pack's files are untouched.
+  if (process.env.IKEMEN_V2) {
+    try {
+      const want = String(roster.motif || DEFAULT_MOTIF).toLowerCase();
+      const motifKey = map.has(roster.motif || DEFAULT_MOTIF) ? (roster.motif || DEFAULT_MOTIF) : [...map.keys()].find((x) => x.toLowerCase() === want);
+      const dir = motifKey ? motifKey.slice(0, motifKey.lastIndexOf('/') + 1).toLowerCase() : '';
+      if (dir) {
+        for (const [vp, abs] of map) {
+          if (typeof abs !== 'string' || !/\.def$/i.test(vp) || !vp.toLowerCase().startsWith(dir)) continue;
+          if (vp === motifKey || generated[vp]) continue;
+          let t;
+          try { t = fs.readFileSync(abs, 'latin1'); } catch (e) { continue; }
+          if (!/^\s*\[\s*scenedef\s*\]/mi.test(t) || !motifCompat.needsStoryboardActions(t)) continue;
+          generated[vp] = Buffer.from(motifCompat.storyboardActions(t), 'latin1');
+        }
+      }
+    } catch (e) {
+      console.warn('the storyboards\' keys were not carried over:', e.message);
+    }
+  }
+
   //
   // a mod: its post-connect sequence called enterSyncedNetplayMenu() (until
   // queue matches went straight to VERSUS) and still calls
@@ -1766,6 +1848,9 @@ function assemble(opts, roster, view) {
         const queuemode = require('./queuemode');
         const queueSet = '\t\t\t\t' + queuemode.handlerSet(roster.queueMode);
         const queueClear = '\t\t\t\t' + queuemode.handlerClear;
+        // The VERSUS 2P pick; on the modern-input engine (IKEMEN_V2) a queue
+        // match also gets no rematch menu and no pause menu (queuemode.js).
+        const versusPick = queuemode.versusPick(!!process.env.IKEMEN_V2);
         const handler = [
           "\t--RANKED MATCH (auto-pairing queue; injected by the web build)",
           "\t['rankedmatch'] = function(t, item)",
@@ -1793,7 +1878,7 @@ function assemble(opts, roster, view) {
           "\t\t\t\tmain.f_clearShuffleTables()",
           "\t\t\t\tmain.f_default()",
           queueSet,
-          "\t\t\t\tlocal versus = main.t_itemname.netplayversus({{itemname = 'netplayversus', displayname = 'VERSUS 2P'}}, 1)",
+          versusPick,
           "\t\t\t\tmain.f_unlock(false)",
           "\t\t\t\tif versus ~= nil then versus() end",
           queueClear,
@@ -1846,7 +1931,7 @@ function assemble(opts, roster, view) {
           "\t\t\t\tmain.f_clearShuffleTables()",
           "\t\t\t\tmain.f_default()",
           queueSet,
-          "\t\t\t\tlocal versus = main.t_itemname.netplayversus({{itemname = 'netplayversus', displayname = 'VERSUS 2P'}}, 1)",
+          versusPick,
           "\t\t\t\tmain.f_unlock(false)",
           "\t\t\t\tif versus ~= nil then versus() end",
           queueClear,
@@ -1931,6 +2016,25 @@ function assemble(opts, roster, view) {
   // with the engine's own settings system, so it lands in save/config.ini -
   // which vfs.js mirrors into localStorage. That makes it browser-stored
   //
+  // PLAYER NAME's text box. The engine before modern-input took the text
+  // sprite, the screen, its background and an overlay; the modern-input engine
+  // (IKEMEN_V2; our web engine and upstream's official build alike) has
+  // main.f_drawInput(text, defaultInput, frameOnly), which draws its own
+  // keyboard screen and answers '' for a cancel, and its motif has no
+  // textinput sprite or overlay. The V2 text calls it the way the engine's own
+  // NEW ADDRESS does; without IKEMEN_V2 the text is the one every earlier build
+  // carried.
+  const ONLINE_NAME_INPUT_V1 = `	local name = main.f_drawInput(
+		motif[main.group].textinput.TextSpriteData,
+		'Online name: ',
+		motif[main.group],
+		motif[main.background],
+		motif[main.group].textinput.overlay.RectData,
+		main.f_onlineName()
+	)
+`;
+  const ONLINE_NAME_INPUT_V2 = `	local name = main.f_drawInput('Online name', main.f_onlineName())
+`;
   if (wantOnlineName) {
     // The plates' font (ikemen1's Menu2Small) under names no screenpack has:
     // only ikemen1's own folder carries it, so under any other pack the
@@ -2550,15 +2654,7 @@ end
 
 main.t_itemname['playername'] = function(t, item)
 	sndPlay(motif.Snd, motif[main.group].cursor.move.snd[1], motif[main.group].cursor.move.snd[2])
-	local name = main.f_drawInput(
-		motif[main.group].textinput.TextSpriteData,
-		'Online name: ',
-		motif[main.group],
-		motif[main.background],
-		motif[main.group].textinput.overlay.RectData,
-		main.f_onlineName()
-	)
-	-- Trim, cap length, and keep it to characters that survive a scoreboard
+${process.env.IKEMEN_V2 ? ONLINE_NAME_INPUT_V2 : ONLINE_NAME_INPUT_V1}	-- Trim, cap length, and keep it to characters that survive a scoreboard
 	-- and a URL without escaping surprises.
 	name = tostring(name or ''):gsub('^%s+', ''):gsub('%s+$', '')
 	name = name:gsub('[^%w _%-%.]', '')
@@ -2751,6 +2847,53 @@ end
     console.warn('sprite file repair failed:', e.message);
   }
 
+  // WEB STAND-INS FOR WINDOWS FONTS (webfonts.js): the modern-input engine's
+  // web builds only. A screenpack font naming a Windows system font the build
+  // does not have (CvS2: arial.ttf, msgothic.ttc) draws in Open_Sans or
+  // DotGothic16 instead of nothing; the build's copies of its .def (or of the
+  // motif, for a [Files] entry naming the font file itself) say so.
+  let webFontStandIns = null;
+  if (process.env.IKEMEN_V2 && opts.web === true) {
+    try {
+      const WF = require('./webfonts.js');
+      const wantMotif = String(roster.motif || '').toLowerCase();
+      const motif = !roster.motif ? DEFAULT_MOTIF
+        : (map.has(roster.motif) ? roster.motif : ([...map.keys()].find((k) => k.toLowerCase() === wantMotif) || null));
+      const lowGen = new Map(Object.keys(generated).map((k) => [k.toLowerCase(), k]));
+      const lowMap = new Map([...map.keys()].map((k) => [k.toLowerCase(), k]));
+      const key = (vp) => String(vp).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+      const has = (vp) => lowGen.has(key(vp)) || lowMap.has(key(vp));
+      const read = (vp) => {
+        const g = lowGen.get(key(vp));
+        if (g) return generated[g];
+        const m = lowMap.get(key(vp));
+        const a = m ? map.get(m) : null;
+        if (typeof a !== 'string') return null;
+        try { return fs.readFileSync(a); } catch (e) { return null; }
+      };
+      const cur = motif ? read(motif) : null;
+      if (cur) {
+        const r = WF.standIns(motif, cur.toString('latin1'), has, read);
+        // the build's copy at the vpath the engine finds (the installed pack's spelling)
+        for (const [vp, buf] of Object.entries(r.files)) generated[lowGen.get(key(vp)) || lowMap.get(key(vp)) || vp] = buf;
+        if (r.motif !== null) generated[motif] = Buffer.from(r.motif, 'latin1');
+        if (r.gothic) {
+          const JP = require('./jpfont.js');
+          if (JP.available()) {
+            const jf = JP.files(JP.DEFAULT_SIZE);
+            for (const vp of [JP.VPATHS.ttf, JP.VPATHS.license]) if (!generated[vp]) generated[vp] = jf[vp];
+          }
+        }
+        if (r.notes.length) {
+          webFontStandIns = r.notes;
+          console.log('web build: Windows fonts drawn in shipped stand-ins: ' + r.notes.join('; '));
+        }
+      }
+    } catch (e) {
+      console.warn('the web font stand-ins were not added:', e.message);
+    }
+  }
+
   // THE COMMAND LIST'S FONT (jpfont.js): only when a list above prints a name
   // the stock fonts cannot draw and DotGothic16 can - the font's def (at the
   // size and spacing of the font the motif's list uses, as this build ships
@@ -2770,22 +2913,67 @@ end
         return null;
       };
       const cur = motif ? readVp(motif) : null;
+      // The modern-input engine (V2) draws the list as menu rows in the pack's
+      // own fonts: those get DotGothic16 as their fallback (jpfont.patchMotifV2).
+      const v2 = !!process.env.IKEMEN_V2;
       if (cur) {
         const text = cur.toString('latin1');
-        const fontName = String(JP.commandListFont(text) || '').replace(/\\/g, '/');
+        const fontName = String((v2 ? JP.commandListFontV2(text) : JP.commandListFont(text)) || '').replace(/\\/g, '/');
         const dir = motif.slice(0, motif.lastIndexOf('/') + 1);
         // the engine's lookup for a motif's font: beside the motif, font/, as is, data/ (motif.go)
         const fontDef = fontName ? [dir + fontName, 'font/' + fontName, fontName, 'data/' + fontName].map(readVp).find(Boolean) : null;
-        const metrics = (fontDef && JP.fontMetrics(fontDef.toString('latin1'))) || JP.DEFAULT_SIZE;
+        let metrics = (fontDef && JP.fontMetrics(fontDef.toString('latin1'))) || JP.DEFAULT_SIZE;
+        // V2: as heavy as a bold bitmap row font (jpfont.boldFor; the engine's [Def] bold)
+        if (v2 && fontDef && JP.boldFor(fontDef, metrics) > 0) metrics = Object.assign({}, metrics, { bold: JP.boldFor(fontDef, metrics) });
+        // V2 web builds: beside a TrueType row font, kana about as tall as its
+        // capitals (jpfont.trueTypeFit; the desktop export's engine has no fallback)
+        if (v2 && opts.web === true) metrics = JP.trueTypeFit(metrics);
         for (const [vp, buf] of Object.entries(JP.files(metrics))) generated[vp] = buf;
-        generated[motif] = Buffer.from(JP.patchMotif(text).text, 'latin1');
+        const patched = v2 ? JP.patchMotifV2(text) : JP.patchMotif(text);
+        generated[motif] = Buffer.from(patched.text, 'latin1');
         // not a charFixes entry: that list is per character (the export's back page groups it by chars/<id>/)
         commandListFont = { def: JP.VPATHS.def, motif, size: metrics.size, from: fontName || null, names: clNames.filter((n) => !JP.stockDraws(n) && JP.fontDraws(n)).length };
-        console.log('website build: the Command List font (DotGothic16) ships for ' + commandListFont.names + ' names; ' + motif + ' points the pause menus\' list at it');
+        if (v2) commandListFont.fallbackFor = patched.slots;
+        console.log('website build: the Command List font (DotGothic16) ships for ' + commandListFont.names + ' names; ' + motif
+          + (v2 ? ' gives it as the fallback of the list\'s fonts (' + patched.slots.map((s) => 'font' + s).join(', ') + ')' : ' points the pause menus\' list at it'));
       }
     }
   } catch (e) {
     console.warn('the Command List font was not added:', e.message);
+  }
+
+  // THE COMMAND LIST'S WORD PICTURES (wordglyphs.js): the modern-input
+  // engine's web builds only. "AIR", "TAP", "EX" and the other word tokens are
+  // pictures whose letters fill a third of their height, 9 px beside 22 px
+  // buttons; the build's copy of the glyph file gets them cut to their
+  // letters, or drawn in the rows' own letters when the rows use a MUGEN
+  //
+  // starts from that file).
+  let commandListWords = null;
+  if (process.env.IKEMEN_V2 && opts.web === true) {
+    try {
+      const WG = require('./wordglyphs.js');
+      const wantMotif = String(roster.motif || '').toLowerCase();
+      const motif = !roster.motif ? DEFAULT_MOTIF
+        : (map.has(roster.motif) ? roster.motif : ([...map.keys()].find((k) => k.toLowerCase() === wantMotif) || null));
+      const readVp = (vp) => {
+        const low = String(vp).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+        for (const k of Object.keys(generated)) if (k.toLowerCase() === low) return generated[k];
+        for (const [k, a] of map) if (k.toLowerCase() === low && typeof a === 'string') { try { return fs.readFileSync(a); } catch (e) { return null; } }
+        return null;
+      };
+      const cur = motif ? readVp(motif) : null;
+      const done = cur ? WG.forBuild(motif, cur.toString('latin1'), readVp) : null;
+      if (done && done.file) {
+        generated[motif] = Buffer.from(done.text, 'latin1');
+        generated[done.file.vpath] = done.file.buf;
+        commandListWords = Object.assign({ motif }, done.info);
+        const inFont = (done.info.notes || []).some((n) => / in the rows' font /.test(n));
+        console.log('web build: the Command List word pictures ' + (inFont ? 'drawn in the rows\' bitmap font' : 'cut to their letters') + ' in ' + done.file.vpath + ' (' + Object.keys(done.info.overrides).join(' ') + ')');
+      }
+    } catch (e) {
+      console.warn('the Command List word pictures were not changed:', e.message);
+    }
   }
 
   // THE COMMAND LIST'S BUTTONS (buttonstyle.js, Settings > Controls): the
@@ -2817,7 +3005,21 @@ end
       const cur = motif ? readVp(motif) : null;
       const done = cur ? BTN.forBuild(motif, cur.toString('latin1'), readVp, roster) : null;
       if (done && done.info && Object.keys(done.info.overrides).length) {
-        generated[motif] = Buffer.from(done.text, 'latin1');
+        // ONE GLYPH FILE, NOT TWO. When the style's pictures are added to the
+        // word pictures' copy (above), the style's file is that copy plus its
+        // pictures, and the motif names it first in [Files] (a key's first value
+        // wins): the copy itself would ship unused, about 500 KB. It goes, with
+        // its [Files] line.
+        let text = done.text;
+        if (done.file && commandListWords && commandListWords.file && done.info.base
+          && String(done.info.base).toLowerCase() === String(commandListWords.file).toLowerCase() && generated[commandListWords.file]) {
+          const WG = require('./wordglyphs.js');
+          const esc = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, (m) => '\\' + m);
+          text = text.replace(new RegExp('^[ \\t]*glyphs[ \\t]*=[ \\t]*' + esc(WG.FILE) + '[ \\t]*' + esc(WG.MARK) + '[ \\t]*\\r?\\n', 'mi'), '');
+          delete generated[commandListWords.file];
+          commandListWords.foldedInto = done.file.vpath;
+        }
+        generated[motif] = Buffer.from(text, 'latin1');
         if (done.file) generated[done.file.vpath] = done.file.buf;
         commandListButtons = Object.assign({ motif }, done.info);
         console.log('website build: the Command List buttons in the ' + done.info.style + ' style (' + Object.keys(done.info.overrides).join(' ') + ')' + (done.file ? ', pictures in ' + done.file.vpath : ''));
@@ -2896,7 +3098,7 @@ end
     if (WORK_DIR.test(vpath) && !userWork.includes(vpath)) userWork.push(vpath);
   }
 
-  return { roster, generated, index: map, charFixes, commandListFont, commandListButtons, userWork };
+  return { roster, generated, index: map, charFixes, commandListFont, commandListButtons, commandListWords, webFontStandIns, userWork };
 }
 
 module.exports = { buildRulesLine, mountNames, ownsMount, selectPathFor, ROOT, IKEMEN_SRC, ROSTER_PATH, readRoster, rosterInView, writeRoster, backupRoster, build, walkDir, buildSelectDef, buildConfigIni, playersOf, stageKeepFilter, gltfFiles, charKeepFilter, rosteredDefNames,

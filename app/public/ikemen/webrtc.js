@@ -49,7 +49,12 @@
 
   async function fetchIceServers() {
     const base = [
-      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
+      // One Google STUN hostname. With three (stun, stun1, stun2), a page that
+      // had gathered and then idled through a fight often never reached
+      // 'complete', so every later lobby match waited gatherComplete's 4 s
+      // (plan 1.24). They are the same service; one is enough to find the
+      // public address.
+      { urls: ['stun:stun.l.google.com:19302'] },
     ];
     if (!METERED_APP) return base;
     try {
@@ -70,6 +75,15 @@
   // semantics for GGPO. Whole datagrams are queued; boundaries preserved.
   let gdc = null, gQueue = [];
   let isConnected = false, isFailed = false, isClosed = false;
+  // The engine's rollback loop as its own datagrams show it (ggpoTrack): when
+  // it last sent one, its newest input frame and when that last moved on.
+  const ggpoLive = { sentAt: 0, top: -1, topAt: 0 };
+  // This page dropped the match it plays because the other player is gone
+  // (lobbyPlayDrop, lobbyGone). An engine that asks (matchGone, every turn of
+  // its rollback loop: the modern-input engine) ends the match itself, so the
+  // page presses no Esc for it (lobbyUnstick); goneAskedAt says when it last
+  // asked.
+  let matchDropped = false, goneAskedAt = 0;
   // Incoming bytes: queue of Uint8Array chunks + read offset into first.
   let chunks = [], chunkOff = 0;
   let panel = null;
@@ -145,8 +159,11 @@
     peerHash = null; hashVerdict = null;
     peerNetcode = null; ncVerdict = null;
     gdc = null; gQueue = []; pingMs = -1;
+    ggpoLive.sentAt = 0; ggpoLive.top = -1; ggpoLive.topAt = 0;
+    matchDropped = false; goneAskedAt = 0;
     queueRole = ''; queueP1 = ''; queueP2 = ''; queueStartedAt = 0; queueMatchSeq = 0;
     queueRated = false; // re-armed only by a {t:'match'} that says mode:'ranked'
+    queueLobby = false; // set again only by lobbyPlates, at a lobby match's start
     if (!localHash) computeBuildHash();
   }
 
@@ -279,10 +296,16 @@
       // survives a hard refresh entirely. A player whose only difference was a
       // rearranged select screen could refresh forever and never connect, with
       // nothing telling them where to look.
-      setStatus('Game contents differ between players! Usually one of you added, removed, '
+      // The one check covers the game files AND the engine (the Engine ID is
+      // folded in above), so the text names both: after an engine update the
+      // usual cause is one player still on the older page.
+      setStatus('Game contents differ between players! Either the game files or the game engine '
+        + 'are not the same (compare the Build ID and the Engine ID on both loading screens). '
+        + 'Different Engine IDs: one of you is on an older version of the site - that player '
+        + 'refreshes the page (Ctrl+F5). Same Engine ID: usually one of you added, removed, '
         + 'edited or rearranged something in the Mod Studio - that has to match too. '
         + 'Fix: make both sides identical, or use Reset on the loading page to go back '
-        + 'to the shipped roster. A hard refresh alone will NOT clear it.');
+        + 'to the shipped roster. A hard refresh alone will NOT clear a Mod Studio change.');
       ikemenNet.close();
     }
   }
@@ -563,7 +586,19 @@
   }
 
   // Wait for ICE gathering so the offer/answer strings are complete
-  // (avoids needing trickle-ICE signaling).
+  // (avoids needing trickle-ICE signaling): 'complete', or GATHER_CAP_MS when
+  // gathering never finishes (an unreachable STUN server).
+  //
+  // Never earlier than 'complete' (2026-11-17, plan 1.24): a rule that sent
+  // the offer once a host and a srflx candidate were in, 250 ms later, broke
+  // about one lobby match in three whose select screen lasted ~45 s (the
+  // match host's engine stayed on select while the other went on, and the
+  // session closed). Every failing offer went out just before 'complete', with
+  // the same candidates the final description had; why that breaks the match
+  // is not known, so this waits for 'complete' as 2.4.1 did. The 4 s wait it was meant to remove came from the old three Google STUN
+  // hostnames, which after an idle fight often never reach 'complete'; the
+  // single hostname in fetchIceServers completes in about 0.12 s.
+  const GATHER_CAP_MS = 4000;
   function gatherComplete(conn) {
     const c = conn || pc; // a watcher's connection, or the players'
     return new Promise((resolve) => {
@@ -575,7 +610,7 @@
         }
       };
       c.addEventListener('icegatheringstatechange', check);
-      setTimeout(resolve, 4000); // fallback: use whatever gathered
+      setTimeout(resolve, GATHER_CAP_MS); // fallback: use whatever gathered
     });
   }
 
@@ -992,6 +1027,10 @@
   // could be stale or wrong, queueRated is the server's answer and is the
   // only thing the report gate trusts.
   let queueMode = 'ranked', queueRated = false;
+  // queueP1/queueP2 came from a lobby match (lobbyPlates), not the queue: the
+  //
+  // has no business in a lobby, so queueNames() leaves it off.
+  let queueLobby = false;
   //
   //
   // on the result page is the whole set's swing, not just the last match -
@@ -1227,10 +1266,23 @@
       setStatus('Build ID unavailable - hard-refresh the page (Ctrl+F5) and try again.');
       return;
     }
+    // THE BUCKET IS THE BUILD CHECK'S OWN HEX: the Build ID with the Engine ID
+    // folded in (computeBuildHash), the same 16 hex digits a lobby is opened
+    // and listed with. The content-only Build ID (ikemenBuildHex) put two
+    // pages on different engines in one bucket after an engine-only update,
+    // and the pair was then refused by the build check at connect. The relay
+    // takes it as it is (lowercase hex of up to 64 digits), so no server
+    // changes.
+    if (!localHash) computeBuildHash();
+    const queueBuild = localHash ? hex8(localHash) : '';
+    if (!/^[0-9a-f]{16}$/.test(queueBuild)) {
+      setStatus('Build ID unavailable - hard-refresh the page (Ctrl+F5) and try again.');
+      return;
+    }
     setStatus('Joining the queue as ' + identity.name + '...');
     const ws = new WebSocket(url + (url.includes('?') ? '&' : '?') +
       'queue=1&mode=' + queueMode +
-      '&build=' + encodeURIComponent(globalThis.ikemenBuildHex) +
+      '&build=' + encodeURIComponent(queueBuild) +
       '&nc=' + localNetcode() +
       '&name=' + encodeURIComponent(identity.name) +
       '&code=' + encodeURIComponent(identity.code));
@@ -1248,7 +1300,7 @@
       let s = 'In queue as ' + identity.name + ' - ' + lastCount +
         (lastCount === 1 ? ' player waiting (that\'s you). Leave this open.' : ' players waiting...');
       if (lonely && lastCount === 1) {
-        s += '\n\nNobody else is on your version of the build. If someone should be online, BOTH of you refresh the page (Ctrl+F5): updating the roster changes the Build ID, and only identical builds can be matched.';
+        s += '\n\nNobody else is on your version of the build. If someone should be online, BOTH of you refresh the page (Ctrl+F5): updating the roster or the engine changes the Build ID or the Engine ID, and only identical builds on the same engine can be matched.';
       }
       setStatus(s);
     }
@@ -1436,6 +1488,21 @@
     if (!size || !bytes) return;
     const f = start + bytes / size - 1 - 16;
     if (f >= 0) trailMap().set(f, crc >>> 0);
+  }
+  // Every datagram the engine hands sendGGPO, open channel or not. While its
+  // rollback loop runs it sends at least every 200 ms (GGPO's keep-alive);
+  // the newest frame of its input messages (the layout above) stops moving
+  // when the loop waits for the other player's inputs.
+  function ggpoTrack(u) {
+    const now = Date.now();
+    ggpoLive.sentAt = now;
+    if (!u || u.length < 23 || u[4] !== 3) return;
+    const o = 6 + 5 * u[5];
+    if (u.length < o + 17) return;
+    const size = u[o + 15], bytes = u[o + 16];
+    if (!size || !bytes) return;
+    const last = new DataView(u.buffer, u.byteOffset, u.byteLength).getUint32(o) + bytes / size - 1;
+    if (last > ggpoLive.top) { ggpoLive.top = last; ggpoLive.topAt = now; }
   }
 
   // ---- what the players see: the watcher count ----
@@ -1649,14 +1716,16 @@
       },
       // One datagram from this match's watchers, taking turns; [slot] alone
       // when the watcher registered in that slot has closed (said once).
-      readAny() {
+      // numEmpty: answer 0 instead of an empty array when nothing waits (an engine
+      // that asks polls this every millisecond; a number costs it no JS object).
+      readAny(numEmpty) {
         const n = wRegList.length;
         for (let k = 0; k < n; k++) {
           const i = (wRR + k) % n, r = wRegList[i];
           if (r.s.q.length) { wRR = (i + 1) % n; return r.s.q.shift(); }
           if (r.s.closed && !r.goneSent) { r.goneSent = true; wRR = (i + 1) % n; return new Uint8Array([r.slot]); }
         }
-        return new Uint8Array(0);
+        return numEmpty ? 0 : new Uint8Array(0);
       },
       log(msg) { netLog('watch: ' + msg); },
       slots() {
@@ -1691,7 +1760,7 @@
         if (!wgdc || wgdc.readyState !== 'open') return false;
         try { wgdc.send(u8); return true; } catch { return false; }
       },
-      readGGPO() { return wg.length ? wg.shift() : (wClosed ? null : new Uint8Array(0)); },
+      readGGPO(numEmpty) { return wg.length ? wg.shift() : (wClosed ? null : (numEmpty ? 0 : new Uint8Array(0))); },
       log(msg) { netLog('watch: ' + msg); },
       leave() { leaveWatch('You left.'); },
     };
@@ -1906,6 +1975,32 @@
   }
   // The engine draws printable ASCII only.
   const asciiName = (s) => String(s || '').replace(/[^\x20-\x7e]/g, '?').slice(0, 24);
+  // The name this player last used in a lobby, under its own key so a lobby
+  //
+  // can throw (private windows, blocked site data): no name is the fallback.
+  const LOBBY_NAME_KEY = 'ikemen-lobby-name';
+  function lobbySavedName() {
+    try { return String(localStorage.getItem(LOBBY_NAME_KEY) || '').slice(0, 24); } catch (e) { return ''; }
+  }
+  function lobbySaveName(n) {
+    try { localStorage.setItem(LOBBY_NAME_KEY, String(n || '').slice(0, 24)); } catch (e) { /* not kept */ }
+  }
+  // The in-fight name plates for a lobby match, on both players' pages and on
+  // every watcher's. The Lua draws whatever queueNames() hands it (line 1 on
+  // engine side 1, line 2 on side 2), and the lobby server makes match.a the
+  // host = side 1, so every page derives the same two lines from the lobby's
+  // own state without a word on the wire (an older page simply draws none).
+  // Taken once at the start: a member who leaves mid-match drops out of the
+  // lobby's member list, and re-reading would turn the plate into '?'.
+  // queueRated stays false, so the pairing token stays '' and neither the
+  //
+  function lobbyPlates(c) {
+    if (!c || !c.a || !c.b) return;
+    queueP1 = asciiName(lobbyName(c.a));
+    queueP2 = asciiName(lobbyName(c.b));
+    queueRated = false;
+    queueLobby = true;
+  }
   function lobbyStatusOf(id) {
     const v = lobby.view;
     if (!v) return '';
@@ -1975,6 +2070,7 @@
     '#lobbybar .lb-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 10px; }',
     '#lobbybar .lb-sec { font: bold 11px var(--lob-head-font); text-transform: uppercase; letter-spacing: .16em; color: var(--lob-accent);',
     '  border-bottom: 2px solid var(--lob-rule); padding: 8px 0 3px; margin-bottom: 4px; }',
+    '#lobbybar .lb-ltitle { font: bold 15px var(--lob-head-font, var(--lob-font)); color: var(--lob-text); overflow-wrap: anywhere; margin-bottom: 4px; }',
     '#lobbybar .lb-code { display: flex; align-items: center; gap: 6px; }',
     '#lobbybar .lb-code b { flex: 1; font: bold 15px var(--lob-font); color: var(--lob-text); background: var(--lob-chat-bg); border: 2px solid var(--lob-rule);',
     '  padding: 4px 6px; user-select: all; overflow-wrap: anywhere; }',
@@ -2026,6 +2122,10 @@
     '#lobbytab.lb-on, #lobbytab:hover, #lobbytab:focus-visible { opacity: 1; transition: opacity .12s linear; }',
     '#lobbytab:hover, #lobbytab:focus-visible { background: var(--lob-accent); color: var(--lob-accent-text); outline: none; }',
     '@media (prefers-reduced-motion: reduce) { #lobbytab, #lobbytab.lb-on { transition: none; } }',
+    // One line over the game for a few seconds (lobbyNote): a player left.
+    '#lobbynote { position: fixed; top: 14px; transform: translateX(-50%); z-index: 945; max-width: calc(100vw - 40px); pointer-events: none;',
+    '  padding: 6px 12px; background: var(--lob-bg); color: var(--lob-text); border: 2px solid var(--lob-warn); border-radius: 0 !important;',
+    '  box-shadow: none !important; box-sizing: border-box; font: bold 13px var(--lob-font); text-align: center; overflow-wrap: anywhere; }',
   ].join('\n');
 
   function lbEl(tag, cls, text) {
@@ -2253,13 +2353,17 @@
       l.appendChild(i); b.appendChild(l);
       return i;
     };
-    let idName = '';
-    try { const id = JSON.parse(localStorage.getItem('ikemen-identity')); idName = (id && id.name) || ''; } catch (e) { idName = ''; }
-    const nameInp = field('Your name', 'lbname', lobby.form.name || idName, 'shown to the lobby');
+    //
+    // name (a lobby is open to anyone and that name is the one the
+    //
+    const nameInp = field('Your name', 'lbname', lobby.form.name || lobbySavedName(), 'shown to the lobby');
     nameInp.maxLength = 24;
     if (mode === 'browse') { lobbyBrowseView(b, nameInp, msg); return; }
-    let codeInp = null;
+    let codeInp = null, titleInp = null;
     if (mode === 'join') codeInp = field('Lobby code', 'lbcode', lobby.form.code || '', 'e.g. spicy-tiger-42');
+    // THE TITLE: what the lobby list and the panel call this lobby. Optional;
+    // the code stays the random one people type to join.
+    if (mode === 'create') { titleInp = field('Lobby title (optional)', 'lbtitle', lobby.form.title || '', 'e.g. Friday Night CvS'); titleInp.maxLength = 32; }
     const passInp = field(mode === 'create' ? 'Password (optional)' : 'Password (if it has one)', 'lbpass', '', mode === 'create' ? 'leave blank for none' : '');
     passInp.maxLength = 64;
     if (mode === 'create') {
@@ -2276,7 +2380,9 @@
     const go = lbButton(mode === 'create' ? 'Create lobby' : 'Join lobby', () => {
       lobby.form.name = nameInp.value.trim();
       if (codeInp) lobby.form.code = codeInp.value.trim().toLowerCase();
+      if (titleInp) lobby.form.title = titleInp.value.trim();
       if (!lobby.form.name) { msgEl.textContent = lobbyReason('name'); return; }
+      lobbySaveName(lobby.form.name);
       if (mode === 'join' && !lobby.form.code) { msgEl.textContent = 'Type the lobby code.'; return; }
       go.disabled = true;
       msgEl.textContent = mode === 'create' ? 'Creating...' : 'Joining...';
@@ -2302,6 +2408,7 @@
     ui.chat.hidden = false;
     ui.title.textContent = 'Lobby ' + v.members.length + '/' + v.max;
     b.textContent = '';
+    if (v.title) b.appendChild(lbEl('div', 'lb-ltitle', v.title));
     const code = lbEl('div', 'lb-code');
     code.appendChild(lbEl('b', 'lb-codetext', v.code));
     const copy = lbButton('Copy', () => {
@@ -2411,12 +2518,27 @@
   // server about 6 requests. Names are shown as text (textContent), never as
   // markup. JOIN takes the same path as joining by code. The new elements use
   // only the --lob-* tokens for colors and fonts (the lobby look defines them).
+  //
+  // BY BUILD. A lobby admits only players on its own build (the 'build' deny),
+  // and on a site where players add their own characters almost every player
+  // has a Build ID of their own. So the page asks with its Build ID
+  // (/lobbies?build=<the hex the lobby socket sends>) and a server that knows
+  // the parameter answers with only that build's lobbies plus `build` (the
+  // same hex) and `other` (how many lobbies are on other builds). The list
+  // then shows only lobbies this page can join, a line says how many others
+  // are hidden, and SHOW ALL asks for the whole list again (no parameter): the
+  // rows on another build are marked DIFFERENT BUILD and their JOIN is off
+  // (the tooltip says how to match a friend's build). A server that does not
+  // answer with `build` (an older one ignores the parameter) gets today's
+  // list: no filter, no marks, no switch. Joining by code is unchanged (the
+  // server refuses a different build with the 'build' text, as before).
   const LOBBY_LIST_EVERY_MS = 10000, LOBBY_LIST_FOR_MS = 10 * 60 * 1000;
   const LOBBY_BROWSE_CSS = [
     '#lobbybar .lb-br-bar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }',
     '#lobbybar .lb-br-at { flex: 1; min-width: 0; font: 11px var(--lob-font, monospace); color: var(--lob-dim, #9fb3cc); }',
     '#lobbybar .lb-br-row { margin-top: 6px; padding: 5px 7px; border: 2px solid var(--lob-border, #6af); border-radius: 0;',
     '  background: var(--lob-panel, #10141c); color: var(--lob-text, #d6e6ff); font: 12px var(--lob-font, monospace); }',
+    '#lobbybar .lb-br-title { font: bold 14px var(--lob-head-font, monospace); color: var(--lob-text, #d6e6ff); overflow-wrap: anywhere; margin-bottom: 2px; }',
     '#lobbybar .lb-br-top { display: flex; align-items: baseline; gap: 6px; }',
     '#lobbybar .lb-br-host { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;',
     '  font: bold 13px var(--lob-head-font, monospace); color: var(--lob-text, #d6e6ff); }',
@@ -2425,7 +2547,22 @@
     '#lobbybar .lb-br-row button { margin-top: 5px; }',
     '#lobbybar .lb-br-empty { margin-top: 6px; padding: 8px; border: 2px solid var(--lob-dim, #9fb3cc); border-radius: 0;',
     '  background: var(--lob-chat-bg, #05070a); color: var(--lob-dim, #9fb3cc); font: 12px var(--lob-font, monospace); }',
+    '#lobbybar .lb-br-builds { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 7px; border: 2px solid var(--lob-rule, #1e2a3a);',
+    '  border-radius: 0; background: var(--lob-chat-bg, #05070a); color: var(--lob-dim, #9fb3cc); font: 12px var(--lob-font, monospace); }',
+    '#lobbybar .lb-br-hid { flex: 1; min-width: 0; overflow-wrap: anywhere; }',
+    '#lobbybar .lb-br-builds button { flex: none; }',
+    '#lobbybar .lb-br-row.lb-br-off { border-color: var(--lob-off-border, #2a3a52); }',
+    '#lobbybar .lb-br-row.lb-br-off .lb-br-host { color: var(--lob-dim, #9fb3cc); }',
+    '#lobbybar .lb-br-diff { flex: none; font: bold 10px var(--lob-font, monospace); letter-spacing: .1em; text-transform: uppercase;',
+    '  padding: 1px 4px; border-radius: 0; background: var(--lob-warn, #fc6); color: var(--lob-bg, #0b0d12); white-space: nowrap; }',
+    '#lobbybar .lb-br-why { color: var(--lob-warn, #fc6); overflow-wrap: anywhere; }',
   ].join('\n');
+  // The tooltip of a JOIN that is off because the lobby is on another build.
+  const LOBBY_OTHER_BUILD = 'This lobby runs a different build of the game, so it would refuse you: everyone in a lobby needs the same build and engine. '
+    + 'To match a friend\'s build, one of you presses Send my build on the Studio page and the other presses Import a build.';
+  // The Build ID this page sends with ?lobby= (lobbyConnect), or '' while it
+  // is not known yet.
+  function lobbyMyBuild() { return localHash ? hex8(localHash) : ''; }
   function lobbyListUrl() {
     const s = signalUrl();
     if (!s) return '';
@@ -2453,13 +2590,18 @@
     const bar = lbEl('div', 'lb-br-bar');
     const at = lbEl('span', 'lb-br-at', '');
     bar.appendChild(at);
-    const br = { box: lbEl('div', 'lb-br-list'), at, nameInp, msgEl, since: Date.now(), timer: 0, busy: false, list: null, err: '', polls: 0 };
+    const br = { box: lbEl('div', 'lb-br-list'), at, nameInp, msgEl, since: Date.now(), timer: 0, busy: false, list: null, err: '', polls: 0,
+      // by build (above): byBuild = the server filters by build; all = SHOW ALL
+      // is on (both kept in the lobby object, so a failed join or a trip to
+      // another tab comes back to them: a SHOW ALL read never says byBuild)
+      byBuild: !!lobby.browseByBuild, other: 0, mine: '', all: !!lobby.browseAll, hashWait: 0 };
     bar.appendChild(lbButton('Refresh', () => { br.since = Date.now(); br.paused = false; lobbyBrowsePoll(br); }, 'lb-br-refresh'));
     b.appendChild(lbEl('div', 'lb-sec', 'Open lobbies'));
     b.appendChild(bar);
     b.appendChild(msgEl);
     b.appendChild(br.box);
-    b.appendChild(lbEl('div', 'lb-line', 'Every lobby without a password is listed here. Pick one and press JOIN.'));
+    br.foot = lbEl('div', 'lb-line', 'Every lobby without a password is listed here. Pick one and press JOIN.');
+    b.appendChild(br.foot);
     const row = lbEl('div', 'lb-row');
     row.appendChild(lbButton('Cancel', () => lobbyLeave('You closed the lobby panel.'), 'lb-cancel'));
     b.appendChild(row);
@@ -2479,9 +2621,15 @@
     if (br.busy) return;
     const url = lobbyListUrl();
     if (!url) { br.err = 'This build has no lobby server.'; lobbyBrowseDraw(br); return; }
+    // the Build ID is worked out at load; wait for it a little (5 s at most,
+    // then ask without it: the whole list, as before)
+    if (!localHash) computeBuildHash();
+    if (!localHash && br.hashWait < 50) { br.hashWait++; br.timer = setTimeout(() => lobbyBrowsePoll(br), 100); return; }
+    const mine = lobbyMyBuild();
+    const all = br.all;
     br.busy = true;
     try {
-      const r = await fetch(url, { cache: 'no-store' });
+      const r = await fetch(url + (mine && !all ? '?build=' + mine : ''), { cache: 'no-store' });
       if (r.status === 429) br.err = 'The lobby server asked to slow down; the list refreshes shortly.';
       else if (!r.ok) br.err = 'The list could not be loaded.';
       else {
@@ -2489,11 +2637,21 @@
         br.list = Array.isArray(j && j.list) ? j.list : [];
         br.err = '';
         br.got = Date.now();
+        br.mine = mine;
+        // only a reply to ?build= tells whether the server filters; the whole
+        // list (SHOW ALL) keeps what the last one said
+        if (!all) {
+          br.byBuild = !!mine && !!j && j.build === mine && Number.isInteger(j.other);
+          br.other = br.byBuild ? Math.max(0, j.other) : 0;
+          if (lobby) lobby.browseByBuild = br.byBuild;
+        }
       }
     } catch (e) { br.err = 'The lobby server could not be reached.'; }
     br.busy = false;
     br.polls++;
     if (!lobby || lobby.browse !== br) return;
+    // SHOW ALL was switched while this read was out: read again for the new view
+    if (all !== br.all) { br.list = null; lobbyBrowsePoll(br); return; }
     lobbyBrowseDraw(br);
     br.timer = setTimeout(() => lobbyBrowsePoll(br), LOBBY_LIST_EVERY_MS);
   }
@@ -2503,25 +2661,63 @@
     br.at.textContent = br.paused ? 'Paused (10 minutes). Refresh to go on.'
       : br.got ? 'Updated ' + new Date(br.got).toLocaleTimeString() : 'Loading...';
     if (br.err) box.appendChild(lbEl('div', 'lb-msg', br.err));
+    const filtered = br.byBuild && !!br.mine;
+    // a row on another build (only a server that filters says which build a
+    // lobby is on; a row without one is left as it is: joining it is checked)
+    const diff = (e) => filtered && typeof e.build === 'string' && e.build !== br.mine;
+    br.foot.textContent = filtered
+      ? (br.all ? 'Every lobby without a password is listed here, and only the ones on your build can be joined. Pick one and press JOIN.'
+        : 'The lobbies on your build are listed here (a lobby with a password never is). Pick one and press JOIN.')
+      : 'Every lobby without a password is listed here. Pick one and press JOIN.';
     const L = br.list;
     if (!L) return;
-    if (!L.length) {
-      box.appendChild(lbEl('div', 'lb-br-empty', 'No open lobbies right now. Create one: it shows up here for everyone (a lobby with a password never does).'));
+    const rows = L.filter((e) => e && typeof e.code === 'string');
+    if (filtered) {
+      const n = br.all ? rows.filter(diff).length : br.other;
+      if (n > 0 || br.all) {
+        const line = lbEl('div', 'lb-br-builds');
+        line.appendChild(lbEl('span', 'lb-br-hid', br.all
+          ? (n === 1 ? '1 lobby is on another build: you cannot join it.' : n + ' lobbies are on other builds: you cannot join them.')
+          : (n === 1 ? '1 lobby on another build is hidden.' : n + ' lobbies on other builds are hidden.')));
+        const sw = lbButton(br.all ? 'My build only' : 'Show all', () => {
+          br.all = !br.all;
+          if (lobby) lobby.browseAll = br.all;
+          br.list = null; br.got = 0; br.err = '';
+          br.since = Date.now(); br.paused = false;
+          lobbyBrowseDraw(br);
+          lobbyBrowsePoll(br);
+        }, 'lb-br-all');
+        sw.setAttribute('aria-pressed', String(br.all));
+        sw.title = br.all ? 'Show only the lobbies on your build' : 'Show the lobbies on other builds too (you cannot join them)';
+        line.appendChild(sw);
+        box.appendChild(line);
+      }
+    }
+    if (!rows.length) {
+      box.appendChild(lbEl('div', 'lb-br-empty', filtered
+        ? 'No open lobby on your build right now. Create one: everyone on your build sees it here (a lobby with a password never does).'
+        : 'No open lobbies right now. Create one: it shows up here for everyone (a lobby with a password never does).'));
       return;
     }
-    for (const e of L) {
-      if (!e || typeof e.code !== 'string') continue;
-      const row = lbEl('div', 'lb-br-row');
+    // SHOW ALL: the lobbies this page can join first, in the server's order
+    const show = br.all ? rows.filter((e) => !diff(e)).concat(rows.filter(diff)) : rows;
+    for (const e of show) {
+      const off = diff(e);
+      const row = lbEl('div', off ? 'lb-br-row lb-br-off' : 'lb-br-row');
       row.dataset.code = e.code;
+      if (off) { row.dataset.build = 'other'; row.title = LOBBY_OTHER_BUILD; }
+      if (typeof e.title === 'string' && e.title) row.appendChild(lbEl('div', 'lb-br-title', e.title));
       const top = lbEl('div', 'lb-br-top');
       top.appendChild(lbEl('span', 'lb-br-host', String(e.host || '?')));
+      if (off) top.appendChild(lbEl('span', 'lb-br-diff', 'Different build'));
       top.appendChild(lbEl('span', 'lb-br-n', (e.n | 0) + '/' + (e.max | 0)));
       row.appendChild(top);
       row.appendChild(lbEl('div', 'lb-br-now', e.a && e.b ? 'Now: ' + e.a + ' vs ' + e.b : 'Waiting for players'));
       if (e.streak && e.streak.n) row.appendChild(lbEl('div', 'lb-br-streak', 'Streak: ' + String(e.streak.name || '?') + ' ' + (e.streak.n | 0) + ' in a row'));
+      if (off) row.appendChild(lbEl('div', 'lb-br-why', 'Not your build: everyone in a lobby needs the same build.'));
       const j = lbButton(e.free ? 'Join' : 'Full', () => lobbyBrowseJoin(br, e.code), 'lb-br-join');
-      j.disabled = !e.free;
-      j.title = e.free ? 'Join ' + e.code : 'This lobby is full (8)';
+      j.disabled = off || !e.free;
+      j.title = off ? LOBBY_OTHER_BUILD : e.free ? 'Join ' + e.code : 'This lobby is full (8)';
       row.appendChild(j);
       box.appendChild(row);
     }
@@ -2530,6 +2726,7 @@
     const name = br.nameInp.value.trim();
     lobby.form.name = name;
     if (!name) { br.msgEl.textContent = lobbyReason('name'); return; }
+    lobbySaveName(name);
     lobby.form.code = code;
     br.msgEl.textContent = 'Joining ' + code + '...';
     lobbyBrowseStop();
@@ -2617,6 +2814,7 @@
       q.set('name', name);
       if (pass) q.set('pass', pass);
       if (mode === 'create' && streak) q.set('streak', String(streak));
+      if (mode === 'create' && lobby.form && lobby.form.title) q.set('title', lobby.form.title.slice(0, 32));
       q.set('bid', lobbyBid());
       const ws = new WebSocket(url + (url.includes('?') ? '&' : '?') + q.toString());
       lobby.ws = ws;
@@ -2651,9 +2849,16 @@
       for (const x of m.members) lobby.names[x.id] = x.name;
       if (first) lobbyUiMake();
       lobbyRender();
+      lobbyOppCheck();
       return;
     }
-    if (m.t === 'sys') { const t = lobbySysLine(m); if (t) lobbyLog(t, 'lb-sys'); return; }
+    if (m.t === 'sys') {
+      const t = lobbySysLine(m);
+      if (t) lobbyLog(t, 'lb-sys');
+      if (m.k === 'kick' && Number.isInteger(m.id)) (lobby.kickedIds || (lobby.kickedIds = new Set())).add(m.id);
+      if (m.k === 'drop') lobbyDropNote(m);
+      return;
+    }
     if (m.t === 'chat') { if (typeof m.text === 'string') lobbyLog(m.text, '', { id: m.from, name: String(m.name || '?') }); return; }
     if (m.t === 'slow') { lobbyLog('(slow down: that line was not sent)', 'lb-sys'); return; }
     if (m.t === 'match' || m.t === 'watch') {
@@ -2722,14 +2927,138 @@
     lobbyBrowseStop();
     lobbyAlertStop();
     if (l.watch) lobbyEndWatch('left the lobby');
-    if (l.inMatch) ikemenNet.close();
+    // This page's own match ends with it (Leave, a kick, the lobby closing):
+    // its engine may be waiting on the other player inside the match.
+    if (l.inMatch) { matchDropped = true; ikemenNet.close(); lobbyUnstick(); }
     try { if (l.ws) { l.ws.onclose = null; l.ws.close(); } } catch { /* gone */ }
     l.ws = null;
     netLog('lobby: ' + why);
+    lobbyNoteDrop();
     lobbyUiDrop();
     lobby = { closed: true, why, names: {}, muted: new Set(), form: {} };
   }
   function lobbyLeave(why) { lobbyGone(why || 'You left the lobby.'); }
+
+  // ---- the other player left (or was kicked) during a match ----
+  // Field report (2026-11-15): "The game freezes if someone is kicked out or
+  // leaves during play." The lobby server knows at once (the leaver's socket
+  // closes, or the host's kick): it ends the match ('drop': the one still
+  // there wins) and assigns the next. The engine did not know: a closed tab
+  // does not close the WebRTC channel for seconds, so it waited on the player
+  // who was gone, a frozen picture with no word on it, until one of its own
+  // limits ran out:
+  //   - in the fight, GGPO's DisconnectTimeout (8 s on the website);
+  //   - when the fight had just ended, the post-match synchronize over the
+  //     'ikemen' channel, until the browser declared the connection dead and
+  //     this page's 12 s grace ran out (29 s in the test);
+  //   - at the character select, the same channel wait.
+  // Players pressed Esc to get out, which is what the lobby's Esc is for (it
+  // ends this page's match, and the lobby puts the player back in line: kept
+  // as it is). Now, when the server's state no longer lists this match's
+  // other player while this page's engine is in that match (lobbyOppCheck):
+  //   1. a short notice over the game says who left (lobbyDropNote / lobbyNote);
+  //   2. this page closes the match's connection (lobbyPlayDrop), so every
+  //      wait on the 'ikemen' channel (the select, the post-match synchronize)
+  //      ends at once, the way the engine handles a lost connection;
+  //   3. if the engine sits in its rollback loop waiting for the other
+  //      player's inputs (lobbyUnstick: its datagrams still go out, its newest
+  //      input frame has not moved for LOBBY_STUCK_MS), the page presses Esc
+  //      for the player, once. The rollback loop reads it on its next turn and
+  //      ends the match; that loop has no other way in from the page (true of
+  //      the 2.4 engine). The modern-input engine sends a netplay Esc as
+  //      synchronized input, which a stalled loop never reads; it asks the
+  //      page instead (matchGone, every turn of its rollback loop) and ends
+  //      the match itself, also in the post-match, so no Esc is pressed. Only
+  //      while the wait is younger than LOBBY_UNSTICK_MAX_MS: past it the
+  //      engine's own timeout is near, and an Esc that reached the engine
+  //      after its loop ended would act in the lobby screen instead.
+  // The page sends no result for the dropped match: the server settled it
+  // (lobbyCmd 'result' sees the lobby has moved on). A watcher whose match host
+  // left stops watching at once (lobbyOppCheck), instead of after its own
+  // timeout.
+  const LOBBY_STUCK_MS = 200, LOBBY_UNSTICK_MAX_MS = 5000, LOBBY_UNSTICK_FOR_MS = 6000, LOBBY_LOOP_SEEN_MS = 600;
+  function lobbyOppCheck() {
+    const v = lobby && lobby.view;
+    if (!v) return;
+    const member = (id) => v.members.some((x) => x.id === id);
+    const w = lobby.watch;
+    if (w && w.started && !member(w.host) && lobby.hostGone !== w.match) {
+      lobby.hostGone = w.match;
+      lobbyEndWatch('the match host left');
+    }
+    const c = lobby.cur;
+    if (!c || c.kind !== 'play' || !lobby.inMatch || lobby.playing !== c.match || member(c.opp) || lobby.oppGone === c.match) return;
+    lobby.oppGone = c.match;
+    netLog('lobby: ' + lobbyName(c.opp) + ' left during match ' + c.match + '; ending it on this side');
+    lobbyPlayDrop();
+    lobbyUnstick();
+  }
+  // This page's end of the match's connection, closed now. The engine's own
+  // exitNetPlay still closes the session (ikemenNet.close).
+  function lobbyPlayDrop() {
+    matchDropped = true;
+    try { if (dc) dc.close(); } catch { /* gone */ }
+    try { if (pc) pc.close(); } catch { /* gone */ }
+    isClosed = true; isConnected = false;
+  }
+  // Presses Esc once if the engine's rollback loop is stuck on the other
+  // player (see above); gives up when the engine is not in that loop.
+  function lobbyUnstick() {
+    const t0 = Date.now();
+    const tick = () => {
+      const now = Date.now();
+      if (now - ggpoLive.sentAt > LOBBY_LOOP_SEEN_MS) return; // not in the rollback loop: the closed channel ends the rest
+      // the engine asks matchGone in that loop and ends the match itself; an
+      // Esc pressed now would reach it after the match, in the lobby screen
+      if (goneAskedAt && now - goneAskedAt < LOBBY_LOOP_SEEN_MS) { netLog('lobby: the engine ends the dropped match itself'); return; }
+      const still = ggpoLive.topAt ? now - ggpoLive.topAt : 0;
+      if (still >= LOBBY_STUCK_MS) {
+        if (still > LOBBY_UNSTICK_MAX_MS) return;
+        netLog('lobby: the match is stuck on a connection that is gone; Esc pressed for you');
+        lobbyEsc();
+        return;
+      }
+      if (now - t0 < LOBBY_UNSTICK_FOR_MS) setTimeout(tick, 100);
+    };
+    tick();
+  }
+  function lobbyEsc() {
+    const key = (type) => {
+      try { document.dispatchEvent(new KeyboardEvent(type, { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })); } catch { /* no engine listening */ }
+    };
+    key('keydown');
+    setTimeout(() => key('keyup'), 60);
+  }
+  // A player left mid-match: everyone in the lobby gets one line over the
+  // game for a few seconds (the chat keeps the full story).
+  function lobbyDropNote(m) {
+    const kicked = !!(lobby.kickedIds && lobby.kickedIds.has(m.id));
+    const who = String(m.idn || lobbyName(m.id)).slice(0, 24);
+    const c = lobby.cur;
+    const mine = c && c.kind === 'play' && c.match === m.match && c.opp === m.id;
+    lobbyNote(who + (kicked ? ' was removed by the host' : ' left') + (mine ? ': you win this match.' : ' mid-match.'));
+  }
+  const LOBBY_NOTE_MS = 5000;
+  function lobbyNote(text) {
+    let el = document.getElementById('lobbynote');
+    if (!el) {
+      if (!document.getElementById('lobbybar-style')) return; // no lobby sidebar, no lobby look
+      el = lbEl('div'); el.id = 'lobbynote'; el.setAttribute('role', 'status');
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.hidden = false;
+    const narrow = document.documentElement.clientWidth < LOBBY_NARROW;
+    const right = lobby && lobby.ui && !lobby.ui.folded && !narrow ? LOBBY_W : 0;
+    el.style.left = 'calc((100vw - ' + right + 'px) / 2)';
+    clearTimeout(lobbyNote.timer);
+    lobbyNote.timer = setTimeout(lobbyNoteDrop, LOBBY_NOTE_MS);
+  }
+  function lobbyNoteDrop() {
+    clearTimeout(lobbyNote.timer);
+    const el = document.getElementById('lobbynote');
+    if (el) el.remove();
+  }
 
   // ---- this page plays a match (ikemenNet.start('lobby'), from the engine) ----
   async function lobbyPlayStart() {
@@ -2739,6 +3068,7 @@
     lobby.playing = a.match;
     lobby.connectBy = Date.now() + LOBBY_CONNECT_MS;
     queueRole = a.role;
+    lobbyPlates(a);
     if (a.role === 'host') {
       installHostWatchBridge();
       await makePeer();
@@ -2917,6 +3247,9 @@
     installWatcherBridge();
     const go = () => {
       if (!(globalThis.ikemenBuildHash instanceof Uint8Array) || globalThis.ikemenEngineId === undefined) { setTimeout(go, 200); return; }
+      // the hello waits for this page's Build ID; ikemenNet.start works it
+      // out (resetState), this route never calls start
+      if (!localHash) computeBuildHash();
       watchPanel(false);
       startWatch(qp.get('watch'), qp.get('pass') || '');
     };
@@ -2970,6 +3303,9 @@
       // A lobby's watch: the bridge is up already (lobbyWatchBegin), no panel.
       if (mode === 'watch' && lobby && lobby.watch && globalThis.ikemenWatch && globalThis.ikemenWatch.role === 'watcher') {
         netLog('lobby: watching match ' + lobby.watch.match);
+        // Same plates as the two players draw; queueRole stays '' (resetState
+        // above) so a watcher never reports or plays a side.
+        lobbyPlates(lobby.cur);
         return;
       }
       if (mode === 'watch') { netLog('watch a match'); startWatchFlow(); return; }
@@ -3043,7 +3379,7 @@
       //
       var token = queueRated ? String(queueStartedAt || 0) : '';
       var base = queueP1 + '\n' + queueP2 + '\n' + token;
-      return rankedStatusLine ? base + '\n' + rankedStatusLine : base;
+      return rankedStatusLine && !queueLobby ? base + '\n' + rankedStatusLine : base;
     },
 
     //
@@ -3117,9 +3453,15 @@
       try { return lobbyCmd(String(cmd), String(arg || '')); } catch (e) { netLog('lobby: ' + e.message); return ''; }
     },
     connected() { return isConnected; },
+    // The engine's rollback loop, every turn (netplay_js.go platformMatchGone):
+    // true once this page dropped the match because the other player is gone.
+    matchGone() { goneAskedAt = Date.now(); return matchDropped; },
     failed() { return isFailed; },
-    read(max) {
-      if (chunks.length === 0) return isClosed ? null : new Uint8Array(0);
+    // numEmpty (readGGPO and readAny too): 0 instead of an empty array when
+    // nothing waits. The engine polls every millisecond or two, and each empty
+    // array it got back was one more JS object for its garbage collector.
+    read(max, numEmpty) {
+      if (chunks.length === 0) return isClosed ? null : (numEmpty ? 0 : new Uint8Array(0));
       const head = chunks[0];
       const avail = head.length - chunkOff;
       const n = Math.min(avail, max);
@@ -3134,16 +3476,17 @@
       try { dc.send(u8); bytesSent += u8.length; renderDiag(); return true; } catch { return false; }
     },
     // GGPO datagram channel (V2 rollback). readGGPO returns ONE whole
-    // datagram (Uint8Array), an empty array when none pending, or null
-    // when the channel is closed.
+    // datagram (Uint8Array), an empty array (0 with numEmpty) when none
+    // pending, or null when the channel is closed.
     sendGGPO(u8) {
+      ggpoTrack(u8); // before the channel check: the engine's loop, even with no channel
       if (!gdc || gdc.readyState !== 'open') return false;
       if (trailOn) trailFromDatagram(u8); // dev switch (?devnet=1&crctrail=1)
       try { gdc.send(u8); return true; } catch { return false; }
     },
-    readGGPO() {
+    readGGPO(numEmpty) {
       if (gQueue.length > 0) return gQueue.shift();
-      return (gdc || !isClosed) ? new Uint8Array(0) : null;
+      return (gdc || !isClosed) ? (numEmpty ? 0 : new Uint8Array(0)) : null;
     },
     // Rollback round-trip time from the engine (shown in the overlay
     // header like any fighting game's ping counter).

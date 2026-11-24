@@ -1538,7 +1538,14 @@ function buildGalleryZss(t, modes) {
 // The script. A PROTOTYPE MODE's chunk (modeParts) goes after every core
 // local and before the mode's own section (run, the autostart): it sees the
 // driver's locals as upvalues and registers its hooks with MODE.add.
-function buildGalleryLua(data, modes) {
+// opts.v2: the text for the modern-input engine (IKEMEN_V2 builds; our web
+// engine and upstream's official build alike), which has no getInput or
+// getInputTime: the picker reads motif actions (getAction, getActionTime) and
+// a match it starts assigns the local inputs first, as upstream's quick
+// versus does. Without it (the default when IKEMEN_V2 is unset) the text is
+// the one every build before the modern-input engine carried, byte for byte.
+function buildGalleryLua(data, modes, opts) {
+  const v2 = opts && opts.v2 !== undefined ? !!opts.v2 : !!process.env.IKEMEN_V2;
   const DATA = { stage: data.stage, setupSlots: data.setupSlots || 0, setSlots: data.setSlots || 0, introMax: INTRO_MAX, pairs: data.pairs };
   const mp = modeParts(data, modes);
   if (mp.bad) throw new Error('mode ' + mp.bad.id + ': ' + mp.bad.why);
@@ -2804,8 +2811,7 @@ end
 -- key's own switch (togglePause): the fighters, the stage and the drivers'
 -- clocks stop; this loop and the Lua draw queue go on. Columns, left to
 -- right: the pairs on screen (with two or more), giver, receiver (with her
--- scene count), scene. Read with the engine's UI input (getInput: the
--- players' own menu keys, keyboard or pad), never with the fighters'
+-- scene count), scene. Read with the engine's UI input (${v2 ? 'getAction: the\n-- players\' own directions and buttons, keyboard or pad' : 'getInput: the\n-- players\' own menu keys, keyboard or pad'}), never with the fighters'
 -- commands: while paused the fighters read no input at all. Esc still leaves
 -- the gallery (the engine ends the match before a script could stop it).
 -- Drawn inside the central 4:3 band, which the paused screen always shows.
@@ -2980,9 +2986,13 @@ local function pickerClose()
   if not PK.keepPaused then PK.release = true end
   pkLog('close')
 end
-local RELEASE_KEYS = { 's', 'a', 'b', 'c', 'x', 'y', 'z', 'U', 'D', 'L', 'R' }
+${v2 ? `-- (Action tokens: BTN:<name> is the engine button a player's Controller
+-- Setup gives that name, DP_* and LS_* the directions.)
+local RELEASE_KEYS = { 'BTN:start', 'BTN:a', 'BTN:b', 'BTN:c', 'BTN:x', 'BTN:y', 'BTN:z', 'DP_U', 'DP_D', 'DP_L', 'DP_R', 'LS_Y-', 'LS_Y+', 'LS_X-', 'LS_X+' }
 local function pickerRelease()
-  if PK.release and not PK.open and getInputTime(-1, RELEASE_KEYS) == 0 then
+  if PK.release and not PK.open and getActionTime(-1, RELEASE_KEYS) == 0 then` : `local RELEASE_KEYS = { 's', 'a', 'b', 'c', 'x', 'y', 'z', 'U', 'D', 'L', 'R' }
+local function pickerRelease()
+  if PK.release and not PK.open and getInputTime(-1, RELEASE_KEYS) == 0 then`}
     PK.release = false
     togglePause(false)
   end
@@ -3293,8 +3303,12 @@ function HGalleryPicker()
   pkLog('open')
 end
 
-local function hit(tok) return getInput(-1, { tok }) == true end
-local function pickerInput()
+${v2 ? `-- The menu tokens of the engine before modern-input, as actions.
+local HIT = { U = { 'DP_U', 'LS_Y-' }, D = { 'DP_D', 'LS_Y+' }, L = { 'DP_L', 'LS_X-' }, R = { 'DP_R', 'LS_X+' },
+  a = { 'BTN:a' }, b = { 'BTN:b' }, s = { 'BTN:start' } }
+local function hit(tok) return getAction(-1, HIT[tok]) == true end
+` : `local function hit(tok) return getInput(-1, { tok }) == true end
+`}local function pickerInput()
   local list = pickerGivers()
   local g = list[PK.gi]
   -- Keys that are no menu token: the last one pressed, counted once.
@@ -3956,7 +3970,14 @@ local function run()
   -- keeps its two characters loaded (existed=1: not loaded or compiled again).
   local before = {}
   local stage = (DATA.stage ~= '' and start.f_getStageRef(DATA.stage)) or nil
-  while true do
+${v2 ? `  -- No side select: the local inputs are assigned as upstream's quick versus
+  -- does (one player a side), before remapInput below gives each fighter his
+  -- controls; the menus get every device back when the gallery is left
+  -- (main.f_default).
+  if type(inputAutoAssign) == 'function' and type(inputBegin) == 'function' then
+    inputAutoAssign(inputBegin(), 1, 1, true)
+  end
+` : ''}  while true do
     local n = #LOAD
     clearSelected()
     resetGameParams()
@@ -4097,7 +4118,15 @@ main.t_itemname.hgallery = function(t, item)
   return run
 end
 main.f_appendItemname(motif.title_info.menu, '', 'hgallery', 'H GALLERY', 'options')
-
+${v2 ? `-- The line the engine draws under the title menu for the highlighted item
+-- (menu.hint.text.<item>), unless the screenpack wrote one.
+do
+  local h = motif.title_info.menu.hint
+  if type(h) == 'table' and type(h.text) == 'table' and h.text.hgallery == nil then
+    h.text.hgallery = 'Watch the scenes of the character pairs in this build.'
+  end
+end
+` : ''}
 -- -hgallery on the command line opens the gallery straight
 -- from the title: "1" at the first pair, or "<giver def>|<receiver def>".
 -- (In a function of its own: its loop's temporaries, on top of every
@@ -4134,7 +4163,7 @@ end
 // a hook that throws, a chunk or a line the files cannot carry - is left
 // out with a warning and the files are made again without it: never a
 // broken gallery for a broken prototype.
-function buildGalleryFiles(data, stage, modes) {
+function buildGalleryFiles(data, stage, modes, opts) {
   let use = [...modeMap(modes).values()];
   let trimmed = null;
   for (;;) {
@@ -4147,7 +4176,7 @@ function buildGalleryFiles(data, stage, modes) {
   }
   if (!trimmed.pairs.length) return null;
   return {
-    lua: Buffer.from(buildGalleryLua(trimmed, use), 'latin1'),
+    lua: Buffer.from(buildGalleryLua(trimmed, use, opts), 'latin1'),
     // latin1: a command name is the .cmd's own bytes (Shift-JIS names too).
     zss: Buffer.from(buildGalleryZss(trimmed, use), 'latin1'),
     pairs: trimmed.pairs.length,

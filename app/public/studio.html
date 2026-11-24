@@ -422,6 +422,7 @@
   #settings .kb input.kv { width: 104px; font: 12px var(--fm); user-select: text; }
   #settings .kb input.kv.set { border-color: var(--accent); }
   #settings .kb input.kv.conflict { border-color: var(--warn); color: var(--warn); }
+  #settings .kb select.kv.conflict { border-color: var(--warn); color: var(--warn); }
   #settings .kb input.kv.arming { border-color: var(--accent); color: var(--accent); font-style: italic; }
   #settings .kb button.cap.arming { border-color: var(--accent); color: var(--accent); }
   #settings .kico { display: block; width: 20px; height: 20px; flex: 0 0 20px; background: var(--dim);
@@ -440,6 +441,9 @@
   #settings .kico.sys.menu { --kmask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M3 4.5h14v2.4H3zm0 4.3h14v2.4H3zm0 4.3h14v2.4H3z'/%3E%3C/svg%3E"); }
   #settings .keyacts { display: flex; gap: 10px; align-items: center; padding: 0 14px 10px; flex-wrap: wrap; }
   #settings .keyacts .note { border-top: 0; padding: 0; }
+  #settings .kb select.kv { width: 112px; font: 12px var(--fm); }
+  #settings .kb select.kv.set { border-color: var(--accent); }
+  #settings .kb select.kv.set.conflict { border-color: var(--warn); color: var(--warn); }
   #settings .warnbox { border: 1px solid var(--warn); border-radius: 8px; padding: 8px 12px; margin: 10px 0; }
   #settings .warnbox .note { border-top: 0; padding: 4px 0 0; }
 
@@ -1292,6 +1296,7 @@
     text-overflow: ellipsis; white-space: nowrap;
     font-family: var(--fm); font-size: 10.5px; color: var(--mute); }
   #optsPop .optrow button { padding: 2px 8px; font-size: 11px; line-height: 1.4; }
+  #optsPop #liteAutoRow .path { white-space: normal; max-width: 260px; }
   #optsPop #lookRow button[aria-pressed="true"] { border-color: var(--accent); color: var(--hi); }
   /* Five looks do not fit one line of the popover: they wrap under the label. */
   #optsPop #lookRow { flex-wrap: wrap; row-gap: 5px; }
@@ -2328,7 +2333,7 @@ body.picking-char #charList .lrow.picked { border-left-color: var(--accent); }
 #toast.ro { border-left-color: var(--line2); color: var(--ink); }
 .roval { color: var(--dim); font-size: 12px; margin-right: 8px; }
 body.readonly :is(#exportBtn, #exportWhere, header .kindsel, #owrapLbl, #selectScreenBtn,
-  .pubchk:has(#publicChk), .tab[data-tab="mods"], #panel-mods,
+  .pubchk:has(#publicChk), .pubchk:has(#liteChk), #ffmpegRow, #liteAutoRow, .tab[data-tab="mods"], #panel-mods,
   [data-add], [data-select], .pickbar, #pathRow, .drops,
   .card.char .ud, .cardremove, .delcorner, .repair-face, .v1pal, .undoname, .ro-edit,
   .avedit, .avboard, #palOrderReset, .vrow button, .card.char.offbuild button,
@@ -2593,6 +2598,27 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
     <label class="pubchk bk-chk" title="On: the web game's page shows only the game - a small loading box, then the picture filling the page, which suits an itch.io embed. Its options open from a MENU button that appears when the mouse moves.&#10;Off: the page as before, with the title, loading log and options above the game.&#10;Saved with this bundle; every Website export uses it.">
       <input type="checkbox" id="gameOnlyChk"><i></i> Game only page
     </label>
+    <!-- LITE BUILD (lite/pack.js): the Website export made into one
+         compressed game.lite after it is written. ON by default (the
+         author's call, 2026-11-23, after a lite build ran a real lobby on his
+         site); untick it for the full build. Website only, like Public build.
+         Last of the switches, so the MP3 encoder row it shows sits right
+         under it. -->
+    <label class="pubchk bk-chk" title="On: the website download is about a third of the size. The game data and engine travel as one compressed file that the player's browser unpacks and keeps, so a second visit downloads nothing. Sprites stay exact; character sounds become MP3 when an MP3 encoder is set below.&#10;The game takes about ten seconds longer to start on every visit, and the export takes a few minutes more.&#10;A lite build plays online only with the same lite build, not with a full build of the same game.">
+      <input type="checkbox" id="liteChk" checked><i></i> Lite build
+    </label>
+    <!-- LITE OFF FOR A VERY BIG BUILD (lite/pack.js AUTO_MAX): shown while
+         the box was left alone and the game data is over the limit, so the
+         box reads unticked and says why. Ticking it makes the build lite. -->
+    <div class="optrow" id="liteAutoRow" hidden><span class="path" id="liteAutoNote"></span></div>
+    <!-- Where ffmpeg is, for a lite build's MP3 sounds (/api/ffmpeg,
+         layout.js FFMPEG). The Studio ships none. -->
+    <div class="optrow" id="ffmpegRow" hidden title="A lite Website build turns character sounds into MP3 with ffmpeg, which the Studio does not include. Pick the folder that holds ffmpeg.exe. Without one, a lite build keeps its sounds lossless (bigger).">
+      <span class="k">MP3 encoder</span>
+      <span class="path" id="ffmpegPath" translate="no">none</span>
+      <button class="tiny" id="ffmpegPick">Change&hellip;</button>
+      <button class="tiny" id="ffmpegReset" hidden title="Forget this folder and look for ffmpeg on PATH.">Default</button>
+    </div>
     <label class="pubchk bk-chk" id="owrapLbl" hidden title="On: keep one build folder and bring it up to date.&#10;Off: date each export so an earlier build you have handed out is left alone.">
       <input type="checkbox" id="overwriteChk" checked><i></i> Overwrite the build folder
     </label>
@@ -2961,14 +2987,14 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
           <img class="body" alt="" draggable="false">
           <img class="shade" alt="" draggable="false">
         </div>
-        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.4.1</span></h2>
+        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.5</span></h2>
         <div class="cv-foot"><span class="with">with</span><span class="ab-chip wb" translate="no">WB</span><span class="ab-chip ar" translate="no">DJ AR</span><span class="ab-chip sz" translate="no">SHiZUKA</span><span class="cv-pub" translate="no">energy.jp</span></div>
       </div>
       <div class="bk-fold" aria-hidden="true"></div>
       <div class="ab-staff">
         <div class="bk-secband">
           <h2 class="bk-secband-t"><span class="t">Staff</span><span class="k" lang="ja">スタッフ</span></h2>
-          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.4.1</span>
+          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.5</span>
             <button class="bk-btn sm" id="aboutNotices" type="button" title="Everything the Studio ships from others, with their terms">Credits &amp; licenses&hellip;</button></div>
         </div>
         <div class="pbody bk-pg r">
@@ -4330,20 +4356,94 @@ function mb(bytes) {
   if (!bytes || !isFinite(bytes)) return null;
   return bytes >= 1e9 ? t('{n} GB', { n: (bytes / 1e9).toFixed(2) }) : t('{n} MB', { n: (bytes / 1e6).toFixed(1) });
 }
-// The header total. Deliberately the DOWNLOAD size - what a player pulls
-// before the game starts - not a disk or storage-quota figure.
-function renderBuildSize(sizes) {
+// THE HEADER TOTAL IS THE EXPORT THAT IS PICKED (exportsize.js, /api/build-size):
+// Website, Website with Lite build ticked, or Desktop, and a Public build's
+// smaller roster. It used to be state.sizes.total, the Studio's own index,
+// which holds every screenpack in themes/ so they can be previewed: 707 MB
+// for a website that shipped 457 MB. The cards keep state.sizes (a
+// character's size is the same in every export).
+//
+// render() runs on every change, so the server is asked again only when
+// something that moves the figure changed: the kind, Public, the content
+// (state.sizes), the theme, or a finished export (a lite export sets the
+// ratio the next lite figure is estimated from).
+let buildSizeKey = '', buildSizeAsk = 0, buildSizeGen = 0;
+function exportPicked() {
+  const desktop = $('#exportKind').value === 'desktop';
+  return { kind: desktop ? 'desktop' : ($('#liteChk').checked ? 'lite' : 'web'), pub: !desktop && $('#publicChk').checked };
+}
+async function refreshBuildSize() {
   const box = $('#buildSize');
-  if (!box || !sizes || !sizes.total) { if (box) box.hidden = true; return; }
+  if (!box) return;
+  const z = state && state.sizes;
+  if (!z || !z.total) { box.hidden = true; buildSizeKey = ''; return; }
+  const { kind, pub } = exportPicked();
+  const key = [kind, pub ? 1 : 0, z.total, z.files, state.motif || (state.roster && state.roster.motif) || '', buildSizeGen].join('|');
+  if (key === buildSizeKey) return;
+  buildSizeKey = key;
+  const ask = ++buildSizeAsk;
+  let r = null;
+  try {
+    const res = await fetch('/api/build-size?kind=' + kind + (pub ? '&public=1' : ''));
+    if (res.ok) r = await res.json();
+  } catch (e) { r = null; }
+  if (ask !== buildSizeAsk) return;            // a newer question is on its way
+  if (!r || r.error || !r.total) { buildSizeKey = ''; box.hidden = true; return; }
+  renderBuildSize(r);
+  if (r.kind !== 'desktop') liteAuto(r);
+}
+// LITE BUILD IS OFF BY DEFAULT FOR A VERY BIG BUILD. Left alone, the box
+// follows the game data's size (the website figure's content, against the
+// server's limit, lite/pack.js AUTO_MAX): over it the box reads unticked and
+// the line under it says why. A tick or untick by hand is the person's choice
+// and is sent as it is; left alone the export is asked for 'auto' and decides
+// the same on the real game.pak, saying so on its card. Not remembered, like
+// the box itself: a new session (or another bundle) starts from the size again.
+let liteTouched = false, liteAutoOff = false;
+function liteAuto(r) {
+  if (liteTouched || !r || !r.liteAutoMax || !(r.content > 0)) return;
+  const over = r.content > r.liteAutoMax;
+  $('#liteAutoNote').textContent = t('Off for this build: its game data is {size}, and a lite build that big takes long to unpack on every visit. Tick Lite build to make it lite anyway.', { size: mb(r.content) });
+  if (over === liteAutoOff) { syncLiteAutoRow(); return; }
+  liteAutoOff = over;
+  $('#liteChk').checked = !over;
+  syncExportKind();
+  if (!over) showFfmpeg();
+}
+function syncLiteAutoRow() {
+  const row = $('#liteAutoRow');
+  if (row) row.hidden = $('#exportKind').value !== 'web' || !liteAutoOff || liteTouched;
+}
+function renderBuildSize(r) {
+  const box = $('#buildSize');
   box.hidden = false;
-  box.className = 'buildsize' + (sizes.total >= 1.5e9 ? ' huge' : sizes.total >= 7e8 ? ' big' : '');
+  box.className = 'buildsize' + (r.total >= 1.5e9 ? ' huge' : r.total >= 7e8 ? ' big' : '');
   box.textContent = '';
-  box.append(el('b', { text: mb(sizes.total) }), el('span', { text: 'build size' }));
-  box.title = t('All the game data this build ships: {files} files, {size}.', { files: sizes.files, size: mb(sizes.total) })
-    + String.fromCharCode(10)
-    + t('This is what a player downloads before the game starts, and what both players wait for online. The engine itself is a separate, much smaller download on top of it.')
-    + String.fromCharCode(10)
-    + t('Measured off the export itself, so it counts only files that actually ship - a character folder full of unreferenced backups is bigger on disk than it is here.');
+  const label = r.kind === 'desktop' ? t('desktop build') : r.kind === 'lite' ? t('lite download') : t('website download');
+  // An estimate says so in words: in the state line's mono face a "~" drew
+  // like a minus sign, and "-0.2 MB" read as a negative size.
+  box.append(el('b', { text: r.exact ? mb(r.total) : t('about {size}', { size: mb(r.total) }) }), el('span', { text: label }));
+  const nl = String.fromCharCode(10);
+  const lines = [];
+  const engine = mb(r.engine) || t('not found');
+  if (r.kind === 'desktop') {
+    lines.push(t('About {size}: the desktop game folder, with this roster ({content}) beside the engine ({engine}).',
+      { size: mb(r.total), content: mb(r.content), engine }));
+    lines.push(t('Counted with the desktop export\'s own rules; it adds a few small files of its own, so the real folder can differ by a little.'));
+  } else if (r.kind === 'lite') {
+    lines.push(t('About {size}: what a player downloads for this website as a lite build, one compressed file the browser unpacks to {full}.',
+      { size: mb(r.total), full: mb(r.unpacked) }));
+    lines.push(r.from
+      ? t('Estimated from your last lite export, which came to {pct}% of its full size. The export prints the real figure.', { pct: Math.round(r.ratio * 100) })
+      : t('Estimated as a third of the full website, about what a lite build comes to. The export prints the real figure.'));
+  } else {
+    lines.push(t('What a player downloads for this website: {files} files of game data ({content}) and the engine ({engine}), {size} in all.',
+      { files: r.files, content: mb(r.content), engine, size: mb(r.total) }));
+    lines.push(t('Measured off the export itself, so it counts only files that actually ship - a character folder full of unreferenced backups is bigger on disk than it is here.'));
+  }
+  if (r.public) lines.push(t('Public build: only the characters and stages listed for it.'));
+  lines.push(t('Follows the export that is picked: Website or Desktop, and Options > Lite build and Public build.'));
+  box.title = lines.join(nl);
 }
 
 // A value shown as words where a build opened read-only has nothing to choose.
@@ -7578,7 +7678,7 @@ function announceRosterChange() {
 
 function render() {
   syncHModuleSwitch();
-  renderBuildSize(state && state.sizes);
+  refreshBuildSize();
   stripCounts();
   // WHERE DOWNLOADS GO: hand the remembered folder to the window once, as soon
   // as the setting is known. WebView2 keeps its own copy in the profile, but
@@ -8116,6 +8216,20 @@ function render() {
     if (cur && cur.memberFaces) {
       themes.append(el('div', { class: 'meta', text: 'Updated for this engine when you export: this screenpack places its team faces with settings the engine no longer reads, so the build\u2019s copy writes them in the engine\u2019s own settings and they stand along the bottom as the pack intends. Your installed screenpack is unchanged.' }));
     }
+    // THE SIDE SELECT SCREEN, per bundle (roster.sideSelect; absent = on).
+    // The web and desktop builds' copy of a screenpack without its own [Side
+    // Select Info] gets upstream's layout (motifcompat.sideSelect, vfslib); off
+    // writes nothing. Stored only when off, so a bundle that never touched it follows
+    // the default.
+    {
+      const box = el('input', { type: 'checkbox', 'aria-label': 'Side select screen' });
+      box.checked = r.sideSelect !== false;
+      box.disabled = !!READ_ONLY;
+      box.onchange = () => { if (box.checked) delete r.sideSelect; else r.sideSelect = false; persist(); };
+      themes.append(el('div', { class: 'card', id: 'sideSelectCard' },
+        el('label', {}, box, ' ', el('span', { text: 'Side select screen' })),
+        el('div', { class: 'meta', text: 'Before character select, each player picks a controller and a side (Team 1 or Team 2). On in web and desktop builds; turn it off to go straight to character select. A screenpack with side select settings of its own keeps them.' })));
+    }
     // What the pack in use brings besides its screens: its own common states
     // and tag system (the block beside #themeExtrasDlg).
     if (window.renderThemeOptions) window.renderThemeOptions(themes, cur);
@@ -8278,6 +8392,9 @@ function render() {
   // The missing-attached-character lines (attachfix.js), the same way.
   const attachAll = READ_ONLY || !r.stages.length ? null
     : fetch('/api/stage-attachfix?all=1').then((x) => x.json()).then((j) => (j && j.results) || null, () => null);
+  // The debug-background lines (debugbg.js), the same way.
+  const dbgAll = READ_ONLY || !r.stages.length ? null
+    : fetch('/api/stage-debugbg?all=1').then((x) => x.json()).then((j) => (j && j.results) || null, () => null);
   // THE BOOKLET (rd-stages-music): the section band's meta - the stages in the
   // build, and (once the widescreen-fit answers are in) how many are narrower
   // than the build and offered the fit. Counted per render from the same
@@ -8457,9 +8574,9 @@ function render() {
         wideLine.append(el('button', { class: 'tiny', text: 'Widescreen fit',
           title: short
             ? t('This stage is {size}, narrower than the build. In a wide fight the engine draws it larger than the fighters and cuts its height; this widens its coordinate space to {to} at the same height, so it fills the screen at the scale it was drawn, and pulls the camera in by {pull} on each side. Edits the stage\u2019s own .def; can be undone. This stage scrolls less than that, so the sides may show up to {units} units of void \u2014 see it in the game.',
-              { size: w.localcoord.join('\u00d7'), to: w.to.join('\u00d7'), pull: w.pull, units })
+              { size: w.localcoord.join('\u00d7'), to: w.to.join('\u00d7'), pull: w.boundPull, units })
             : t('This stage is {size}, narrower than the build. In a wide fight the engine draws it larger than the fighters and cuts its height; this widens its coordinate space to {to} at the same height, so it fills the screen at the scale it was drawn, and pulls the camera in by {pull} on each side. Edits the stage\u2019s own .def; can be undone.',
-              { size: w.localcoord.join('\u00d7'), to: w.to.join('\u00d7'), pull: w.pull }),
+              { size: w.localcoord.join('\u00d7'), to: w.to.join('\u00d7'), pull: w.boundPull }),
           onclick: (e) => run(e.target, 'fit', (r) => {
             const v = { name: s.name, from: r.localcoord.join('\u00d7'), to: r.to.join('\u00d7'), bf: r.bounds.from.join('/'), bt: r.bounds.to.join('/'), units: Math.max(r.short.left, r.short.right) };
             return (r.short.left || r.short.right)
@@ -8608,6 +8725,41 @@ function render() {
           el('span', { class: 'meta bkm-why', text: t('on desktop its far surfaces can flicker: near {from} → {to} makes depth {gain}× finer', { from: d0.near, to: d0.to, gain: m.gain }) }));
       }
     }).catch(() => {});
+    // DEBUG BACKGROUND. A stage that ships with debugbg on in its [BGdef] (a
+    // stage author's aid) shows magenta wherever its art leaves a gap, and in
+    // the band a screen shake uncovers (debugbg.js says why). The line goes on
+    // the card only for such a stage (or one turned off here): every other
+    // card is exactly what it was. Nothing changes until Fix is pressed.
+    const bgLine = el('div', { class: 'line bgline' });
+    if (!READ_ONLY) dbgAll.then((all) => (all && Object.prototype.hasOwnProperty.call(all, s.file) ? { result: all[s.file] }
+      : fetch('/api/stage-debugbg?file=' + encodeURIComponent(s.file)).then((x) => x.json()))).then(({ result: d }) => {
+      if (!d) return;
+      const run = async (b, action, done) => {
+        const was = b.textContent; b.disabled = true; b.textContent = '…';
+        try {
+          const { result } = await api('/api/stage-debugbg', JSON.stringify({ file: s.file, action }), { 'Content-Type': 'application/json' });
+          toast(done(result), 'ok');
+          await refresh();
+        } catch (err) { toast(err.message, 'warn'); b.disabled = false; b.textContent = was; }
+      };
+      if (d.fixed) {
+        bgLine.dataset.state = 'fixed';
+        bgLine.append(
+          el('span', { class: 'meta bkm-verdict', text: 'debug background off' }),
+          el('button', { class: 'tiny', text: 'Undo', title: 'Put the stage’s debugbg line back exactly as it was.',
+            onclick: (e) => run(e.target, 'undo', () => t('Put {name}’s debug background back', { name: s.name })) }));
+      }
+      if (d.on && !d.fixed) {
+        bgLine.dataset.state = 'on';
+        bgLine.append(el('button', { class: 'tiny', text: 'Fix',
+          title: t('This stage’s .def has debugbg = {value} in its [BGdef], a setting stage authors use while they build a stage. With it on, the engine paints the screen magenta before it draws the stage, so every spot the art does not cover shows bright pink: the sides when the camera goes past the art, and the edge a screen shake uncovers. This sets it to 0, so those spots show the stage’s background color instead (black unless the stage sets bgclearcolor). Edits the stage’s own .def; can be undone.', { value: d.value }),
+          onclick: (e) => run(e.target, 'fix', () => t('Turned off {name}’s debug background', { name: s.name })) }),
+        el('span', { class: 'meta bkm-why', text: 'debug background is on: magenta shows wherever its art leaves a gap, and during screen shakes' }));
+      } else if (d.on) {
+        // turned on again by hand since the fix: said, and Undo stays the way back
+        bgLine.append(el('span', { class: 'meta bkm-why', text: 'debug background is on: magenta shows wherever its art leaves a gap, and during screen shakes' }));
+      }
+    }).catch(() => {});
     // A MISSING ATTACHED CHARACTER. A stage can bring a character along to run
     // its own rules (attachedchar); when that file is not in the build, the
     // engine stops the game as the stage loads, on a random pick too
@@ -8658,7 +8810,7 @@ function render() {
           el('div', { class: 'meta', translate: 'no', text: 'stages/' + s.file
             + (mb(sizeOfStage(s.file)) ? ' · ' + mb(sizeOfStage(s.file)) : '') })),
         songs,
-        el('div', { class: 'stnotes' }, thumbLine, fitLine, wideLine, camLine, nearLine)),
+        el('div', { class: 'stnotes' }, thumbLine, fitLine, wideLine, bgLine, camLine, nearLine)),
       removeButton('stage', s.file, s.name));
     card.dataset.id = s.file;
     card.addEventListener('click', (ev) => {
@@ -9661,8 +9813,40 @@ function syncExportKind() {
   if (pub) pub.hidden = !web;
   const gameOnly = $('#gameOnlyChk').closest('label');
   if (gameOnly) gameOnly.hidden = !web;
+  const lite = $('#liteChk').closest('label');
+  if (lite) lite.hidden = !web;
+  $('#ffmpegRow').hidden = !web || !$('#liteChk').checked;
+  syncLiteAutoRow();
   $('#owrapLbl').hidden = web;
+  refreshBuildSize();
 }
+$('#publicChk').addEventListener('change', () => refreshBuildSize());
+$('#liteChk').onchange = () => { liteTouched = true; syncExportKind(); if ($('#liteChk').checked) showFfmpeg(); };
+// THE MP3 ENCODER for a lite build's sounds: shown under Lite build when it
+// is ticked. The path is what the Studio found and will use; "none" says the
+// sounds stay lossless.
+async function showFfmpeg(j) {
+  try {
+    if (!j) j = await (await fetch('/api/ffmpeg')).json();
+    const p = $('#ffmpegPath');
+    p.textContent = !j.found ? t('none - sounds stay lossless') : j.setting ? j.found : t('ffmpeg on PATH');
+    p.title = j.found || j.why || '';
+    $('#ffmpegReset').hidden = !j.setting;
+  } catch (e) { /* the row keeps what it showed */ }
+}
+$('#ffmpegPick').onclick = async () => {
+  const chosen = await pickAnyFolder(t('Which folder holds ffmpeg.exe?'));
+  if (!chosen) return;
+  try {
+    const j = await api('/api/ffmpeg', JSON.stringify({ path: chosen }), { 'Content-Type': 'application/json' });
+    showFfmpeg(j);
+    toast(t('MP3 encoder: {path}', { path: j.found }));
+  } catch (e) { toast(String(e && e.message ? e.message : e), 'warn'); }
+};
+$('#ffmpegReset').onclick = async () => {
+  try { showFfmpeg(await api('/api/ffmpeg', JSON.stringify({ path: '' }), { 'Content-Type': 'application/json' })); }
+  catch (e) { toast(String(e && e.message ? e.message : e), 'warn'); }
+};
 $('#exportKind').onchange = syncExportKind;
 // THE GAME ONLY PAGE: the open bundle's roster.json gameOnly, read and
 // written through /api/game-only (never through a page's roster snapshot,
@@ -9693,6 +9877,9 @@ $('#exportKind').onchange = syncExportKind;
 // secondary thing you can also make. In a browser it is the other way round.
 if (NATIVE) $('#exportKind').value = 'desktop';
 syncExportKind();
+// Lite build starts ticked: fill the MP3 encoder row now, so it names the
+// encoder the first time Website is picked.
+if ($('#liteChk').checked) showFfmpeg();
 
 // The pre-flight's warning for files that are missing but do not stop the
 // build (/api/check-chars, modlib.checkAllChars). It names the character and
@@ -9711,6 +9898,47 @@ function missingFileWarning(pre) {
   const more = who.length > 3 ? ', ' + t('+{n} more', { n: who.length - 3 }) : '';
   return who.length === 1 ? t('1 character names a missing file — {list}. Exported anyway.', { list: named.join(', ') + more })
     : t('{n} characters name missing files — {list}. Exported anyway.', { n: who.length, list: named.join(', ') + more });
+}
+
+// WHAT A WEBSITE EXPORT IS DOING, in the building line under "Building"
+// (#wbSub), asked of /api/export-status every 2 s while /api/export runs. The
+// lite step's last minutes can be one big piece on one thread; the line says
+// so instead of looking frozen. The bar stays the scrolling kind.
+function exportStatusText(s) {
+  if (!s || !s.running) return '';
+  const n = { done: s.done || 0, total: s.total || 0, left: Math.max(0, (s.total || 0) - (s.done || 0)), mb: s.bigMb || 0 };
+  switch (s.step) {
+    case 'read': return t('Lite build: reading the game data');
+    case 'sff': return t('Lite build: writing PNG sprites again ({done} of {total} files)', n);
+    case 'analyze': return t('Lite build: taking the files apart ({done} of {total})', n);
+    case 'compress':
+      // the last jobs, or one big job among many: say what is being waited on
+      if (n.left && n.left <= (s.busy || 0) && n.mb >= 64) {
+        return n.left === 1 ? t('Lite build: compressing the last piece ({mb} MB); a big piece can take a few minutes', n)
+          : t('Lite build: compressing the last {left} pieces (the biggest is {mb} MB); a big piece can take a few minutes', n);
+      }
+      if (n.mb >= 128) return t('Lite build: compressing ({done} of {total} jobs done); a {mb} MB piece is among them and can take a few minutes', n);
+      return t('Lite build: compressing ({done} of {total} jobs done)', n);
+    case 'write': return t('Lite build: writing game.lite');
+    case 'check': return t('Lite build: checking every file ({done} of {total} chunks)', n);
+    case 'swap': return t('Lite build: putting game.lite in place');
+    default: return t('Writing the website');
+  }
+}
+function watchExport() {
+  let on = true;
+  (async () => {
+    while (on) {
+      await new Promise((r) => setTimeout(r, 2000));
+      if (!on) break;
+      let s = null;
+      try { s = await (await fetch('/api/export-status')).json(); } catch (e) { s = null; }
+      const text = on && buildState === 'working' ? exportStatusText(s) : '';
+      const sub = $('#wbSub');
+      if (text && sub) { sub.textContent = s.seconds ? t('{step}, {n} s so far', { step: text, n: s.seconds }) : text; sub.title = ''; }
+    }
+  })();
+  return { stop: () => { on = false; } };
 }
 
 // `dest` undefined means the default folder beside the program, which is what
@@ -9817,10 +10045,32 @@ async function runExport(dest) {
       // The imported build's own state files this engine refused, and what stands in.
       for (const n of result.commonReport || []) warnNotes.push(n);
       card('desktop', result, { notes, warnNotes });
+      buildSizeGen++; refreshBuildSize();
     } else {
       const isPublic = $('#publicChk').checked;
-      const { result } = await api('/api/export', JSON.stringify({ pack: true, public: isPublic, dest }));
-      card('web', result, { isPublic, warnNotes: result.commonReport || [] });
+      const ticked = $('#liteChk').checked;
+      const lite = liteTouched ? ticked : 'auto';
+      if (ticked) btn.textContent = t('Exporting (lite: a few minutes)...');
+      const watch = watchExport();
+      let result;
+      try { ({ result } = await api('/api/export', JSON.stringify({ pack: true, public: isPublic, lite, dest }))); }
+      finally { watch.stop(); }
+      // What the lite step did (lite/pack.js liteInPlace), on the card.
+      const notes = [], warnNotes = (result.commonReport || []).slice();
+      const L = result.lite;
+      if (result.liteSkipped) {
+        notes.push(t('Not made lite: the game data is {size}, over the {max} a lite build is made for by default, so this is the full build. Tick Lite build in Options to make it lite anyway', { size: mb(result.liteSkipped.bytes), max: mb(result.liteSkipped.max) }));
+      }
+      if (L && L.failed) {
+        warnNotes.push(t('The lite step stopped, so this folder holds the full build: {error}', { error: L.failed }));
+      } else if (L) {
+        notes.push(t('Lite build: the game data and engine went from {before} MB to {after} MB, in one file the player\'s browser unpacks and keeps. It plays online only with this same lite build',
+          { before: (L.before / 1e6).toFixed(1), after: (L.after / 1e6).toFixed(1) }));
+        if (L.sounds === 'lossy') notes.push(t('Character sounds are MP3 in this build; sprites are exact'));
+        else warnNotes.push(t('Character sounds were kept lossless ({why}). Set an MP3 encoder in Options for a smaller build', { why: L.soundsWhy || t('no MP3 encoder') }));
+      }
+      card('web', result, { isPublic, notes, warnNotes });
+      buildSizeGen++; refreshBuildSize();
     }
     setBuildState('done');
   } catch (e) {
@@ -9953,7 +10203,7 @@ async function renderSettings() {
       'The settings people actually change: how hard, how long, how many rounds, how big, how loud, which fight mechanics.'],
     ['all', t('All'), SET_SCHEMA.length,
       'Every setting the engine reads that this Studio can write. Most of these nobody ever needs.'],
-    ['controls', t('Controls'), window.KEYS ? (window.KEYS.model.conflicts.length || '') : '',
+    ['controls', t('Controls'), window.KEYS ? ((window.KEYS.model.conflicts.length + ((window.KEYS.model.setupConflicts || []).length)) || '') : '',
       'The keys and gamepad buttons this build ships with. Press a key to bind it, or type the engine\'s own name for one.'],
     ['hosting', t('Online'), hostingN,
       'Where this build finds its lobby relay, TURN relay and leaderboard. Optional: online play works with none of it.'],
@@ -10171,7 +10421,7 @@ async function renderEngineZip(host) {
   const H = ENGINE_ZIP;
   const intro = document.createElement('div');
   intro.className = 'hostnote';
-  intro.textContent = t('The desktop export builds your game from the official Ikemen GO release zip in {folder}. The website export and Test in Browser use the Studio\u2019s own engine and never read it.', { folder: H.deps });
+  intro.textContent = t('The desktop export builds your game from upstream\u2019s official Ikemen GO zip in {folder}: the modern-input pre-release (Ikemen_GO-modern-input-windows.zip), later the versioned release that replaces it. Ikemen GO 1.0 and other zips are not used. The website export and Test in Browser use the Studio\u2019s own engine and never read it.', { folder: H.deps });
   host.appendChild(intro);
   const det = document.createElement('details');
   det.className = 'grp'; det.open = true;
@@ -10198,6 +10448,9 @@ async function renderEngineZip(host) {
     const files = H.contents.wrapper ? t('{n} files inside a {folder}/ folder (the export flattens it)', { n: H.contents.entries, folder: H.contents.wrapper })
       : t('{n} files', { n: H.contents.entries });
     line(t('Contents'), files + (H.contents.missing.length ? '' : ' - ' + t('the engine, its menu scripts, common states, lifebars and default screenpack are all there')), H.contents.missing.length ? 'bad' : 'ok');
+  }
+  if (H.format && H.format.mapping) {
+    line(t('Controls format'), t('{mapping} and {setup} sections in save/config.ini, the names its Ikemen_GO.exe reads', { mapping: '[' + H.format.mapping + '_*]', setup: '[' + H.format.setup + '_*]' }), 'ok');
   }
   if (H.zips.length) {
     line('In Dependencies', H.zips.map((z) => (z.name === H.picked ? t('{name} ({mb} MB, used)', { name: z.name, mb: (z.bytes / 1e6).toFixed(1) })
@@ -10844,12 +11097,17 @@ function renderHostServers(host, H, ui) {
     + (hs.kitVersion ? ' · ' + t('server version {v}', { v: hs.kitVersion }) : '') + (hs.worker ? ' · ' + t('server name {name}', { name: hs.worker }) : '')));
   // An older server than this Studio carries (the version saved when it was
   // set up or last updated): offer the update. 1.1.0 and older have no
-  // lobbies, so their players' game shows no LOBBY or WATCH A MATCH.
-  if (hostKitOlder(hs.kitVersion, H.hostKitVersion)) {
+  // lobbies, so their players' game shows no LOBBY or WATCH A MATCH: a
+  // warning. 1.2.0 has lobbies and watching; 1.2.1 adds only lobby titles and
+  // the list by build, so for 1.2.0 the offer is a plain, optional hint.
+  if (hostKitOlder(hs.kitVersion, '1.2.0')) {
     ui.hint(det, t('Your servers run version {old}; this Studio carries version {new}, which adds lobbies, watching matches and the list of open lobbies. Press <b>Update my servers</b> to get them: every name and rating is kept. Until then your players’ game does not show <b>LOBBY</b> or <b>WATCH A MATCH</b>.',
       { old: esc(hs.kitVersion), new: esc(H.hostKitVersion) }));
     const last = det.lastElementChild;
     if (last) last.classList.add('hostold');
+  } else if (hostKitOlder(hs.kitVersion, H.hostKitVersion)) {
+    ui.hint(det, t('Your servers run version {old}; this Studio carries version {new}, which adds lobby titles and a lobby list that shows each player only the lobbies on their own build. Lobbies, watching and the match queue already work on your version. Optional: press <b>Update my servers</b> to get them: every name and rating is kept.',
+      { old: esc(hs.kitVersion), new: esc(H.hostKitVersion) }));
   }
   askPanel();
   logBox();
@@ -15720,6 +15978,8 @@ window.renderControls = async function renderControls(host) {
     if (gen !== renderControls.gen) return;    // the tab moved on while we waited
     wait.remove();
   }
+  // The modern-input engine (IKEMEN_V2): keyboard controllers and a setup.
+  if (window.KEYS.v2) return window.renderControlsV2(host);
   const K = window.KEYS;
   const M = K.model;
   const mk = (tag, cls, text) => {
@@ -15892,6 +16152,201 @@ window.renderControls = async function renderControls(host) {
   host.appendChild(help);
 };
 
+// ---- SETTINGS > CONTROLS on the modern-input engine (IKEMEN_V2) -------------
+//
+// Decision 17: on that engine the build only states its two default keyboard
+// layouts (Keyboard Controller 1 and 2: the key behind each control of a
+// standard pad) and its button setup (which control each engine button
+// sits on). Everything else is the game's own: a player remaps keys in
+// Options > Input Settings > Controller Mapping and the buttons in Button
+// Setup, and a pad needs no mapping at all. /api/keys serves keylib.modelV2.
+window.renderControlsV2 = function renderControlsV2(host) {
+  const K = window.KEYS;
+  const M = K.model;
+  const mk = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+  const commit = async (body) => {
+    try {
+      const r = await api('/api/keys', JSON.stringify(body), { 'Content-Type': 'application/json' });
+      window.KEYS = Object.assign({}, window.KEYS, { model: r.model, written: r.written });
+      window.BTNSTYLE = null;    // the Xbox / PlayStation pictures follow the button setup
+      renderSettings();
+    } catch (e) {
+      // "Keyboard Controller 1 DP_U: <reason>" / "Standard a: <reason>": the
+      // names are the engine's, the reason is the server's message (I18n.server)
+      const m = /^((?:Keyboard Controller \d+|Standard) \S+): ([\s\S]+)$/.exec(e.message);
+      toast(m ? m[1] + ': ' + I18n.server(m[2]) : e.message, 'err');
+    }
+  };
+
+  host.appendChild(mk('div', 'note', t('These are the two keyboard layouts and the button setup a fresh copy of this build starts with on the website. A player changes them in the game: Options > Input Settings > Controller Mapping (the keys) and Button Setup (which control is which button). A pad needs no layout: its buttons are the controls.')));
+  host.appendChild(mk('div', 'note', t('Written into the build: {sections}.', { sections: (K.written || []).join(', ') })));
+  host.appendChild(mk('div', 'note', t('A Desktop export writes the same layouts and setup, under the same section names (Controller Mapping and Button Setup). Once a player remaps in that game, a re-export keeps their remaps.')));
+
+  if (M.conflicts.length) {
+    const box = mk('div', 'warnbox');
+    box.appendChild(mk('b', null, M.conflicts.length === 1 ? t('1 conflict') : t('{n} conflicts', { n: M.conflicts.length })));
+    for (const c of M.conflicts) {
+      box.appendChild(mk('div', 'note', t('{key} is on {where}: one press works them all.', { key: c.token,
+        where: c.where.map((w) => w.name + ' ' + w.control).join(' ' + t('and') + ' ') })));
+    }
+    host.appendChild(box);
+  }
+
+  host.appendChild(window.buttonStyleSection());
+
+  // Which engine buttons sit on a control through the setup: "a", "x", "xyz".
+  const onControl = (control) => M.setup.rows.filter((r) => r.value === control).map((r) => r.button);
+  const GROUPS = [['dpad', t('D-pad')], ['face', t('Face buttons')], ['shoulder', t('Bumpers and triggers')], ['system', t('Start and Back')], ['stick', t('Sticks')]];
+
+  for (const kb of M.keyboards) {
+    const det = document.createElement('details');
+    det.className = 'kslot';
+    det.dataset.slot = kb.id;
+    det.open = true;
+    const sum = document.createElement('summary');
+    sum.textContent = t('{name}: player {n} side', { name: kb.name, n: kb.side }) + (kb.changed ? ' ' + t('(changed)') : '');
+    det.appendChild(sum);
+    const pad = mk('div', 'kpad');
+    const cols = [mk('div', 'kcol'), mk('div', 'kcol')];
+    pad.appendChild(cols[0]);
+    pad.appendChild(cols[1]);
+    GROUPS.forEach(([g, title], gi) => {
+      const sec = mk('section', 'kgrp');
+      sec.dataset.group = g;
+      sec.appendChild(mk('h4', null, title));
+      for (const b of kb.bindings.filter((x) => x.group === g)) {
+        const row = mk('div', 'kb');
+        row.dataset.slot = kb.id;
+        row.dataset.action = b.control;
+        const lab = mk('div', 'kbl');
+        const nm = mk('span', 'kbn');
+        nm.appendChild(mk('b', null, b.control));
+        const via = onControl(b.control);
+        const words = b.label === b.control ? '' : I18n.server(b.label);
+        const sub = words + (via.length ? (words ? ' · ' : '') + via.join(' ') : '');
+        if (sub) nm.appendChild(mk('span', 'kbm', sub));
+        lab.appendChild(nm);
+        lab.title = via.length ? t('{control} presses the engine’s {buttons} through the button setup.', { control: b.control, buttons: via.join(', ') })
+          : t('{control} presses no engine button in the button setup.', { control: b.control });
+        row.appendChild(lab);
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'kv';
+        inp.value = b.value;
+        inp.setAttribute('translate', 'no');
+        inp.placeholder = b.def;
+        inp.setAttribute('aria-label', kb.name + ' ' + b.control);
+        inp.dataset.slot = kb.id;
+        inp.dataset.action = b.control;
+        if (b.set) inp.classList.add('set');
+        if (b.conflict) inp.classList.add('conflict');
+        inp.onchange = () => commit({ slot: kb.id, set: { [b.control]: inp.value.trim() } });
+        row.appendChild(inp);
+        const cap = mk('button', 'tiny cap', t('press'));
+        cap.title = t('Put this control on the next key you press. Escape gives up, Backspace leaves it without a key.');
+        cap.onclick = () => window.armKeyCapture({ id: kb.id, keyboard: true }, { action: b.control }, inp, cap, commit);
+        row.appendChild(cap);
+        const clr = mk('button', 'tiny', t('clear'));
+        clr.title = t('Leave this control without a key ({key}).', { key: K.nokey });
+        clr.onclick = () => commit({ slot: kb.id, set: { [b.control]: K.nokey } });
+        row.appendChild(clr);
+        sec.appendChild(row);
+      }
+      cols[gi < 2 ? 0 : 1].appendChild(sec);
+    });
+    det.appendChild(pad);
+    const acts = mk('div', 'keyacts');
+    const rst = mk('button', 'tiny', t('reset this keyboard'));
+    rst.title = t('Put every key of {name} back to the website’s own layout.', { name: kb.name });
+    rst.disabled = !kb.changed;
+    rst.onclick = () => commit({ slot: kb.id, reset: true });
+    acts.appendChild(rst);
+    det.appendChild(acts);
+    host.appendChild(det);
+  }
+
+  // THE BUTTON SETUP: the control behind each engine button, for every
+  // device (keyboards and pads alike).
+  const det = document.createElement('details');
+  det.className = 'kslot';
+  det.dataset.slot = 'setup';
+  det.open = true;
+  const sum = document.createElement('summary');
+  sum.textContent = t('Button setup: {name}', { name: M.setup.name }) + (M.setup.changed ? ' ' + t('(changed)') : '');
+  det.appendChild(sum);
+  det.appendChild(mk('div', 'note', t('The control each engine button is on, for keyboards and pads alike. Upstream’s Standard setup puts the punches on X Y RB and the kicks on A B RT.')));
+  // Two rows on one control: the engine takes it (one press presses every
+  // button of both rows), so the setup is saved as chosen; the box says so.
+  const shared = M.setupConflicts || [];
+  if (shared.length) {
+    const box = mk('div', 'warnbox');
+    box.dataset.slot = 'setup';
+    box.appendChild(mk('b', null, shared.length === 1 ? t('1 control presses more than one button') : t('{n} controls press more than one button', { n: shared.length })));
+    for (const c of shared) {
+      box.appendChild(mk('div', 'note', t('{control} is on {buttons}: one press presses them all.', { control: c.control,
+        buttons: c.buttons.join(' ' + t('and') + ' ') })));
+    }
+    box.appendChild(mk('div', 'note', t('The build is saved like this. Pick another control for one of the rows if each button should have its own.')));
+    det.appendChild(box);
+  }
+  const LABEL = new Map((K.actions || []).map((a) => [a.key, a.label]));
+  const options = [K.nokey].concat(K.controls.map((c) => c.key));
+  const grid = mk('div', 'kpad');
+  const cols = [mk('section', 'kgrp'), mk('section', 'kgrp')];
+  cols[0].appendChild(mk('h4', null, t('Buttons')));
+  cols[1].appendChild(mk('h4', null, t('Button combinations')));
+  grid.appendChild(cols[0]);
+  grid.appendChild(cols[1]);
+  for (const r of M.setup.rows) {
+    const row = mk('div', 'kb');
+    row.dataset.slot = 'setup';
+    row.dataset.action = r.button;
+    const lab = mk('div', 'kbl');
+    const nm = mk('span', 'kbn');
+    nm.appendChild(mk('b', null, r.button));
+    const words = LABEL.get(r.button);
+    if (words) nm.appendChild(mk('span', 'kbm', I18n.server(words)));
+    else if (r.combo) nm.appendChild(mk('span', 'kbm', t('{buttons} together', { buttons: r.button.split('').join(' + ') })));
+    lab.appendChild(nm);
+    row.appendChild(lab);
+    const sel = document.createElement('select');
+    sel.className = 'kv';
+    sel.setAttribute('translate', 'no');
+    sel.setAttribute('aria-label', M.setup.name + ' ' + r.button);
+    sel.dataset.slot = 'setup';
+    sel.dataset.action = r.button;
+    for (const o of options) {
+      const opt = document.createElement('option');
+      opt.value = o;
+      opt.textContent = o === K.nokey ? t('{none} (none)', { none: K.nokey }) : o;
+      if (o === r.value) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.value = r.value;
+    if (r.set) sel.classList.add('set');
+    if (r.conflict) sel.classList.add('conflict');
+    sel.onchange = () => commit({ slot: 'setup', set: { [r.button]: sel.value } });
+    row.appendChild(sel);
+    cols[r.combo ? 1 : 0].appendChild(row);
+  }
+  det.appendChild(grid);
+  const acts = mk('div', 'keyacts');
+  const rst = mk('button', 'tiny', t('reset the setup'));
+  rst.title = t('Put every button back to upstream’s Standard setup.');
+  rst.disabled = !M.setup.changed;
+  rst.onclick = () => commit({ slot: 'setup', reset: true });
+  acts.appendChild(rst);
+  det.appendChild(acts);
+  host.appendChild(det);
+
+  host.appendChild(mk('div', 'note', t('Click "press" beside a control, then press the key you want. Escape cancels. Backspace leaves the control without a key. You can also type the engine’s name for a key into the box, which is the only way to get keys no keyboard has, like F13 to F24.')));
+};
+
 // THE COMMAND LIST'S BUTTONS (/api/button-style -> buttonstyle.js): which
 // pictures the pause menu's Command List draws for a button in this build.
 // Four styles, each shown with its own pictures for x y z a b c d w as the
@@ -15903,7 +16358,10 @@ window.buttonStyleSection = function buttonStyleSection() {
   const mk = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
   const sec = mk('section', 'kgrp bstylegrp');
   sec.appendChild(mk('h4', null, 'Command List buttons'));
-  sec.appendChild(mk('div', 'note', 'The pictures the pause menu’s Command List draws for each button, in the website and a Desktop'
+  const v2 = !!(window.KEYS && window.KEYS.v2);
+  sec.appendChild(mk('div', 'note', v2
+    ? t('The pictures the pause menu’s Command List draws for each button, in the website and a Desktop export. Xbox and PlayStation show the pad button the button setup below puts each one on; any punch and any kick show their three buttons.')
+    : 'The pictures the pause menu’s Command List draws for each button, in the website and a Desktop'
     + ' export. Xbox and PlayStation show the pad button Joystick_P1 binds below; any punch and any kick show their three buttons.'));
   const body = mk('div', 'bstyles');
   body.setAttribute('role', 'radiogroup');
@@ -15954,6 +16412,9 @@ window.buttonStyleSection = function buttonStyleSection() {
         } else cell.appendChild(mk('span', 'bsmiss', b.label));
         cell.appendChild(mk('span', 'bsk', UNDER[k] || k));
         cell.title = name + ' → ' + b.label + ((s.id === 'xbox' || s.id === 'playstation') && b.pad ? ' (Joystick_P1 ' + (k === 's' ? 'start' : b.extra ? 'buttons' : k) + ' = ' + b.pad + ')' : '');
+        if (v2 && (s.id === 'xbox' || s.id === 'playstation') && b.pad) {
+          cell.title = t('{name} → {label} (the button setup puts {button} on {pad})', { name, label: b.label, button: k === 's' ? 'start' : b.extra ? b.word : k, pad: b.pad });
+        }
         row.appendChild(cell);
       }
       card.appendChild(row);
@@ -17588,7 +18049,7 @@ window.renderLifebar = async function renderLifebar(host) {
       <div class="xcolophon">
         <div class="xcolophon-row">
           <span class="bk-imprint" aria-hidden="true" translate="no">energy.jp</span>
-          <span class="xline2"><b translate="no">Mugen Studio 2.4.1</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
+          <span class="xline2"><b translate="no">Mugen Studio 2.5</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
         </div>
       </div>
     </section>

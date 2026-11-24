@@ -24,8 +24,9 @@
 // shipped to a native engine.
 //
 // `webOff: true` is a desktop-only key the website also FORCES off at boot,
-// over a returning player's saved config (vfs.js WEB_FORCED; the two lists
-// are held equal by tools/test-build-rules.js). Rollback.LogsEnabled is one:
+// over a returning player's saved config (vfs.js WEB_FORCED forces every
+// webOff key; tools/test-build-rules.js holds the lists together and names
+// the forced keys this schema does not carry yet). Rollback.LogsEnabled is one:
 // in a browser its log grows in page memory nobody can open, and writing it
 // slowed online matches (DEVLOG 2026-11-15).
 //
@@ -223,6 +224,86 @@ const SETTINGS = [
   { sec: 'Common', key: 'Lua', type: 'string', def: 'loop()', applies: 'both', group: 'Modules & scripting', advanced: 'This is a raw code-injection point into the frame loop, not a setting. The only correct value for essentially every build is `loop()`, the failure mode for a wrong value is silent (overlays vanish only during the fight) or a mid-match Lua error, and the legitimate way to add per-frame behavior is a…', does: 'Comma-separated Lua source strings executed with luaLState.DoString once per UI tick from System.uiAction (src/system.go:2985-2993), right after the motif is stepped and acted (the ordering is deliberate — see the in-source link to issue #3080, since inverting it lags motif input by a frame).', danger: 'It is DoString, so each string is RE-PARSED AND RE-COMPILED EVERY FRAME — this is a call site, not a place to put a program.' },
 ];
 
+// ---- THE MODERN-INPUT ENGINE (engine 2.5, IKEMEN_V2) -------------------------
+//
+// The list above is the 1.0.0-format engine's (the 2.4 web build, and the
+// desktop export until it moves to upstream's official modern-input build).
+// The modern-input engine's defaultConfig.ini differs from it in four ways,
+// each of which matters because a desktop export writes EVERY key of the panel
+// (settingsFor `complete`): a stale default here would pin the old value into
+// every exported config, silently.
+//
+//  * four defaults moved (VsScreenLoading 0 -> 1, TurnsLoading 0 -> 1,
+//    PauseMasterVolume 100 -> 75, AudioResampleQuality 1 -> 4);
+//  * Rollback.LogsEnabled is gone, split into StateLogsEnabled and
+//    GgpoLogsEnabled (both desktop only and forced off on the web, like the
+//    old key: vfs.js WEB_FORCED);
+//  * seventeen keys are new (Options.PauseDelay since the 2026-11-17 refresh);
+//  * Config.Players now caps how many devices join as players (system.go
+//    assignInputs), not how many [Keys_Pn] sections are read.
+//
+// Built from the list above: `V2_CHANGE` replaces fields of an entry,
+// `V2_DROP` removes one, and each `V2_ADD` entry goes in after the key its
+// `after` names. Checked against the engine's own defaultConfig.ini by
+// tools/test-build-rules.js.
+const V2_CHANGE = {
+  'Config.Players': { does: 'The most players at once (1-8). Devices join as players in the order they are first used, up to this count (system.go); co-op modes cap Simul and Tag teams at the smaller of 4 and this value.', danger: 'Below 2 the versus co-op mode leaves the main menu, and a second device can no longer join a match.' },
+  'Config.VsScreenLoading': { def: '1' },
+  'Config.TurnsLoading': { def: '1' },
+  'Sound.PauseMasterVolume': { def: '75' },
+  'Sound.AudioResampleQuality': { def: '4', applies: 'desktop', opts: [['1', '1 - cheapest'], ['2', '2'], ['3', '3'], ['4', '4 - the default'], ['6', '6'], ['8', '8'], ['16', '16 - most CPU']],
+    does: 'Quality of every audio resampler (music, sounds, video audio): the number of neighboring samples its Lagrange interpolation reads, 1-16 (sound.go, beep Resample). The website always uses 1 (Decision 9): the browser mixes sound on the game\'s own thread, and the engine puts 1 back at every boot.',
+    danger: 'Every playing sound runs through its own resampler, so high values cost CPU on every voice. Above 6 the difference is hard to hear.' },
+};
+const V2_DROP = ['Netplay.Rollback.LogsEnabled'];
+const V2_ADD = [
+  { after: 'Common.Lua', sec: 'Common', key: 'Shaders', type: 'string', def: '', applies: 'both', group: 'Modules & scripting', advanced: 'Custom shader files the build ships. Leave it empty unless the build has some.', does: 'A comma-separated list of files with a [Shaders] section (name = path) that every character and stage can use; a character\'s own shader of the same name wins (system.go).' },
+  { after: 'Config.BootLoadingMode', sec: 'Debug', key: 'RetryLoadOnError', type: 'bool', def: '1', applies: 'desktop', group: 'Developer tools', does: 'When a match fails to load (a character with bad syntax), the desktop engine asks whether to try again, so the file can be fixed without a restart. Never offered online, with TurnsLoading, or on the website.' },
+  { after: 'Video.KeepAspect', sec: 'Video', key: 'VRAMFallbackEnabled', type: 'bool', def: '1', applies: 'desktop', group: 'Renderer / Vulkan memory', advanced: 'Vulkan memory tuning; inert on every other renderer.', does: 'Vulkan only: when video memory runs out, textures may go to slower shared memory instead of failing.' },
+  { after: 'Video.VRAMFallbackEnabled', sec: 'Video', key: 'VRAMSwapThresholdPercent', type: 'int', def: '80', applies: 'desktop', group: 'Renderer / Vulkan memory', min: 1, max: 100, advanced: 'Vulkan memory tuning; inert on every other renderer.', does: 'Vulkan only: the share of video memory in use (percent) at which textures start to be evicted.' },
+  { after: 'Video.VRAMSwapThresholdPercent', sec: 'Video', key: 'VRAMSwapCooldownFrames', type: 'int', def: '60', applies: 'desktop', group: 'Renderer / Vulkan memory', min: 0, max: 600, advanced: 'Vulkan memory tuning; inert on every other renderer.', does: 'Vulkan only: frames to wait between two texture evictions.' },
+  { after: 'Video.VRAMSwapCooldownFrames', sec: 'Video', key: 'LifeBarTextureAtlasSize', type: 'enum', def: '1024', applies: 'both', group: 'Performance', opts: [['0', 'Off'], ['256', '256'], ['512', '512'], ['1024', '1024'], ['2048', '2048'], ['4096', '4096']], advanced: 'Memory against draw calls, with no visible effect when it works. Ship the defaults.', does: 'Size of the texture atlas lifebar sprites are packed into (0 = no atlas). Larger can draw faster and wastes memory on small files.' },
+  { after: 'Video.LifeBarTextureAtlasSize', sec: 'Video', key: 'StageTextureAtlasSize', type: 'enum', def: '1024', applies: 'both', group: 'Performance', opts: [['0', 'Off'], ['256', '256'], ['512', '512'], ['1024', '1024'], ['2048', '2048'], ['4096', '4096']], advanced: 'Memory against draw calls, with no visible effect when it works. Ship the defaults.', does: 'Size of the texture atlas stage sprites are packed into (0 = no atlas).' },
+  { after: 'Video.StageTextureAtlasSize', sec: 'Video', key: 'CharacterTextureAtlasSize', type: 'enum', def: '0', applies: 'both', group: 'Performance', opts: [['0', 'Off'], ['256', '256'], ['512', '512'], ['1024', '1024'], ['2048', '2048'], ['4096', '4096']], advanced: 'Memory against draw calls, with no visible effect when it works. Ship the defaults.', does: 'Size of the texture atlas character sprites are packed into (0 = no atlas, the default).' },
+  { after: 'Video.CharacterTextureAtlasSize', sec: 'Video', key: 'FontTextureAtlasSize', type: 'enum', def: '512', applies: 'both', group: 'Performance', opts: [['256', '256'], ['512', '512'], ['1024', '1024'], ['2048', '2048'], ['4096', '4096']], advanced: 'Memory against draw calls, with no visible effect when it works. Ship the defaults.', does: 'Size of the texture atlas font glyphs are packed into. Must not be 0; languages with many characters (Japanese) may need a larger one.' },
+  { after: 'Video.FontTextureAtlasSize', sec: 'Video', key: 'TextureAtlasSize', type: 'enum', def: '1024', applies: 'both', group: 'Performance', opts: [['0', 'Off'], ['256', '256'], ['512', '512'], ['1024', '1024'], ['2048', '2048'], ['4096', '4096']], advanced: 'Memory against draw calls, with no visible effect when it works. Ship the defaults.', does: 'Size of the texture atlas every other sprite (menus, effects) is packed into (0 = no atlas).' },
+  { after: 'Sound.PauseMasterVolume', sec: 'Sound', key: 'FocusLossVolume', type: 'int', def: '50', applies: 'desktop', group: 'Audio > Volume', min: 0, max: 100, does: 'Master volume, in percent, while the game window does not have the focus. The website always plays at 100 here (Decision 33; vfs.js puts it back at every boot).' },
+  { after: 'Netplay.ListenPort', sec: 'Netplay', key: 'Rollback.Port', type: 'int', def: '7500', applies: 'desktop', group: 'Netplay', min: 1, max: 65535, does: 'UDP port for rollback traffic on the desktop engine; both peers advertise their own. The website talks over WebRTC and never opens it.' },
+  { after: 'Netplay.Rollback.DisconnectTimeout', sec: 'Netplay', key: 'Rollback.StateLogsEnabled', type: 'bool', def: '0', applies: 'desktop', webOff: true, group: 'Netplay (diagnostics)', advanced: 'Diagnostics a player can neither read nor act on.', does: 'Saves recent rollback state snapshots to save/logs to chase desyncs. Desktop only: the website forces it off (vfs.js), because in a browser the log only fills memory and slowed online matches.' },
+  { after: 'Netplay.Rollback.StateLogsEnabled', sec: 'Netplay', key: 'Rollback.GgpoLogsEnabled', type: 'bool', def: '0', applies: 'desktop', webOff: true, group: 'Netplay (diagnostics)', advanced: 'Diagnostics a player can neither read nor act on.', does: 'Saves the rollback library\'s full, very verbose log to save/logs. Desktop only: the website forces it off (vfs.js).' },
+  { after: 'Netplay.Rollback.DesyncTestAI', sec: 'Netplay', key: 'SyncTimeout', type: 'int', def: '30000', applies: 'desktop', group: 'Netplay', min: 1000, max: 600000, does: 'Milliseconds the desktop engine waits for the other player to synchronize before it gives up. The website waits as long as it takes (Decision 10).' },
+  { after: 'Netplay.SyncTimeout', sec: 'Netplay', key: 'LoadingTimeout', type: 'int', def: '60000', applies: 'desktop', group: 'Netplay', min: 1000, max: 600000, does: 'Milliseconds the desktop engine waits for the other player to finish loading a match. The website waits as long as it takes (Decision 10): a large character can take a phone far longer.' },
+  { after: 'Options.RedLife', sec: 'Options', key: 'PauseDelay', type: 'bool', def: '0', applies: 'both', group: 'Controls', does: 'The pause menu opens only after its button is held for the pack\'s [Pause Menu] open.holdtime (frames; upstream\'s default 30) instead of on the first press. Esc still opens it at once. Online the host\'s value applies to both players (a host-synced setting).' },
+  { after: 'Input.PauseExitDelay', sec: 'Input', key: 'CommandMirror', type: 'bool', def: '0', applies: 'both', group: 'Controls', does: 'Turns the Command List\'s directions around while the player who paused faces left.' },
+  { after: 'Input.CommandMirror', sec: 'Input', key: 'CommandMapping', type: 'bool', def: '0', applies: 'both', group: 'Controls', does: 'The Command List draws the key or pad button each button is bound to (1), or the standard button art (0).', danger: 'On, it replaces the pictures of the Command List buttons style chosen in Settings > Controls.' },
+];
+
+function buildV2(list) {
+  const out = [];
+  for (const s of list) {
+    const path = s.sec + '.' + s.key;
+    if (V2_DROP.includes(path)) continue;
+    out.push(V2_CHANGE[path] ? Object.assign({}, s, V2_CHANGE[path]) : s);
+  }
+  for (const a of V2_ADD) {
+    const at = out.findIndex((s) => s.sec + '.' + s.key === a.after);
+    if (at < 0) throw new Error('settings-schema V2: no ' + a.after + ' to put ' + a.sec + '.' + a.key + ' after');
+    const e = Object.assign({}, a);
+    delete e.after;
+    out.splice(at + 1, 0, e);
+  }
+  return out;
+}
+const SETTINGS_V1 = SETTINGS;
+const SETTINGS_V2 = buildV2(SETTINGS);
+
+// The list for an engine format: 'v2' (modern-input), 'v1', or by default the
+// one this process builds for (IKEMEN_V2, read at call time).
+function settingsList(format) {
+  const f = format || (process.env.IKEMEN_V2 ? 'v2' : 'v1');
+  return f === 'v2' ? SETTINGS_V2 : SETTINGS_V1;
+}
+
 // What a given product should actually be told, out of what the user chose.
 //
 // Sparse by design: only values moved off the default are stored, so an
@@ -263,9 +344,10 @@ function isDefaultEverywhere(s, val) {
 // the full set makes the exported config always equal what the panel shows.
 //
 // It is the same shape as Motif being written only into an empty folder.
-function settingsFor(values, target, complete) {
+function settingsFor(values, target, complete, format) {
   const out = [];
-  for (const s of SETTINGS) {
+  const list = settingsList(format);
+  for (const s of list) {
     const path = s.sec + '.' + s.key;
     const v = (values || {})[path];
     const set = !(v === undefined || v === null || v === '');
@@ -305,13 +387,19 @@ function settingsFor(values, target, complete) {
   for (const [k, from] of Object.entries(win)) {
     const other = k === 'WindowWidth' ? 'WindowHeight' : 'WindowWidth';
     if (!has(k) && has(other)) {
-      const src = SETTINGS.find((x) => x.sec === 'Video' && x.key === from);
+      const src = list.find((x) => x.sec === 'Video' && x.key === from);
       const chosen = (values || {})['Video.' + from];
-      out.push({ sec: 'Video', key: k, def: SETTINGS.find((x) => x.sec === 'Video' && x.key === k),
+      out.push({ sec: 'Video', key: k, def: list.find((x) => x.sec === 'Video' && x.key === k),
         val: String(chosen !== undefined && chosen !== '' ? chosen : defaultFor(src, target)) });
     }
   }
   return out;
 }
 
-module.exports = { SETTINGS, settingsFor, defaultFor, isDefaultEverywhere };
+// SETTINGS is the list for the engine format this process builds for, read
+// when it is asked for (server.js sets IKEMEN_V2 before anything loads).
+module.exports = {
+  get SETTINGS() { return settingsList(); },
+  SETTINGS_V1, SETTINGS_V2, V2_CHANGE, V2_DROP, V2_ADD,
+  settingsList, settingsFor, defaultFor, isDefaultEverywhere,
+};

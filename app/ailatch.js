@@ -79,6 +79,58 @@ function latchVar(block, impossible) {
   return -1;
 }
 
+// The variable a "helper detector" latch sets, or -1. Faust (fau, faust.cmd)
+// checks for a player with a keyctrl helper (10000+ID, state 10000) that
+// compares its own commands with the root's: when only the root sees a press,
+// the helper sets its var(59) to 1, and the latch has one more trigger group,
+// `NumHelper(10000+ID)` + `Helper(10000+ID),var(59)>0`, that copies it. In
+// Ikemen GO a keyctrl helper sees no input on its first frames (its command
+// list is built later, in Char.tick), so a button held while the fight loads
+// or right after a training Round Reset reads as CPU control and his AI drives
+// the player's Faust. Such a latch is a VarSet to a non-zero constant whose
+// numbered trigger groups are either impossible commands only (at least one)
+// or only NumHelper(...), Helper(...),var(L) (bare, > 0 or != 0) and
+// var(L) = 0 on the same var L (at least one Helper line). R. Mika (cvsmika_h,
+// AI_mika3_2/-3.cns) has the bare form: `var(59)=0` + `Helper(10001),var(59)`,
+// with the same keyctrl helper (state 10001). Its release keeps the detector's
+// negative "player seen".
+function detectorLatchVar(block, impossible) {
+  let type = '', v = -1, value = null, varAssign = null;
+  const groups = new Map();
+  for (let i = 1; i < block.length; i++) {
+    const k = keyOf(block[i]);
+    if (!k) continue;
+    if (k === 'type') type = valOf(block[i]).toLowerCase();
+    else if (k === 'v') v = parseInt(valOf(block[i]), 10);
+    else if (k === 'value') value = valOf(block[i]);
+    else if (/^var\(\s*\d+\s*\)$/.test(k)) varAssign = { n: parseInt(k.replace(/\D/g, ''), 10), value: valOf(block[i]) };
+    else if (/^trigger\d+$/.test(k)) {
+      const g = parseInt(k.slice(7), 10);
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(valOf(block[i]));
+    }
+  }
+  if (type !== 'varset' || !groups.size) return -1;
+  const nonZero = (x) => x !== null && /^\s*-?\d+(\.\d+)?\s*$/.test(x) && Number(x) !== 0;
+  let n = -1;
+  if (varAssign && nonZero(varAssign.value)) n = varAssign.n;
+  else if (Number.isInteger(v) && v >= 0 && nonZero(value)) n = v;
+  if (n < 0) return -1;
+  const impossibleOnly = (t) => {
+    const names = [...t.matchAll(/command\s*=\s*"([^"]*)"/gi)].map((m) => m[1].toLowerCase());
+    const rest = t.replace(/command\s*=\s*"[^"]*"/gi, '').replace(/[\s()&|]/g, '');
+    return names.length > 0 && !rest && names.every((x) => impossible.has(x));
+  };
+  const helperRe = new RegExp('^(numhelper\\s*\\([^()]*\\)|helper\\s*\\([^()]*\\)\\s*,\\s*var\\(\\s*' + n + '\\s*\\)(\\s*(>|!=)\\s*0)?|var\\(\\s*' + n + '\\s*\\)\\s*=\\s*0)$', 'i');
+  let imp = 0, det = 0;
+  for (const lines of groups.values()) {
+    if (lines.every(impossibleOnly)) imp++;
+    else if (lines.every((t) => helperRe.test(t.trim())) && lines.some((t) => /^helper/i.test(t.trim()))) det++;
+    else return -1;
+  }
+  return imp && det ? n : -1;
+}
+
 // Does some controller already set var(n) on an AILevel test? Then the author
 // handled it, and nothing is added.
 function handled(text, n) {
@@ -155,7 +207,8 @@ function patchText(text, impossible, others) {
   let block = null;
   const flush = () => {
     if (!block) return;
-    const n = latchVar(block, impossible);
+    let n = latchVar(block, impossible);
+    const detector = n < 0 && (n = detectorLatchVar(block, impossible)) >= 0;
     if (n >= 0 && !vars.includes(n) && ![text, ...(others || [])].some((t) => handled(t, n))) {
       const num = (/^\[\s*state\s+(-?\d+)/i.exec(headOf(block[0])) || [, '-1'])[1];
       // Right after the latch's own last line, ahead of the comments and
@@ -163,9 +216,12 @@ function patchText(text, impossible, others) {
       let last = block.length - 1;
       while (last > 0 && !headOf(block[last])) last--;
       for (let i = 0; i <= last; i++) out.push(block[i]);
+      // A detector latch's release leaves its negative "player seen" alone,
+      // so the detector helper is not spawned again, and adds no derived-var
+      // releases.
       out.push('', '[State ' + num + ', Mugen Studio: AI switch off while a player controls this character]',
-        'type = VarSet', 'trigger1 = AILevel = 0', 'var(' + n + ') = 0');
-      for (const d of derivedVars([text, ...(others || [])], n)) {
+        'type = VarSet', 'trigger1 = AILevel = 0', ...(detector ? ['trigger1 = var(' + n + ') > 0'] : []), 'var(' + n + ') = 0');
+      for (const d of detector ? [] : derivedVars([text, ...(others || [])], n)) {
         out.push('', '[State ' + num + ', Mugen Studio: AI mode off while a player controls this character]',
           'type = VarSet', 'trigger1 = AILevel = 0', 'var(' + d + ') = 0');
         derived.push(d);
@@ -191,4 +247,4 @@ function patchText(text, impossible, others) {
   return { text: vars.length ? out.join(nl) : text, count: vars.length, vars, derived };
 }
 
-module.exports = { impossibleCommands, latchVar, derivedVars, patchText };
+module.exports = { impossibleCommands, latchVar, detectorLatchVar, derivedVars, patchText };

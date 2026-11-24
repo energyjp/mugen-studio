@@ -257,6 +257,18 @@
 #panel-stages #stages .card.stage .nearline .bkm-verdict::before { content: '\2713'; font-size: var(--t-13); }
 #panel-stages #stages .card.stage .nearline[data-state="offer"] { padding-left: 10px; box-shadow: inset 3px 0 0 var(--warn); }
 #panel-stages #stages .card.stage .nearline .bkm-why { flex: 1 1 160px; }
+/* debug background (debugbg.js): the warning rule while it is on, the printed
+   stamp once Fix turned it off */
+#panel-stages #stages .card.stage .bgline { min-height: 24px; }
+#panel-stages #stages .card.stage .bgline:empty { display: none; }
+#panel-stages #stages .card.stage .bgline .meta { font-size: var(--t-12); }
+#panel-stages #stages .card.stage .bgline .bkm-verdict {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink);
+  font: 800 var(--t-11)/1 var(--f-disp); font-stretch: 104%; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
+}
+#panel-stages #stages .card.stage .bgline .bkm-verdict::before { content: '\2713'; font-size: var(--t-13); }
+#panel-stages #stages .card.stage .bgline[data-state="on"] { padding-left: 10px; box-shadow: inset 3px 0 0 var(--warn); }
+#panel-stages #stages .card.stage .bgline .bkm-why { flex: 1 1 160px; }
 /* a missing attached character (attachfix.js): the warning rule while the
    game would stop on the stage, the printed stamp once it plays without it */
 #panel-stages #stages .card.stage .attachline { min-height: 24px; }

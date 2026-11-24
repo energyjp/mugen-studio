@@ -2,7 +2,7 @@ Screenpack, lifebars, sounds and fonts
 ======================================
 
 This build's data and font folders come from Ikemen GO. From the LICENSES.txt
-of Ikemen_GO-v1.0.0-windows, section 2:
+of Ikemen_GO-modern-input-windows, section 2:
 
 Screenpack license from Ikemen-GO-Screenpack/LICENCE.txt:
 

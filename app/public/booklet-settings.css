@@ -280,6 +280,8 @@
 #panel-settings #settings .kb input.kv { width: 108px; height: 26px; }
 #panel-settings #settings .kb input.kv.set { border-color: var(--ink); }
 #panel-settings #settings .kb input.kv.conflict { border-color: var(--warn); color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); }
+#panel-settings #settings .kb select.kv.set { border-color: var(--ink); }
+#panel-settings #settings .kb select.kv.conflict { border-color: var(--warn); color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); }
 #panel-settings #settings .kb input.kv.arming { border-color: var(--mark); color: var(--mark); font-style: italic; }
 #panel-settings #settings .kb button { height: 24px; padding: 0 8px; }
 #panel-settings #settings .keyacts { padding: 0 4px 12px 20px; }
