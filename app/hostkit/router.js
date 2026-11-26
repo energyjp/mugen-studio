@@ -26,6 +26,9 @@
 //                                   ?build=<Build ID>: only that build's
 //                                   lobbies, plus {build, other} (how many are
 //                                   on other builds), cached per build.
+//                                   &modes=1: team-mode lobbies too (a page
+//                                   that plays a lobby's match mode; relay.js,
+//                                   THE MATCH MODE), cached apart.
 //   GET  /mugen/identity/check      -> the Ladder object (ladder.js)
 //   POST /mugen/identity/claim      -> the Ladder, rate limited per IP
 //   POST /mugen/identity/recover    -> the Ladder, rate limited per IP
@@ -70,15 +73,21 @@
 // No `cloudflare:workers` import and no Node APIs, so Node can load this file
 // for tests (tools/test-hostkit-worker.js).
 
-import { handleRelay, addrHash, randomHex, refuseSocket, DIR_NAME, lobbyListBuild, LOBBY_LIST_BUILDS } from './relay.js';
+import { handleRelay, addrHash, randomHex, refuseSocket, DIR_NAME, lobbyListBuild, lobbyListKey, LOBBY_LIST_BUILDS } from './relay.js';
 import { ladderStub } from './ladder.js';
 import { sameSecret, KIT_NAME } from './ladder-core.js';
 
 // ---------------------------------------------------------------- settings --
 // Read by hostkit/deploy.js (kitVersion in its result) and by GET /. 1.2.0:
 // lobbies, watching a room's matches and the list of open lobbies. 1.2.1: the
-// list by build (?build=) and a lobby's title, set by its creator.
-export const KIT_VERSION = '1.2.1';
+// list by build (?build=) and a lobby's title, set by its creator. 1.2.2: a
+// member whose socket the server lost leaves within a minute, a lobby whose
+// pages (heartbeat ones) all went silent ends within minutes, and the list
+// shows one lobby per host browser (LIVENESS in the LOBBY CORE); and a lobby
+// plays the match mode its creator picked (THE MATCH MODE in the LOBBY CORE:
+// 1 vs 1, or Simul, Tag or Turns at 2-4 a side), which a page before 1.2.2's
+// game page cannot join or see listed.
+export const KIT_VERSION = '1.2.2';
 export const KIT_PARTS = Object.freeze(['relay', 'queue', 'ladder']);
 
 // How long this instance keeps the body of GET /lobbies before it asks the
@@ -240,7 +249,7 @@ export function createWorker(opts) {
   // this instance's memory only.
   let salt = '';
   // GET /lobbies, as last read from the directory object, per build ('' = the
-  // whole list; see lobbyListBuild): build -> { at, body }.
+  // whole list; see lobbyListBuild) and &modes=1 (lobbyListKey): key -> { at, body }.
   const listCache = new Map();
 
   function over(ruleName, request, name) {
@@ -266,7 +275,8 @@ export function createWorker(opts) {
   // cannot be asked and nothing is cached. ?build=<Build ID> (lobbyListBuild):
   // only that build's lobbies plus `other`, cached per build (at most
   // LOBBY_LIST_BUILDS builds, the oldest dropped first); without it, or with
-  // a value that is not a Build ID, the whole list as before.
+  // a value that is not a Build ID, the whole list as before. &modes=1:
+  // team-mode lobbies too, cached apart (relay.js, THE MATCH MODE).
   async function lobbies(request, env) {
     const h = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
     if (request.method !== 'GET') return new Response('GET only', { status: 405, headers: h });
@@ -274,18 +284,24 @@ export function createWorker(opts) {
       return new Response('{"t":"slowdown"}', { status: 429, headers: Object.assign({ 'Retry-After': '20' }, h) });
     }
     const t = now();
-    const build = lobbyListBuild(new URL(request.url).searchParams.get('build'));
-    let c = listCache.get(build);
+    const sp = new URL(request.url).searchParams;
+    const build = lobbyListBuild(sp.get('build'));
+    const modes = sp.get('modes') === '1';
+    const key = lobbyListKey(build, modes);
+    let c = listCache.get(key);
     if (!c || t - c.at >= LIST_CACHE_MS) {
       let body = null;
       try {
-        const r = await env.ROOM.get(env.ROOM.idFromName(DIR_NAME)).fetch('https://do/dir/list' + (build ? '?build=' + build : ''));
+        const dq = new URLSearchParams();
+        if (build) dq.set('build', build);
+        if (modes) dq.set('modes', '1');
+        const r = await env.ROOM.get(env.ROOM.idFromName(DIR_NAME)).fetch('https://do/dir/list' + (dq.toString() ? '?' + dq.toString() : ''));
         if (r.ok) body = await r.text();
       } catch { body = null; }
       if (body !== null) {
         c = { at: t, body };
-        listCache.delete(build);
-        listCache.set(build, c);
+        listCache.delete(key);
+        listCache.set(key, c);
         while (listCache.size > LOBBY_LIST_BUILDS) listCache.delete(listCache.keys().next().value);
       } else if (!c) return new Response('{"t":"lobbies","list":[]}', { status: 503, headers: h });
     }

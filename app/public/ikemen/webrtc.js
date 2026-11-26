@@ -1456,7 +1456,7 @@
   // The only ctl messages each side accepts; anything else is dropped, and a
   // watcher that keeps sending junk is cut off.
   const CTL_FROM_WATCHER = ['hello'];
-  const CTL_FROM_HOST = ['verified', 'refused', 'select', 'nowatch', 'start', 'drop', 'end'];
+  const CTL_FROM_HOST = ['verified', 'refused', 'select', 'nowatch', 'start', 'drop', 'end', 'late'];
   const CTL_MAX_BYTES = 64 * 1024; // an end message carries 256 frames of input
   const GGPO_MAX_BYTES = 1024;     // no GGPO message is bigger
   // What one watcher may send on its GGPO channel. An honest watcher sent
@@ -1487,7 +1487,7 @@
     const start = dv.getUint32(o), crc = dv.getUint32(o + 9), size = u[o + 15], bytes = u[o + 16];
     if (!size || !bytes) return;
     const f = start + bytes / size - 1 - 16;
-    if (f >= 0) trailMap().set(f, crc >>> 0);
+    if (f >= 0) trailSet(f, crc);
   }
   // Every datagram the engine hands sendGGPO, open channel or not. While its
   // rollback loop runs it sends at least every 200 ms (GGPO's keep-alive);
@@ -1525,6 +1525,10 @@
   // watcher the match registered nor make the engine think it closed.
   const wslots = [];
   let wOffer = null, wOfferMatch = 0, wStarted = 0;
+  // The lobby match this page was playing when its engine made that offer
+  // (0: none, or a room): an offer left from an earlier lobby match is not
+  // the watcher's match.
+  let wOfferLobby = 0;
   let wReg = [], wRegList = [], wRR = 0; // this match's watchers: by slot, in order; round-robin
   let hostWs = null;      // the host's lobby socket (watchers reach the host through it)
   let watchAllow = true;  // the host's "Allow watchers" switch
@@ -1579,8 +1583,15 @@
     return false;
   }
   function wOfferTo(s, slot) {
-    // A watcher that verifies during a match waits for the next one.
-    if (!wOffer || wStarted >= wOfferMatch) return;
+    // A watcher that verifies during a match waits for the next one. A lobby
+    // watcher is told so when the match it was put to watch is the one that
+    // already started (page only, its engine never sees it): before that it
+    // cannot know whether the select is still to come.
+    if (!wOffer) return;
+    if (wStarted >= wOfferMatch) {
+      if (s.lmatch && s.lmatch === wOfferLobby && s.late !== s.lmatch && wCtlSend(s, { t: 'late', match: s.lmatch })) s.late = s.lmatch;
+      return;
+    }
     if (wCtlSend(s, wOffer)) s.offered = wOfferMatch;
   }
   function wOnCtl(slot, e) {
@@ -1685,14 +1696,18 @@
       role: 'host',
       offer(match, raw) {
         wOffer = String(raw); wOfferMatch = match;
+        wOfferLobby = lobbyOn() && lobby && lobby.inMatch ? lobby.playing || 0 : 0;
         wslots.forEach((s, i) => { if (s && s.verified && !s.closed) wOfferTo(s, i); });
       },
+      // Asked once per GGPO session: a Turns match asks again with the SAME
+      // match for each turn (the engine keeps one watch match across its
+      // turns), and a watcher dropped from an earlier turn of it stays out.
       start(match) {
         wStarted = match;
         wReg = []; wRegList = []; wRR = 0;
         const out = [];
         wslots.forEach((s, i) => {
-          if (!s || !s.verified || s.closed || s.offered !== match) return;
+          if (!s || !s.verified || s.closed || s.offered !== match || s.out === match) return;
           s.reg = match; s.q.length = 0;
           wReg[i] = s; wRegList.push({ slot: i, s, goneSent: false });
           out.push(i);
@@ -1750,6 +1765,10 @@
   // ---- watcher side ----
   const wq = [], wg = [];
   let wpc = null, wctl = null, wgdc = null, wClosed = false, wWs = null, wSeen = false;
+  // The match a Turns select offered (0: none). Its ends are turns, each a
+  // GGPO session of the same match, and the page cannot tell the last one
+  // from the others, so each says "Turn over".
+  let wTurnsMatch = 0;
   function watchStatus(msg) { setStatus(msg); netLog('watch: ' + msg); }
   function installWatcherBridge() {
     wq.length = 0; wg.length = 0; wClosed = false;
@@ -1764,7 +1783,7 @@
       log(msg) { netLog('watch: ' + msg); },
       leave() { leaveWatch('You left.'); },
     };
-    if (trailOn) globalThis.ikemenWatch.trail = (f, crc) => { trailMap().set(f, crc >>> 0); };
+    if (trailOn) globalThis.ikemenWatch.trail = (f, crc) => { trailSet(f, crc); };
   }
   function dropWatchConn() {
     try { if (wWs) { wWs.__done = true; wWs.close(); } } catch { /* gone */ }
@@ -1798,10 +1817,13 @@
   }
   // What the host's engine said about a match, on the panel.
   function watchNote(mm) {
-    if (mm.t === 'select') { watchStatus('A match is starting - watching.'); setTimeout(() => { if (!wClosed) hidePanel(); }, 2500); }
-    else if (mm.t === 'nowatch') { watchStatus('This match cannot be watched: ' + (mm.why || '') + '. Waiting for the next match.'); showWatchPanelAgain(); }
+    if (mm.t === 'select') {
+      wTurnsMatch = Array.isArray(mm.teamMode) && mm.teamMode.includes(2) ? mm.match : 0; // 2: TM_Turns
+      watchStatus('A match is starting - watching.');
+      setTimeout(() => { if (!wClosed) hidePanel(); }, 2500);
+    } else if (mm.t === 'nowatch') { watchStatus('This match cannot be watched: ' + (mm.why || '') + '. Waiting for the next match.'); showWatchPanelAgain(); }
     else if (mm.t === 'drop') { watchStatus('Dropped from this match: ' + (mm.why || 'no reason given') + '. Waiting for the next match.'); showWatchPanelAgain(); }
-    else if (mm.t === 'end') { watchStatus('Match over. Waiting for the next match.'); }
+    else if (mm.t === 'end') { watchStatus(wTurnsMatch && mm.match === wTurnsMatch ? 'Turn over.' : 'Match over. Waiting for the next match.'); }
   }
   function showWatchPanelAgain() { if (!panel && !wClosed && !(lobby && lobby.watch)) watchPanel(true); }
   function startWatch(code, pass) {
@@ -1870,6 +1892,14 @@
           let mm; try { mm = JSON.parse(x.data); } catch { return; }
           if (!mm || !CTL_FROM_HOST.includes(mm.t)) return;
           if (mm.t === 'verified') { watchStatus('Waiting for the next match.'); return; }
+          if (mm.t === 'late') {
+            if (lobby && lobby.watch && mm.match === lobby.watch.match && !lobby.watch.started) {
+              lobby.watch.late = true;
+              netLog('watch: this match started before you joined. You are in line for the next one.');
+              lobbyRender();
+            }
+            return;
+          }
           if (mm.t === 'refused') {
             const why = mm.why === 'off' ? 'The host turned watching off.' : friendlyWatchDeny(mm.why === 'build' ? 'build' : 'netcode');
             globalThis.ikemenWatchRefused = why;
@@ -1929,7 +1959,7 @@
   //   {t:'watcher', id}       (match host) a member to carry: P1's wAdd.
   // The engine runs the lobby loop (main.lua main.f_lobby) and asks through
   // ikemenNet.lobby(cmd, arg): 'avail', 'open', 'next', 'text', 'stale',
-  // 'result', 'leave', 'rounds'. An assignment reaches the engine only when it
+  // 'result', 'leave', 'rounds', 'mode'. An assignment reaches the engine only when it
   // is free (between matches), so the page never swaps a bridge under a match
   // that is still running; a watch that has not started is let go when a newer
   // assignment comes (the engine goes back to the lobby screen and takes it).
@@ -1952,6 +1982,12 @@
   const LOBBY_CONNECT_MS = 90 * 1000; // a lobby match's players must connect within this
   let lobby = null;
   const lobbyTrails = new Map(); // lobby match -> (frame -> checksum), dev switch
+  // A Turns match is one lobby match but a new GGPO session every turn, whose
+  // frames start again at 0: a lobby match's trail is cut into one segment per
+  // session, keyed k, then k/1, k/2... A frame of 30 or less after the segment
+  // held one of 120 or more starts the next (frames only move forward inside a
+  // session: a player's newest sent frame, a watcher's simulated one).
+  const trailSegs = new Map(); // lobby match -> { n, key, max }
   function lobbyOn() { return !!(lobby && lobby.code && lobby.ws && lobby.ws.readyState === 1); }
   function lobbyTrailKey() {
     if (!lobby) return 0;
@@ -1959,15 +1995,44 @@
     if (lobby.watch) return lobby.watch.match;
     return 0;
   }
-  function trailMap() {
+  function trailSet(f, crc) {
     const k = lobbyTrailKey();
-    if (!k) return crcTrail;
-    if (!lobbyTrails.has(k)) lobbyTrails.set(k, new Map());
-    return lobbyTrails.get(k);
+    if (!k) { crcTrail.set(f, crc >>> 0); return; }
+    let seg = trailSegs.get(k);
+    if (!seg) { seg = { n: 0, key: k, max: -1 }; trailSegs.set(k, seg); }
+    if (f <= 30 && seg.max >= 120) { seg.n++; seg.key = k + '/' + seg.n; seg.max = -1; }
+    if (!lobbyTrails.has(seg.key)) lobbyTrails.set(seg.key, new Map());
+    lobbyTrails.get(seg.key).set(f, crc >>> 0);
+    if (f > seg.max) seg.max = f;
   }
   function lobbyRaw(obj) {
     try { if (lobby && lobby.ws && lobby.ws.readyState === 1) lobby.ws.send(JSON.stringify(obj)); } catch { /* gone */ }
   }
+  // THE MATCH MODE (the lobby server's LOBBY CORE has the rules). A lobby
+  // plays one mode, set once by its creator on the Create form: 'single'
+  // (1 vs 1) or a team mode at a team size: 'simul2'..'simul4', 'tag2'..,
+  // 'turns2'... The form starts on the build's Match mode (the Studio's
+  // Online tab; the Website export writes it as IKEMEN_BRAND.matchMode). This
+  // page says it plays modes (&modes=1) on every lobby socket and list read,
+  // and the server sends each lobby's mode in {t:'state'} and in the list.
+  // Before each lobby match the engine asks for it (netLobby 'mode', the
+  // online mod's main.f_lobbyPlay), so both players set the same mode at the
+  // same size: the one the SERVER reports, never this page's own default. A
+  //
+  // sends none: its lobbies are 1 vs 1 for everyone in them, and a creator who
+  // picked a team mode is told so.
+  const LOBBY_MODE_KINDS = ['single', 'simul', 'tag', 'turns'];
+  const LOBBY_MODE_NAMES = { single: '1v1', simul: 'Simul', tag: 'Tag', turns: 'Turns' };
+  function lobbyModeOk(v) { return v === 'single' || (typeof v === 'string' && /^(simul|tag|turns)[234]$/.test(v)); }
+  function lobbyModeOf(v) { return lobbyModeOk(v) ? v : 'single'; }
+  // '1v1', 'Simul 3', 'Tag 2', 'Turns 4'
+  function lobbyModeLabel(v) {
+    const m = lobbyModeOf(v);
+    return m === 'single' ? LOBBY_MODE_NAMES.single : LOBBY_MODE_NAMES[m.slice(0, -1)] + ' ' + m.slice(-1);
+  }
+  function lobbyModeDefault() { const b = globalThis.IKEMEN_BRAND; return lobbyModeOf(b && b.matchMode); }
+  // What this page's lobby plays: the server's word, or 1 vs 1 when it has none.
+  function lobbyModeNow() { const v = lobby && lobby.view; return v && lobbyModeOk(v.mode) ? v.mode : 'single'; }
   function lobbyName(id) {
     const v = lobby && lobby.view;
     const m = v && v.members.find((x) => x.id === id);
@@ -2099,6 +2164,10 @@
     '#lobbybar .lb-tabs { display: flex; margin-bottom: 4px; }',
     '#lobbybar .lb-tabs button { flex: 1; }',
     '#lobbybar .lb-tabs button[aria-selected="true"] { background: var(--lob-accent); color: var(--lob-accent-text); }',
+    '#lobbybar .lb-mm { display: flex; }',
+    '#lobbybar .lb-mm button { flex: 1; padding: 4px 2px; }',
+    '#lobbybar .lb-mm button + button { border-left-width: 0; }',
+    '#lobbybar .lb-mm button[aria-pressed="true"] { background: var(--lob-accent); color: var(--lob-accent-text); }',
     '#lobbybar .lb-msg { color: var(--lob-warn); margin-top: 6px; white-space: pre-line; min-height: 14px; }',
     '#lobbybar .lb-chat { flex: none; display: flex; flex-direction: column; height: 38%; min-height: 150px; border-top: 2px solid var(--lob-border); }',
     '#lobbybar .lb-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 10px; background: var(--lob-chat-bg); line-height: 15px; }',
@@ -2366,6 +2435,7 @@
     if (mode === 'create') { titleInp = field('Lobby title (optional)', 'lbtitle', lobby.form.title || '', 'e.g. Friday Night CvS'); titleInp.maxLength = 32; }
     const passInp = field(mode === 'create' ? 'Password (optional)' : 'Password (if it has one)', 'lbpass', '', mode === 'create' ? 'leave blank for none' : '');
     passInp.maxLength = 64;
+    if (mode === 'create') lobbyModeForm(b);
     if (mode === 'create') {
       b.appendChild(lbEl('div', 'lb-sec', 'Winner leaves after'));
       const row = lbEl('div', 'lb-row lb-step');
@@ -2401,6 +2471,47 @@
     if (globalThis.ikemenNetcode !== 'rollback') msgEl.textContent = lobbyReason('netcode');
   }
 
+  // THE MATCH MODE on the Create form: 1v1 / Simul / Tag / Turns and, for a
+  // team mode, the team size (2-4), starting on the build's Match mode. Kept
+  // in lobby.form.mm ('single', 'simul3'...) while the form is redrawn (the
+  // tabs), and the team size a team mode last had in lobby.form.mmSize.
+  function lobbyModeForm(b) {
+    const f = lobby.form;
+    if (!lobbyModeOk(f.mm)) f.mm = lobbyModeDefault();
+    if (![2, 3, 4].includes(f.mmSize)) f.mmSize = f.mm === 'single' ? 2 : Number(f.mm.slice(-1));
+    b.appendChild(lbEl('div', 'lb-sec', 'Match mode'));
+    const row = lbEl('div', 'lb-mm');
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Match mode');
+    const size = lbEl('div', 'lb-row lb-step lb-mmsize');
+    const val = lbEl('b', '', '');
+    const kinds = {};
+    const draw = () => {
+      const k = f.mm === 'single' ? 'single' : f.mm.slice(0, -1);
+      for (const x of LOBBY_MODE_KINDS) kinds[x].setAttribute('aria-pressed', String(x === k));
+      size.hidden = k === 'single';
+      val.textContent = String(f.mmSize);
+    };
+    const pick = (k) => { f.mm = k === 'single' ? 'single' : k + f.mmSize; draw(); };
+    for (const k of LOBBY_MODE_KINDS) {
+      kinds[k] = lbButton(LOBBY_MODE_NAMES[k], () => pick(k), 'lb-mm-' + k);
+      kinds[k].title = k === 'single' ? 'One fighter each' : LOBBY_MODE_NAMES[k] + ': both players get a team of the size below';
+      row.appendChild(kinds[k]);
+    }
+    const step = (d) => {
+      f.mmSize = Math.max(2, Math.min(4, f.mmSize + d));
+      if (f.mm !== 'single') f.mm = f.mm.slice(0, -1) + f.mmSize;
+      draw();
+    };
+    size.appendChild(lbButton('-', () => step(-1), 'lb-minus'));
+    size.appendChild(val);
+    size.appendChild(lbButton('+', () => step(1), 'lb-plus'));
+    size.appendChild(lbEl('span', 'lb-line', 'a side'));
+    b.appendChild(row);
+    b.appendChild(size);
+    draw();
+  }
+
   //
   function lobbyRender() {
     if (!lobby || !lobby.ui || !lobby.view) return;
@@ -2419,6 +2530,7 @@
     code.appendChild(copy);
     b.appendChild(code);
     if (v.pass) b.appendChild(lbEl('div', 'lb-line lb-pass', 'Password set: tell your friends the password too.'));
+    b.appendChild(lbEl('div', 'lb-line lb-mode', 'MODE: ' + lobbyModeLabel(lobbyModeNow())));
     // lb-now / lb-next / lb-streak and each member's data-st (play, line,
     // spec, watch) and data-p are hooks for the look's panel themes
     // (lobby-look.js); the text is the same in every theme.
@@ -2543,6 +2655,7 @@
     '#lobbybar .lb-br-host { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;',
     '  font: bold 13px var(--lob-head-font, monospace); color: var(--lob-text, #d6e6ff); }',
     '#lobbybar .lb-br-n { font: bold 12px var(--lob-font, monospace); color: var(--lob-accent, #6af); }',
+    '#lobbybar .lb-br-mode { flex: none; font: bold 11px var(--lob-font, monospace); color: var(--lob-text, #d6e6ff); white-space: nowrap; }',
     '#lobbybar .lb-br-now, #lobbybar .lb-br-streak { color: var(--lob-dim, #9fb3cc); overflow-wrap: anywhere; }',
     '#lobbybar .lb-br-row button { margin-top: 5px; }',
     '#lobbybar .lb-br-empty { margin-top: 6px; padding: 8px; border: 2px solid var(--lob-dim, #9fb3cc); border-radius: 0;',
@@ -2629,7 +2742,12 @@
     const all = br.all;
     br.busy = true;
     try {
-      const r = await fetch(url + (mine && !all ? '?build=' + mine : ''), { cache: 'no-store' });
+      // modes=1: this page plays a lobby's match mode, so the server lists
+      // team-mode lobbies too (an older page is never shown one)
+      const lq = new URLSearchParams();
+      if (mine && !all) lq.set('build', mine);
+      lq.set('modes', '1');
+      const r = await fetch(url + '?' + lq.toString(), { cache: 'no-store' });
       if (r.status === 429) br.err = 'The lobby server asked to slow down; the list refreshes shortly.';
       else if (!r.ok) br.err = 'The list could not be loaded.';
       else {
@@ -2710,6 +2828,8 @@
       const top = lbEl('div', 'lb-br-top');
       top.appendChild(lbEl('span', 'lb-br-host', String(e.host || '?')));
       if (off) top.appendChild(lbEl('span', 'lb-br-diff', 'Different build'));
+      // the lobby's match mode (a server before modes lists none: 1v1)
+      top.appendChild(lbEl('span', 'lb-br-mode', lobbyModeLabel(e.mode)));
       top.appendChild(lbEl('span', 'lb-br-n', (e.n | 0) + '/' + (e.max | 0)));
       row.appendChild(top);
       row.appendChild(lbEl('div', 'lb-br-now', e.a && e.b ? 'Now: ' + e.a + ' vs ' + e.b : 'Waiting for players'));
@@ -2799,6 +2919,34 @@
     if (document.visibilityState === 'visible') lobbyAlertStop();
     else if (lobby && !lobby.closed) lobbyAwayCheck();
   });
+  //
+  // instead of trusting the browser to send one (field report 2026-11-24: a
+  // lobby whose page was gone stayed listed).
+  addEventListener('pagehide', () => {
+    if (lobby && !lobby.closed && lobby.ws) lobbyGone('The page was closed.');
+  });
+
+  // ---- the lobby heartbeat (LIVENESS in the lobby server's LOBBY CORE) ----
+  // The page opens with &hb=1; a server that keeps lobbies alive this way
+  // answers {t:'lobby'} with hb (its cadence in ms), and only then does the
+  // page send LOBBY_HB that often, so an older server (2.5.1's lobby, a host
+  // kit before 1.2.2) never gets a message it would count as junk. The
+  // heartbeat keeps the socket from sitting silent while a host waits alone
+  // (proxies close a silent WebSocket), and lets the server end a lobby whose
+  // pages are all gone behind sockets that still look open (a silent page
+  // beside someone the server hears stays: it may be a frozen background
+  // tab). The server's answer and its sweep's {t:'hb'} need nothing from the
+  // page.
+  const LOBBY_HB = '{"t":"hb"}';
+  function lobbyBeat(hb) {
+    clearInterval(lobby.beat);
+    lobby.beat = 0;
+    if (!Number.isInteger(hb) || hb < 5000) return;
+    const ws = lobby.ws;
+    lobby.beat = setInterval(() => {
+      try { if (ws && ws.readyState === 1) ws.send(LOBBY_HB); } catch (e) { /* closing */ }
+    }, Math.min(hb, 60000));
+  }
 
   // ---- the lobby socket ----
   function lobbyConnect(mode, code, pass, name, streak, fail) {
@@ -2815,7 +2963,12 @@
       if (pass) q.set('pass', pass);
       if (mode === 'create' && streak) q.set('streak', String(streak));
       if (mode === 'create' && lobby.form && lobby.form.title) q.set('title', lobby.form.title.slice(0, 32));
+      // THE MATCH MODE: the one a create asks for (none = 1 vs 1)
+      lobby.asked = mode === 'create' ? lobbyModeOf(lobby.form && lobby.form.mm) : '';
+      if (lobby.asked && lobby.asked !== 'single') q.set('mode', lobby.asked);
       q.set('bid', lobbyBid());
+      q.set('hb', '1');
+      q.set('modes', '1');
       const ws = new WebSocket(url + (url.includes('?') ? '&' : '?') + q.toString());
       lobby.ws = ws;
       let inside = false;
@@ -2838,6 +2991,7 @@
     }
     if (m.t === 'lobby') {
       lobby.code = m.code; lobby.you = m.you;
+      lobbyBeat(m.hb);
       netLog('lobby: in ' + m.code + ' as member ' + m.you);
       lobbyUiMake();
       lobbyLog('You are in lobby ' + m.code + '.', 'lb-sys');
@@ -2848,6 +3002,12 @@
       lobby.view = m;
       for (const x of m.members) lobby.names[x.id] = x.name;
       if (first) lobbyUiMake();
+      // a server before modes ignored the team mode its creator picked
+      if (first && lobby.asked && lobby.asked !== 'single' && !lobbyModeOk(m.mode)) {
+        lobby.note = 'This lobby server does not have match modes yet, so this lobby plays 1v1, not ' + lobbyModeLabel(lobby.asked) + '.';
+        lobbyLog(lobby.note, 'lb-sys');
+        netLog('lobby: the server sent no mode; ' + lobbyModeLabel(lobby.asked) + ' was asked, this lobby plays 1v1');
+      }
       lobbyRender();
       lobbyOppCheck();
       return;
@@ -2924,6 +3084,8 @@
     if (!lobby) return;
     const l = lobby;
     l.closed = true;
+    clearInterval(l.beat);
+    l.beat = 0;
     lobbyBrowseStop();
     lobbyAlertStop();
     if (l.watch) lobbyEndWatch('left the lobby');
@@ -3141,7 +3303,7 @@
       const a = lobby.assign, v = lobby.view;
       if (!a || a.match === lobby.taken || !v || !v.match || v.match.id !== a.match) return '';
       lobby.taken = a.match;
-      lobby.cur = Object.assign({ a: v.match.a, b: v.match.b }, a);
+      lobby.cur = Object.assign({ a: v.match.a, b: v.match.b, mode: lobbyModeNow() }, a);
       if (a.kind === 'watch') lobbyWatchBegin(a);
       // A player tells the lobby its engine took the match: one that never
       // does within a minute (its game is not in the lobby loop, or gone) is
@@ -3202,14 +3364,29 @@
     }
     if (cmd === 'leave') { lobbyLeave('You left the lobby.'); return ''; }
     if (cmd === 'rounds') return devnet && /^[1-9]$/.test(qp.get('lobbyrounds') || '') ? qp.get('lobbyrounds') : '';
+    // the match mode the engine sets for a lobby match (THE MATCH MODE): the
+    // lobby's, as the server reports it, taken when the engine took the match
+    if (cmd === 'mode') {
+      const m = lobby.cur ? lobby.cur.mode : lobbyModeNow();
+      netLog('lobby: the engine asks the match mode: ' + lobbyModeLabel(m));
+      return m;
+    }
     if (cmd === 'text') {
       if (!lobby.code) return 'LOBBY\n\nCreate, join or browse lobbies in the panel on the right.\n\nEsc: back';
       const v = lobby.view;
       if (!v) return 'LOBBY ' + lobby.code;
-      const L = ['LOBBY ' + v.code + '   ' + v.members.length + '/' + v.max];
+      const mm = lobbyModeNow();
+      const L = ['LOBBY ' + v.code + '   ' + v.members.length + '/' + v.max + (mm !== 'single' ? '   ' + lobbyModeLabel(mm).toUpperCase() : '')];
       L.push(...lobbyNowNext(true));
       const c = lobby.cur;
-      if (c && c.kind === 'watch') L.push('YOU: watching' + (lobby.watch && lobby.watch.started ? '' : ' (waiting for it to start)'));
+      if (c && c.kind === 'watch') {
+        // "in line" only once the match's host said it had started before
+        // this page was verified ({t:'late'}): a member who joined at the
+        // select still watches it from its start.
+        const w = lobby.watch;
+        L.push(w && w.started ? 'YOU: watching'
+          : w && w.late && w.match === c.match ? 'YOU: in line (this match started before you joined)' : 'YOU: watching (waiting for it to start)');
+      }
       else if (c && c.kind === 'play') L.push('YOU: connecting to ' + asciiName(lobbyName(c.opp)) + '...');
       else L.push('YOU: ' + lobbyStatusOf(lobby.you).toLowerCase());
       L.push('', 'Esc: leave the lobby');
@@ -3222,7 +3399,8 @@
   if (devnet) {
     globalThis.ikemenTest = {
       room: '',
-      // trail(): the checksum trail; trail(N): lobby match N's
+      // trail(): the checksum trail; trail(N): lobby match N's (its first
+      // GGPO session; a Turns match's later turns are 'N/1', 'N/2'...)
       trail(k) { return Array.from((k ? lobbyTrails.get(k) || new Map() : crcTrail).entries()).sort((a, b) => a[0] - b[0]); },
       trails() { return Array.from(lobbyTrails.keys()); },
       lobby() {

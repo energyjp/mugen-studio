@@ -71,6 +71,7 @@ const VPATHS = Object.freeze({
   trainingZss: 'data/sceneviewer.zss',
   galleryLua: STUDIO_MODS_DIR + '/hgallery.lua',
   galleryZss: 'data/hgallery.zss',
+  galleryFont: 'font/hgallery-6x9.def',
   webflags: STUDIO_MODS_DIR + '/webflags.lua',
   onlineName: STUDIO_MODS_DIR + '/onlinename.lua',
   framebar: STUDIO_MODS_DIR + '/framebar.lua',
@@ -108,8 +109,8 @@ const BUILTINS = Object.freeze([
   {
     id: 'net-menu',
     label: 'Online menu (PRESS N)',
-    about: 'Puts PRESS N FOR ONLINE on the title screen of every screenpack. N opens a NETWORK box for hosting, joining'
-      + ' or queuing for a match, drawn the same way whatever the screenpack looks like.',
+    about: 'Puts PRESS N FOR ONLINE on the title screen of every screenpack. N, a gamepad\'s LB or a click or tap on the hint'
+      + ' opens a NETWORK box for hosting, joining or queuing for a match, drawn the same way whatever the screenpack looks like.',
     offLoses: 'No PRESS N hint and no NETWORK box on any title screen. A screenpack without its own NETWORK menu then'
       + ' has no way to host, join or queue, and friend lobbies are drawn in the screenpack\'s own menu style again.',
     files: [VPATHS.netMenu, VPATHS.netMenuFont],
@@ -169,7 +170,7 @@ const BUILTINS = Object.freeze([
     about: 'A gallery mode on the title menu: it loads each pair in the roster and plays its scenes, stepped by hand.',
     offLoses: 'The gallery mode is gone from the title menu.',
     absentWhy: 'Only a build with a pair scene to show has the gallery.',
-    files: [VPATHS.galleryLua, VPATHS.galleryZss],
+    files: [VPATHS.galleryLua, VPATHS.galleryZss, VPATHS.galleryFont],
     hOnly: true,
   },
   ...galleryModeRows(),

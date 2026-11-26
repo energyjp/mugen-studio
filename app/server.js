@@ -36,6 +36,9 @@ const stagethumb = require('./stagethumb');
 const vfslib = require('./vfslib');
 const modlib = require('./modlib');
 const { exportSite, makeBoardArt } = require('./export');
+// The version (studio-version.json) and the updater (About > Check for
+// updates): /api/update below, and `version` on /api/studio.
+const updater = require('./updater.js');
 
 // The VFS index is rebuilt lazily whenever Studio edits invalidate it.
 let vfs = null;
@@ -319,6 +322,9 @@ const READ_ONLY_ALLOWED = new Set([
   '/api/download-folder', '/api/local-config/test', '/api/players',
   // where ffmpeg is, for a lite Website export: the Studio's own setting
   '/api/ffmpeg',
+  // the updater: the check, its setting, the download into the copy's own
+  // .update folder - the program, never the bundle
+  '/api/update/check', '/api/update/setting', '/api/update/download', '/api/update/cancel', '/api/update/dismiss',
   '/api/open-path', '/api/open-folder', '/api/launch-build', '/api/pick-file',
   '/api/export-open', '/api/export-play', '/api/mods/open',
   // the match view: which two characters and stage the web game loads - held
@@ -788,9 +794,9 @@ async function handleApi(req, res, pathname) {
             hModule: { state: H.moduleState(disk), seen: Array.isArray(disk.hModuleSeen) ? disk.hModuleSeen : [] } });
         };
         const j = require('./readonlyscan.js').ask('studio', { fn: 'studio' });
-        if (j.state === 'done') return json(res, 200, Object.assign(withH(j.value), { downloadFolder: layout.DOWNLOAD_FOLDER }));
+        if (j.state === 'done') return json(res, 200, Object.assign(withH(j.value), { downloadFolder: layout.DOWNLOAD_FOLDER, version: updater.VERSION }));
         if (!readOnlyLight) readOnlyLight = modlib.studioInfoLight();
-        return json(res, 200, Object.assign(withH(readOnlyLight), { downloadFolder: layout.DOWNLOAD_FOLDER },
+        return json(res, 200, Object.assign(withH(readOnlyLight), { downloadFolder: layout.DOWNLOAD_FOLDER, version: updater.VERSION },
           j.state === 'failed' ? { pending: false, scanError: j.error } : {}));
       }
       // A FIRST START IN A FOLDER THE PROGRAM CANNOT WRITE (extracted into
@@ -798,7 +804,7 @@ async function handleApi(req, res, pathname) {
       // and noted why, and the roster is then simply not there. The Node
       // message named a path, not the cure; this names the folder and the cure.
       // Both conditions, or the error goes out as it always has.
-      try { return json(res, 200, modlib.studioInfo()); } catch (e) {
+      try { return json(res, 200, Object.assign({}, modlib.studioInfo(), { version: updater.VERSION })); } catch (e) {
         const missingRoster = e && e.code === 'ENOENT' && /roster\.json'?$/i.test(String(e.path || e.message || ''));
         const why = layout.SETTINGS_DIR && (layout.STARTUP_NOTES || []).find((n) => n.kind === 'error' && /^could not make /.test(n.text));
         if (!missingRoster || !why) throw e;
@@ -812,6 +818,48 @@ async function handleApi(req, res, pathname) {
           settingsNotes: layout.STARTUP_NOTES,
         });
       }
+    }
+
+    // THE UPDATER (updater.js): what it knows, a check (auto: the daily one
+    // on start, which asks GitHub at most once in 20 hours and only while
+    // the setting is on), the setting, the download on the person's click
+    // (one JSON line per progress step, then the result), cancel, and OK on
+    // the launcher's last word. MugenStudio.exe does the swap.
+    if (pathname === '/api/update' && req.method === 'GET') return json(res, 200, updater.state());
+    if (pathname === '/api/update/check' && req.method === 'POST') {
+      let body = {};
+      try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}') || {}; } catch (e) { return json(res, 400, { error: 'bad JSON' }); }
+      const r = await updater.check({ auto: body.auto === true });
+      return json(res, 200, Object.assign(updater.state(), { asked: r.asked }));
+    }
+    if (pathname === '/api/update/setting' && req.method === 'POST') {
+      let body = {};
+      try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}') || {}; } catch (e) { return json(res, 400, { error: 'bad JSON' }); }
+      updater.setAuto(body.autoCheck !== false);
+      return json(res, 200, updater.state());
+    }
+    if (pathname === '/api/update/download' && req.method === 'POST') {
+      await readBody(req);
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+      const line = (o) => { try { res.write(JSON.stringify(o) + '\n'); } catch (e) { /* the page went away; the download goes on */ } };
+      try {
+        const staged = await updater.download((p) => line(Object.assign({ type: 'progress' }, p)));
+        line({ type: 'done', staged, state: updater.state() });
+      } catch (e) {
+        line({ type: 'error', error: e.message, state: updater.state() });
+      }
+      try { res.end(); } catch (e) { /* gone */ }
+      return;
+    }
+    if (pathname === '/api/update/cancel' && req.method === 'POST') {
+      await readBody(req);
+      updater.cancel();
+      return json(res, 200, updater.state());
+    }
+    if (pathname === '/api/update/dismiss' && req.method === 'POST') {
+      await readBody(req);
+      updater.dismiss();
+      return json(res, 200, updater.state());
     }
 
     // Every character on disk, flagged with whether it is in the build. The
@@ -4436,14 +4484,20 @@ function routeRequest(req, res) {
     // (only the Website export brands it), so Test in Browser would show the
     // sidebar in its default look. A bundle with a lobby look gets it added
     // after the page's brand block; one without gets the page's own bytes.
+    // The lobby form's Match mode (queuemode.js lobbyMode, as the export
+    // writes it) is added the same way, only for a team mode.
     if (/[/\\]ikemen[/\\]index\.html$/i.test(staticPath) && req.method === 'GET') {
-      const look = require('./lobbylook').forStudio(vfslib.readRoster().lobbyLook);
+      const roster = vfslib.readRoster();
+      const look = require('./lobbylook').forStudio(roster.lobbyLook);
+      const matchMode = require('./queuemode').lobbyMode(roster.queueMode);
+      const extra = (look ? '\nwindow.IKEMEN_BRAND.lobbyLook = ' + JSON.stringify(look).replace(/</g, '\\u003c') + ';' : '')
+        + (matchMode !== 'single' ? '\nwindow.IKEMEN_BRAND.matchMode = ' + JSON.stringify(matchMode) + ';' : '');
       let body = null;
-      if (look) { try { body = fs.readFileSync(staticPath, 'utf8'); } catch (e) { body = null; } }
+      if (extra) { try { body = fs.readFileSync(staticPath, 'utf8'); } catch (e) { body = null; } }
       const BLOCK = /window\.IKEMEN_BRAND\s*=\s*\{[\s\S]*?\};/;
-      if (look && body !== null && BLOCK.test(body)) {
+      if (extra && body !== null && BLOCK.test(body)) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.end(body.replace(BLOCK, (m) => m + '\nwindow.IKEMEN_BRAND.lobbyLook = ' + JSON.stringify(look).replace(/</g, '\\u003c') + ';'));
+        res.end(body.replace(BLOCK, (m) => m + extra));
         return;
       }
     }

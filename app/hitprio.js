@@ -119,12 +119,13 @@ function remember(key, stamp, out) {
   }
 }
 // A copy per caller: the entries are handed out again on the next call.
-const copyOut = (out) => out.map((h) => ({ abs: h.abs, rel: h.rel, text: h.text, count: h.count, latches: h.latches }));
+const copyOut = (out) => out.map((h) => ({ abs: h.abs, rel: h.rel, text: h.text, count: h.count, latches: h.latches, commas: h.commas }));
 
-// What a character's shipped copy needs: [{ abs, rel, text, count, latches }]
-// for each state file with a HitDef to fill in (count, MUGEN-authored
-// characters only) or an AI switch to release (latches, ailatch.js), or [] when
-// there is neither. `rel` is relative to charDir.
+// What a character's shipped copy needs: [{ abs, rel, text, count, latches,
+// commas }] for each state file with a HitDef to fill in (count, MUGEN-authored
+// characters only), an AI switch to release (latches, ailatch.js) or a stray
+// comma before a flag trigger's `=` to drop (commas, straycomma.js; any
+// character), or [] when there is none. `rel` is relative to charDir.
 function repairFor(charDir, defName, opts) {
   const defPath = path.join(charDir, defName);
   let defText, defSt;
@@ -150,6 +151,7 @@ function repairFor(charDir, defName, opts) {
   // Read once; the impossible commands any of them define (a .cmd's
   // [Command] blocks) decide what ailatch looks for.
   const ailatch = require('./ailatch.js');
+  const straycomma = require('./straycomma.js');
   const own = [];
   let complete = true;
   for (const f of files) {
@@ -163,7 +165,8 @@ function repairFor(charDir, defName, opts) {
   for (const o of own) {
     const h = mugen ? patchText(o.text) : { text: o.text, count: 0 };
     const a = ailatch.patchText(h.text, impossible, own.filter((x) => x !== o).map((x) => x.text));
-    if (h.count || a.count) out.push({ abs: o.abs, rel: o.rel.split(path.sep).join('/'), text: a.text, count: h.count, latches: a.count });
+    const k = straycomma.patchText(a.text);
+    if (h.count || a.count || k.count) out.push({ abs: o.abs, rel: o.rel.split(path.sep).join('/'), text: k.text, count: h.count, latches: a.count, commas: k.count });
   }
   // a file that would not read is tried again next time, as before
   if (key && complete) remember(key, stamp, out);

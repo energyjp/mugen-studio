@@ -54,8 +54,11 @@ func claimInstance(name string) (handle uintptr, already bool, err error) {
 
 // alreadyOpen says so in a window (there is no console) and leaves. Not an
 // error: the Studio the person wanted is running.
-func alreadyOpen() {
-	msg, _ := syscall.UTF16PtrFromString("Mugen Studio is already open from this folder.")
+func alreadyOpen() { infoBox("Mugen Studio is already open from this folder.") }
+
+// infoBox is a plain information box (no console to write to).
+func infoBox(text string) {
+	msg, _ := syscall.UTF16PtrFromString(text)
 	title, _ := syscall.UTF16PtrFromString("Mugen Studio")
 	user32.NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(msg)), uintptr(unsafe.Pointer(title)), 0x40) // MB_ICONINFORMATION
 }

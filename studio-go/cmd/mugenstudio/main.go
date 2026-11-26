@@ -30,6 +30,8 @@ import (
 	"unsafe"
 
 	"github.com/jchv/go-webview2"
+
+	"mugenstudio/update"
 )
 
 const serverExe = "studio-server.exe"
@@ -106,11 +108,15 @@ func main() {
 	if err != nil {
 		fail("Cannot locate the program: %v", err)
 	}
+	// A portable copy finishes or applies an update first, before the
+	// program's folder is even looked at: in the middle of one, app/ can be
+	// the backup's (updating.go).
+	confirming := startupUpdate(exe)
 	app := appDir(exe)
 
 	server := filepath.Join(app, serverExe)
 	if _, err := os.Stat(server); err != nil {
-		fail("%s is missing.\n\nExpected it in:\n%s\n\n"+
+		failNew(confirming, "%s is missing.\n\nExpected it in:\n%s\n\n"+
 			"Put this program in the Studio folder, or put a studio.path file\n"+
 			"beside it containing that folder's path.", serverExe, app)
 	}
@@ -118,7 +124,10 @@ func main() {
 	// One window per app folder (instance.go): a second one would start a
 	// second server on the same bundle. A mutex that cannot be made at all
 	// does not stop the launch - that was the old behavior, not a new risk.
-	if h, already, err := claimInstance(instanceMutexName(app)); err == nil {
+	// A portable copy took it already, before Recover (claimEarly).
+	if instanceMutex != 0 {
+		// held
+	} else if h, already, err := claimInstance(instanceMutexName(app)); err == nil {
 		if already {
 			if flagValue("--selftest") != "" {
 				// No box for a script to wait on.
@@ -133,7 +142,7 @@ func main() {
 
 	port, err := choosePort()
 	if err != nil {
-		fail("Could not get a free port: %v", err)
+		failNew(confirming, "Could not get a free port: %v", err)
 	}
 
 	// The server, which this window can also restart (server.go). Its output
@@ -143,7 +152,7 @@ func main() {
 	logPath := serverLogPath(exe, app)
 	srv.logPath = logPath
 	if err := srv.start(); err != nil {
-		fail("Could not start %s:\n%v", serverExe, err)
+		failNew(confirming, "Could not start %s:\n%v", serverExe, err)
 	}
 	// Kill the server whichever way we leave - a normal close, a panic, or a
 	// failed startup. An orphaned server holding a port and a lock on the
@@ -158,11 +167,10 @@ func main() {
 	if !srv.ready(url, 25*time.Second) {
 		srv.kill()
 		if tail := serverLogTail(logPath, 8); tail != "" {
-			fail("The Studio did not start within 25 seconds.\n\nThe last thing it said:\n%s\n\nEverything it said is in:\n%s", tail, logPath)
+			failNew(confirming, "The Studio did not start within 25 seconds.\n\nThe last thing it said:\n%s\n\nEverything it said is in:\n%s", tail, logPath)
 		}
-		fail("The Studio did not start within 25 seconds.\n\nRun %s on its own to see what it says.", serverExe)
+		failNew(confirming, "The Studio did not start within 25 seconds.\n\nRun %s on its own to see what it says.", serverExe)
 	}
-
 	// KEEP THE BROWSER CACHE IN THE APP FOLDER.
 	//
 	// Left alone, go-webview2 puts it in %APPDATA%\MugenStudio.exe (pkg/edge/
@@ -181,9 +189,20 @@ func main() {
 		},
 	})
 	if w == nil {
-		fail("Could not create the window.\n\nWebView2 is missing - it ships with Windows 10 and 11,\nor install the Evergreen Runtime from Microsoft.")
+		srv.kill()
+		failNew(confirming, "Could not create the window.\n\nWebView2 is missing - it ships with Windows 10 and 11,\nor install the Evergreen Runtime from Microsoft.")
 	}
 	defer w.Destroy()
+
+	// The new version's first start: its server answered and its window
+	// exists, so the launcher that started it can let go, and the page
+	// (navigated below, after this) says "You're on" it.
+	if confirming {
+		exeDir := filepath.Dir(exe)
+		if err := confirmRetry(exeDir); err != nil {
+			updateOptions(exeDir).Log("confirm: %v", err)
+		}
+	}
 
 	// WHERE DOWNLOADS LAND - see download.go. READ ONLY for now: this getter is
 	// the probe that proves the vtable index before anything writes through it.
@@ -273,6 +292,25 @@ func main() {
 			})
 		}()
 		return float64(id)
+	})
+
+	// RESTART TO UPDATE: the Studio has a whole, checked staging in
+	// .update/staged and the page has made sure nothing open holds unsaved
+	// work. The tool windows close, the window closes, and after the server
+	// has stopped the swap runs (updating.go applyAfterClose). False when
+	// this is not a portable copy or there is nothing staged.
+	var wantUpdate int32
+	w.Bind("nativeRestartToUpdate", func() bool {
+		here := filepath.Dir(exe)
+		if !update.IsPortable(here) || update.Staged(here) == "" {
+			return false
+		}
+		if !atomic.CompareAndSwapInt32(&wantUpdate, 0, 1) {
+			return false
+		}
+		closeToolWindows()
+		w.Dispatch(func() { w.Terminate() })
+		return true
 	})
 
 	w.Bind("nativeProgress", func(state string, pct float64) bool {
@@ -434,6 +472,14 @@ func main() {
 
 	w.Navigate(url)
 	w.Run() // returns when the user closes the window
+	if atomic.LoadInt32(&wantUpdate) == 1 {
+		tb.set(hwnd, "done", 0)
+		w.Destroy()
+		// Asked to go, the way a restart asks: the API requests in flight
+		// finish first (server.go).
+		srv.stop(20 * time.Second)
+		applyAfterClose(filepath.Dir(exe))
+	}
 }
 
 // appDir is where the Studio's files live: normally beside this program, but

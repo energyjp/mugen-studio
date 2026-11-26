@@ -2331,6 +2331,38 @@ body.picking-char #charList .lrow.picked { border-left-color: var(--accent); }
 /* A refusal just shown: the label says it once more where the reason lives. */
 #roBanner.flash .rok { border-color: var(--warn); color: var(--warn); }
 #toast.ro { border-left-color: var(--line2); color: var(--ink); }
+/* ---- A NEW VERSION (updater.js): the read-only line's plate, square edges,
+   the spot ink on the one button that does something. ---------------------- */
+#updBanner { display: flex; align-items: center; gap: 10px; padding: 4px 20px; font-size: 12px; line-height: 1.45;
+  background: var(--plate); color: var(--ink); border-bottom: 2px solid var(--ink); }
+#updBanner[hidden], #updBanner [hidden], #updNotes[hidden] { display: none; }
+#updBanner .rok { flex: none; font: 800 10.5px/1.5 var(--fd); letter-spacing: .08em; text-transform: uppercase;
+  border: 2px solid var(--ink); border-radius: 0; padding: 0 6px; background: var(--spot); color: var(--onspot); }
+#updBanner.done .rok { background: var(--ink); color: var(--paper); }
+#updBanner.bad .rok { background: var(--warn); color: var(--onwarn); }
+#updBanner .rot { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a problem wraps: its last words say what to do (a long folder path came first) */
+#updBanner.bad .rot { white-space: normal; overflow: visible; overflow-wrap: anywhere; padding: 2px 0; }
+#updBanner .rot b { font-weight: 700; }
+#updBanner .rot .m { color: var(--ink2); }
+#updBanner button { flex: none; height: 24px; padding: 0 10px; border: 2px solid var(--ink); border-radius: 0;
+  background: var(--paper); color: var(--ink); font: 700 12px/1 var(--fd); cursor: pointer; box-shadow: none; }
+#updBanner button:hover { background: var(--ink); color: var(--paper); }
+#updBanner button.go { background: var(--ink); color: var(--paper); }
+#updBanner button.go:hover { background: var(--spot); color: var(--onspot); }
+#updBanner button.q { border-color: transparent; background: transparent; font-weight: 500; text-decoration: underline; padding: 0 4px; }
+#updBanner button.q:hover { color: var(--ink); text-decoration-thickness: 2px; }
+#updBanner button:disabled { opacity: .5; cursor: default; }
+#updBanner .updbar { flex: 0 1 220px; min-width: 80px; height: 12px; border: 2px solid var(--ink); background: var(--paper); position: relative; }
+#updBanner .updbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--ink); }
+#updNotes { padding: 10px 20px 12px 78px; background: var(--paper); color: var(--ink); border-bottom: 2px solid var(--ink);
+  font-size: 12.5px; line-height: 1.5; max-height: 190px; overflow: auto; }
+#updNotes p { margin: 0 0 7px; max-width: 760px; }
+#updNotes .src { color: var(--ink2); font-size: 11px; }
+#panel-about .aboutLinks .ab-updrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#panel-about .aboutLinks .ab-updver { font: 700 var(--t-13)/1.3 var(--f-data); }
+#panel-about .aboutLinks .ab-updauto { grid-column: 2; justify-self: start; font-size: var(--t-12); gap: 6px; }
+#panel-about .aboutLinks .ab-updauto > i { width: 14px; height: 14px; }
 .roval { color: var(--dim); font-size: 12px; margin-right: 8px; }
 body.readonly :is(#exportBtn, #exportWhere, header .kindsel, #owrapLbl, #selectScreenBtn,
   .pubchk:has(#publicChk), .pubchk:has(#liteChk), #ffmpegRow, #liteAutoRow, .tab[data-tab="mods"], #panel-mods,
@@ -2680,6 +2712,21 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
   <button class="tiny" id="roHModule" type="button" hidden title="This bundle's H-MUGEN module (role badges, the pair bench, the H gallery): click to turn it on or off.">H-MUGEN</button>
   <button class="tiny" id="roBundles" type="button" title="Content bundles: switch to another one, or open another build.">Bundles&hellip;</button>
 </div>
+<!-- A NEW VERSION (updater.js, /api/update): one line under the header,
+     one state at a time - out, downloading, ready to restart, and what the
+     last update did. Nothing downloads or changes without its button. -->
+<div id="updBanner" hidden role="status">
+  <span class="rok" id="updTag">New version</span>
+  <span class="rot" id="updText"></span>
+  <span class="updbar" id="updBar" hidden><i id="updBarFill"></i></span>
+  <button class="tiny q" id="updNotesBtn" type="button" aria-expanded="false" aria-controls="updNotes" hidden>What's new</button>
+  <button class="tiny go" id="updGo" type="button" hidden>Update</button>
+  <button class="tiny go" id="updRestart" type="button" hidden>Restart to update</button>
+  <button class="tiny" id="updCancel" type="button" hidden>Cancel</button>
+  <button class="tiny q" id="updLater" type="button" hidden>Later</button>
+  <button class="tiny" id="updOk" type="button" hidden>OK</button>
+</div>
+<div id="updNotes" hidden></div>
 </div>
 
 <main id="main">
@@ -2987,14 +3034,14 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
           <img class="body" alt="" draggable="false">
           <img class="shade" alt="" draggable="false">
         </div>
-        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3">Version 2.5.1</span></h2>
+        <h2 class="cv-title aboutTitle"><span class="w1" translate="no">Mugen</span><span class="w2" translate="no">Studio</span><span class="w3" id="aboutVer"></span></h2>
         <div class="cv-foot"><span class="with">with</span><span class="ab-chip wb" translate="no">WB</span><span class="ab-chip ar" translate="no">DJ AR</span><span class="ab-chip sz" translate="no">SHiZUKA</span><span class="cv-pub" translate="no">energy.jp</span></div>
       </div>
       <div class="bk-fold" aria-hidden="true"></div>
       <div class="ab-staff">
         <div class="bk-secband">
           <h2 class="bk-secband-t"><span class="t">Staff</span><span class="k" lang="ja">スタッフ</span></h2>
-          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> Version 2.5.1</span>
+          <div class="bk-secband-meta"><span><b translate="no">Mugen Studio</b> <span class="studioVerT"></span></span>
             <button class="bk-btn sm" id="aboutNotices" type="button" title="Everything the Studio ships from others, with their terms">Credits &amp; licenses&hellip;</button></div>
         </div>
         <div class="pbody bk-pg r">
@@ -3005,6 +3052,13 @@ body.readonly #charDetail .who b { cursor: default !important; pointer-events: n
                 <ul class="aboutLinks">
                   <li><span class="k">Site</span><a href="https://energyjp.com" target="_blank" rel="noopener" translate="no">energyjp.com</a><span class="d">the band's home</span></li>
                   <li><span class="k" translate="no">GitHub</span><a href="https://github.com/energyjp/ikemen-go-web" target="_blank" rel="noopener" translate="no">energyjp/ikemen-go-web</a><span class="d">the browser engine fork</span></li>
+                  <!-- THE UPDATER (updater.js): the version, Check for updates,
+                       what the last check found, and whether the Studio looks
+                       on its own when it starts (on unless turned off). -->
+                  <li class="ab-upd" id="abUpd"><span class="k">Version</span>
+                    <span class="ab-updrow"><b class="ab-updver" id="abUpdVer" translate="no"></b><button class="bk-btn sm" id="abUpdCheck" type="button" title="Ask GitHub for the newest Mugen Studio. Nothing downloads until you press Update.">Check for updates</button></span>
+                    <span class="d" id="abUpdSays" aria-live="polite"></span>
+                    <label class="bk-chk ab-updauto" title="Look for a new version once a day when the Studio starts."><input type="checkbox" id="abUpdAuto" checked><i></i>Check on start</label></li>
                 </ul>
               </div>
               <div class="ab-what">
@@ -11100,14 +11154,25 @@ function renderHostServers(host, H, ui) {
   // lobbies, so their players' game shows no LOBBY or WATCH A MATCH: a
   // warning. 1.2.0 has lobbies and watching; 1.2.1 adds only lobby titles and
   // the list by build, so for 1.2.0 the offer is a plain, optional hint.
+  // 1.2.2 adds the lobby liveness fix (a host who lost the connection left
+  // listed for up to an hour) and the lobby's match mode, so 1.2.1 gets its
+  // own plain hint. An older server ignores a lobby's mode and every lobby
+  // plays 1 vs 1 (the game page tells the creator, but not why), so when this
+  // bundle's Match mode is a team mode both 1.2.x hints say the update is
+  // what lobbies need to play it.
+  const kitModes = H.queueMode && H.queueMode.mode && H.queueMode.mode !== 'single'
+    ? ' ' + t('Lobbies need this update to play your team Match mode. Until then every lobby plays 1 vs 1.') : '';
   if (hostKitOlder(hs.kitVersion, '1.2.0')) {
     ui.hint(det, t('Your servers run version {old}; this Studio carries version {new}, which adds lobbies, watching matches and the list of open lobbies. Press <b>Update my servers</b> to get them: every name and rating is kept. Until then your players’ game does not show <b>LOBBY</b> or <b>WATCH A MATCH</b>.',
       { old: esc(hs.kitVersion), new: esc(H.hostKitVersion) }));
     const last = det.lastElementChild;
     if (last) last.classList.add('hostold');
-  } else if (hostKitOlder(hs.kitVersion, H.hostKitVersion)) {
+  } else if (hostKitOlder(hs.kitVersion, '1.2.1')) {
     ui.hint(det, t('Your servers run version {old}; this Studio carries version {new}, which adds lobby titles and a lobby list that shows each player only the lobbies on their own build. Lobbies, watching and the match queue already work on your version. Optional: press <b>Update my servers</b> to get them: every name and rating is kept.',
-      { old: esc(hs.kitVersion), new: esc(H.hostKitVersion) }));
+      { old: esc(hs.kitVersion), new: esc(H.hostKitVersion) }) + kitModes);
+  } else if (hostKitOlder(hs.kitVersion, H.hostKitVersion)) {
+    ui.hint(det, t('Your servers run version {old}; this Studio carries version {new}, which tidies the list of open lobbies: a host who hosts again is listed once, and in games exported with this Studio a lobby where everyone lost the connection leaves the list within minutes (until now it could stay listed for up to an hour). Optional: press <b>Update my servers</b> to get it: every name and rating is kept.',
+      { old: esc(hs.kitVersion), new: esc(H.hostKitVersion) }) + kitModes);
   }
   askPanel();
   logBox();
@@ -12585,7 +12650,12 @@ async function renderHosting(host) {
     box.className = 'lbprev lobbyprev';
     const bar = document.createElement('div'); bar.className = 'bar';
     const open = document.createElement('button'); open.type = 'button'; open.className = 'tiny'; open.textContent = 'Open in its own window';
-    const lobbyUrl = () => '/ikemen/lobby-preview.html?look=' + encodeURIComponent(JSON.stringify(H.lobbyLookStored || {}));
+    // ?mode=: the bundle's Match mode (Online > Match mode, H.queueMode) as a
+    // lobby carries it, the mode a new lobby starts on, so the panel's MODE
+    // line is this bundle's
+    const QM = H.queueMode || {};
+    const lobbyUrl = () => '/ikemen/lobby-preview.html?look=' + encodeURIComponent(JSON.stringify(H.lobbyLookStored || {}))
+      + '&mode=' + encodeURIComponent(/^(simul|tag|turns)$/.test(QM.mode) && /^[234]$/.test(String(QM.size)) ? QM.mode + QM.size : 'single');
     open.onclick = () => openToolWindow(lobbyUrl(), 'lobby-look', 'width=1100,height=640', 'The lobby preview window was blocked.');
     const reset = H.lobbyLookStored ? (() => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'tiny';
@@ -12699,7 +12769,9 @@ async function renderHosting(host) {
 
     // THE MATCH MODE OF CASUAL AND RANKED (queuemode.js). Online VERSUS is
     // 1 vs 1 unless this names a team mode; then both players get that mode
-    // at that size and the game skips the team menu.
+    // at that size and the game skips the team menu. It is also where the
+    // game page's lobby Create form starts (IKEMEN_BRAND.matchMode); the
+    // lobby's host can pick another mode there.
     const Q = H.queueMode || { mode: 'single', size: 1 };
     const QL = { single: t('1 vs 1 (Single)'), simul: t('Simul'), tag: t('Tag'), turns: t('Turns') };
     const qMode = document.createElement('select');
@@ -12720,12 +12792,12 @@ async function renderHosting(host) {
     qWrap.appendChild(qMode);
     qWrap.appendChild(document.createTextNode(' '));
     qWrap.appendChild(qSize);
-    row(det, 'Match mode', 'What CASUAL and RANKED matches play. Both players get the same mode and team size, and the team menu is skipped. '
+    row(det, 'Match mode', 'What CASUAL and RANKED matches play, and the mode a new LOBBY starts on (its host can pick another there). Both players get the same mode and team size, and the team menu is skipped. '
       + 'HOST GAME and JOIN GAME stay 1 vs 1. Needs the Online menu on; applied when a build is made.', qWrap);
     const add004Says = t('This bundle carries add004\u2019s tag system, which runs on <b>Simul</b> with teams of <b>3</b>.');
     hint(det, qMode.value === 'single'
       ? t('Each player picks one fighter, the online default.') + (H.add004Tag ? ' ' + add004Says : '')
-      : t('<b>{mode}, {n} a side</b> in every CASUAL and RANKED match. Team modes load more fighters, which on the website means more memory and more rollback work every frame; online VERSUS is 1 vs 1 because Simul is not stable over the web netcode yet. Play a few CASUAL matches with a friend before you rely on it (both of you queue at the same time; HOST and JOIN stay 1 vs 1).',
+      : t('<b>{mode}, {n} a side</b> in every CASUAL and RANKED match, and where a new LOBBY starts. Team modes load more fighters, which on the website means more memory and more rollback work every frame; online VERSUS is 1 vs 1 because Simul is not stable over the web netcode yet. Play a few matches with a friend before you rely on it (in a lobby, or both of you queue at the same time; HOST and JOIN stay 1 vs 1).',
         { mode: QL[qMode.value], n: qSize.value })
         + (H.add004Tag && qMode.value !== 'simul' ? ' ' + add004Says : ''));
     note(det, (H.servedPageHasIdentity ? '' : t('Test in browser runs without the leaderboard - it only reaches your Website export.') + ' ')
@@ -18049,7 +18121,7 @@ window.renderLifebar = async function renderLifebar(host) {
       <div class="xcolophon">
         <div class="xcolophon-row">
           <span class="bk-imprint" aria-hidden="true" translate="no">energy.jp</span>
-          <span class="xline2"><b translate="no">Mugen Studio 2.5.1</b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
+          <span class="xline2"><b translate="no">Mugen Studio <span class="studioVer"></span></b><span class="long">instruction booklet, back cover,&nbsp;</span><span id="exportPrinting"></span></span>
         </div>
       </div>
     </section>
@@ -19416,6 +19488,9 @@ window.renderLifebar = async function renderLifebar(host) {
     document.getElementById('bundleSwitchingSub').textContent = sub;
     switching.hidden = false;
   }
+  // The updater's Restart asks the same questions (an export, an import,
+  // E-Select's unsaved work) through this.
+  window.__restartFacts = async () => ({ exporting: buildState === 'working', importing: IMPORTING, unsaved: await unsavedElsewhere() });
   window.__serverRestartFailed = (msg) => {
     try { sessionStorage.removeItem(OPENED_KEY); } catch (e) { /* storage blocked */ }
     showSwitching('The Studio could not restart',
@@ -20661,6 +20736,306 @@ window.renderLifebar = async function renderLifebar(host) {
     pre.scrollTop = 0;
   });
   document.getElementById('noticesClose').addEventListener('click', () => dlg.close());
+})();
+</script>
+<script>
+// ---- THE UPDATER (updater.js, /api/update; MugenStudio.exe swaps) -------------
+// The version this is, from studio-version.json, on the About cover, the staff
+// band and the export's back cover. A daily look at GitHub on start (the
+// server decides whether it is due), the About row's Check for updates, and
+// the banner: out -> Update -> downloading -> Restart to update. Nothing
+// downloads or changes without its button. The launcher's word on the last
+// update (applied, rolled back, interrupted, blocked) shows once.
+(() => {
+  const B = document.getElementById('updBanner');
+  if (!B) return;
+  const $u = (id) => document.getElementById(id);
+  const NATIVE = typeof window.nativeRestartToUpdate === 'function';
+  let S = null;            // the last /api/update answer
+  let later = false;       // Later: hidden for this session
+  let laterReady = false;
+  let asked = false;       // a check the person asked for (About)
+  let checking = false;
+  let dl = null;           // { got, total, phase } while this page downloads
+  let failed = '';         // the last download's reason
+  let resultSeen = false;
+  const mb = (n) => Math.max(1, Math.round((Number(n) || 0) / 1e6));
+  const api2 = async (route, body) => {
+    const r = await fetch(route, body === undefined ? undefined
+      : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || r.statusText);
+    return d;
+  };
+
+  function paintVersion(v) {
+    if (!v) return;
+    const cover = $u('aboutVer');
+    if (cover) cover.textContent = t('Version {v}', { v });
+    for (const n of document.querySelectorAll('.studioVerT')) n.textContent = t('Version {v}', { v });
+    for (const n of document.querySelectorAll('.studioVer')) n.textContent = v;
+    const ver = $u('abUpdVer');
+    if (ver) ver.textContent = v;
+  }
+
+  // the banner's text: a bold part and a quiet one, each the page's own words
+  function say(bold, quiet, data) {
+    const out = $u('updText');
+    out.replaceChildren();
+    const b = document.createElement('b');
+    b.textContent = bold;
+    out.append(b);
+    if (quiet) {
+      const m = document.createElement('span');
+      m.className = 'm';
+      m.textContent = ' ' + quiet;
+      out.append(m);
+    }
+    if (data) {
+      // a reason in the program's own words: shown as it came
+      const d = document.createElement('span');
+      d.className = 'm';
+      d.setAttribute('translate', 'no');
+      d.textContent = ' ' + data;
+      out.append(d);
+    }
+    out.title = out.textContent.trim();
+  }
+  function show(tag, kind, buttons) {
+    $u('updTag').textContent = tag;
+    B.classList.toggle('done', kind === 'done');
+    B.classList.toggle('bad', kind === 'bad');
+    for (const id of ['updBar', 'updNotesBtn', 'updGo', 'updRestart', 'updCancel', 'updLater', 'updOk']) $u(id).hidden = !buttons.includes(id);
+    B.hidden = false;
+    if (!buttons.includes('updNotesBtn')) notes(false);
+    if (typeof syncHeaderHeight === 'function') syncHeaderHeight();
+  }
+  function hide() {
+    B.hidden = true;
+    notes(false);
+    if (typeof syncHeaderHeight === 'function') syncHeaderHeight();
+  }
+
+  // The release notes: his text from the release page, escaped - paragraphs
+  // and **bold** only, never markup from the page itself.
+  function notesHtml(body) {
+    const paras = String(body || '').replace(/\r\n/g, '\n').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).slice(0, 40);
+    return paras.map((p) => '<p translate="no">' + esc(p).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>') + '</p>').join('');
+  }
+  function notes(open) {
+    const n = $u('updNotes');
+    const btn = $u('updNotesBtn');
+    if (open && S && S.latest) {
+      n.innerHTML = notesHtml(S.latest.body);
+      const src = document.createElement('p');
+      src.className = 'src';
+      src.textContent = t('From the release page on GitHub. Your characters, stages and settings stay as they are.');
+      n.append(src);
+      n.hidden = false;
+    } else {
+      n.hidden = true;
+    }
+    btn.setAttribute('aria-expanded', String(!n.hidden));
+    if (typeof syncHeaderHeight === 'function') syncHeaderHeight();
+  }
+
+  function render() {
+    if (!S) return;
+    paintVersion(S.version);
+    about();
+    const r = S.result;
+    if (r && !resultSeen) {
+      if (r.result === 'applied') {
+        say(t("You're on {v}.", { v: r.to || S.version }), t('Your builds, settings and keys came along.'));
+        return show(t('Updated'), 'done', S.latest && S.latest.version === r.to ? ['updNotesBtn', 'updOk'] : ['updOk']);
+      }
+      if (r.result === 'rolledBack') {
+        say(t("{to} didn't start, so you're back on {from}.", { to: r.to, from: r.from }), '', r.reason);
+        return show(t('Not updated'), 'bad', ['updOk']);
+      }
+      if (r.result === 'interrupted') {
+        say(t("The update got interrupted, so you're still on {from}.", { from: r.from }), t('Try again from About.'));
+        return show(t('Not updated'), 'bad', ['updOk']);
+      }
+      if (r.result === 'blocked') {
+        say(t("The update couldn't go in."), t('Something still had the app folder open. Close it and try again.'));
+        return show(t('Not updated'), 'bad', S.staged && NATIVE ? ['updRestart', 'updOk'] : ['updOk']);
+      }
+    }
+    const d = dl || S.download;
+    if (d) {
+      const pct = d.total ? Math.min(100, Math.round(100 * d.got / d.total)) : 0;
+      $u('updBarFill').style.width = pct + '%';
+      const v = S.latest ? S.latest.version : '';
+      if (d.phase === 'verify' || d.phase === 'unpack') say(t('Downloading {v}', { v }), t('Checking it and unpacking it.'));
+      else say(t('Downloading {v}', { v }), t('{got} of {total} MB', { got: mb(d.got), total: mb(d.total) }));
+      return show(t('New version'), '', ['updBar', 'updCancel']);
+    }
+    if (failed && S.newer && S.canApply) {
+      say(t('The update stopped.'), failed);
+      $u('updGo').textContent = t('Try again');
+      return show(t('Not updated'), 'bad', ['updGo', 'updLater']);
+    }
+    if (S.staged && S.canApply && !laterReady) {
+      if (NATIVE) {
+        say(t('{v} is ready.', { v: S.staged.version }), t('Restart and the Studio swaps it in. Your stuff stays put.'));
+        return show(t('New version'), '', ['updRestart', 'updLater']);
+      }
+      say(t('{v} is ready.', { v: S.staged.version }), t('Close the Studio, then start MugenStudio.exe again to finish.'));
+      return show(t('New version'), '', ['updLater']);
+    }
+    if (S.newer && S.canApply && !later && (asked || S.latest.version !== S.skipAuto)) {
+      $u('updGo').textContent = t('Update');
+      say(t('Mugen Studio {v} is out', { v: S.latest.version }), t('(you have {current}, {size} MB download)', { current: S.version, size: mb(S.latest.size) }));
+      return show(t('New version'), '', ['updNotesBtn', 'updGo', 'updLater']);
+    }
+    hide();
+  }
+
+  function when(ms) {
+    const d = new Date(ms);
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return t('Up to date. Checked today at {time}.', { time });
+    return t('Up to date. Checked {date}.', { date: d.toLocaleDateString() });
+  }
+  function about() {
+    const says = $u('abUpdSays');
+    const auto = $u('abUpdAuto');
+    if (!says || !S) return;
+    auto.checked = S.autoCheck !== false;
+    // The checkout never looks on its own: no box that would do nothing.
+    const autoRow = auto.closest('label');
+    if (autoRow) autoRow.style.display = S.portable ? '' : 'none';
+    const btn = $u('abUpdCheck');
+    btn.disabled = checking;
+    let text;
+    if (checking) text = t('Asking GitHub…');
+    else if (S.rateLimitedUntil) text = t('GitHub says wait until {time}.', { time: new Date(S.rateLimitedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
+    else if (S.newer) text = S.portable ? t('{v} is out.', { v: S.latest.version }) : t('{v} is on GitHub. This copy updates by hand.', { v: S.latest.version });
+    else if (asked && S.offline) text = t("Couldn't reach GitHub. Try again later.");
+    else if (asked && S.problem && /^http /.test(S.problem)) text = t('GitHub answered {code}. Try again later.', { code: S.problem.slice(5) });
+    else if (S.checkedAt) text = when(S.checkedAt);
+    else text = t('Not checked yet.');
+    says.textContent = text;
+  }
+
+  async function load() {
+    try { S = await api2('/api/update'); } catch (e) { return; }
+    render();
+    if (S.download) poll();
+    // The daily look: the server asks GitHub only when it is due and the
+    // setting is on, and says nothing when it cannot reach it.
+    try { S = await api2('/api/update/check', { auto: true }); render(); } catch (e) { /* offline: quiet */ }
+  }
+  async function poll() {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 700));
+      try { S = await api2('/api/update'); } catch (e) { return; }
+      render();
+      if (!S.download) return;
+    }
+  }
+
+  async function download() {
+    failed = '';
+    dl = { got: 0, total: S.latest ? S.latest.size : 0, phase: 'download' };
+    render();
+    nativeProgress('normal', 0);
+    let last = null;
+    try {
+      const res = await fetch('/api/update/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i);
+          buf = buf.slice(i + 1);
+          if (!line.trim()) continue;
+          let o;
+          try { o = JSON.parse(line); } catch (e) { continue; }
+          if (o.type === 'progress') {
+            dl = { got: o.got, total: o.total, phase: o.phase || 'download' };
+            nativeProgress('normal', o.total ? Math.round(100 * o.got / o.total) : 0);
+            render();
+          } else last = o;
+        }
+      }
+    } catch (e) {
+      last = { type: 'error', error: e.message };
+    }
+    dl = null;
+    nativeProgress('none');
+    if (last && last.state) S = last.state;
+    if (!last || last.type === 'error') {
+      failed = last && last.error ? last.error : t('The download stopped.');
+      if (/^Download cancelled\.$/.test(failed)) failed = '';
+    }
+    render();
+  }
+
+  async function restart() {
+    const f = typeof window.__restartFacts === 'function' ? await window.__restartFacts() : { unsaved: [] };
+    let why = '';
+    if (f.exporting) why = t('An export is running. Restart when it has finished.');
+    else if (f.importing) why = t('A build is being imported. Restart when it has finished.');
+    else if (f.unsaved && f.unsaved.length) {
+      const o = f.unsaved[0];
+      why = o.unsaved === 1 ? t('{page} has 1 unsaved change. Save or discard it there first.', { page: o.page })
+        : t('{page} has {n} unsaved changes. Save or discard them there first.', { page: o.page, n: o.unsaved });
+    }
+    if (why) { toast(why, 'warn'); return; }
+    $u('updRestart').disabled = true;
+    say(t('Restarting…'), t('The Studio closes, swaps in the new version and opens again.'));
+    let ok = false;
+    try { ok = await window.nativeRestartToUpdate(); } catch (e) { ok = false; }
+    if (!ok) {
+      $u('updRestart').disabled = false;
+      toast(t("The update isn't ready to go in. Check for updates in About."), 'warn');
+      try { S = await api2('/api/update'); } catch (e) { /* as it was */ }
+      render();
+    }
+  }
+
+  $u('updGo').onclick = download;
+  $u('updRestart').onclick = restart;
+  $u('updCancel').onclick = async () => {
+    $u('updCancel').disabled = true;
+    try { S = await api2('/api/update/cancel', {}); } catch (e) { /* the stream says it */ }
+    $u('updCancel').disabled = false;
+  };
+  $u('updLater').onclick = () => {
+    if (S && S.staged) laterReady = true; else later = true;
+    failed = '';
+    render();
+  };
+  $u('updOk').onclick = async () => {
+    resultSeen = true;
+    try { S = await api2('/api/update/dismiss', {}); } catch (e) { /* hidden anyway */ }
+    render();
+  };
+  $u('updNotesBtn').onclick = () => notes($u('updNotes').hidden);
+  const checkBtn = $u('abUpdCheck');
+  if (checkBtn) checkBtn.onclick = async () => {
+    asked = true;
+    later = false;
+    checking = true;
+    about();
+    try { S = await api2('/api/update/check', { auto: false }); } catch (e) { /* the state says why */ }
+    checking = false;
+    render();
+  };
+  const autoBox = $u('abUpdAuto');
+  if (autoBox) autoBox.onchange = async () => {
+    try { S = await api2('/api/update/setting', { autoCheck: autoBox.checked }); } catch (e) { toast(e.message, 'warn'); }
+    render();
+  };
+  window.studioUpdater = { state: () => S, render };
+  load();
 })();
 </script>
 </body>

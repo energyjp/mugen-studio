@@ -19,6 +19,8 @@
 //     menu makes, so a lobby behaves exactly as it does from a NETWORK menu.
 //     The desktop engine has no web join, so there JOIN GAME opens a second
 //     box with the saved addresses, NEW ADDRESS and BACK, as the stock menu has.
+//     On the modern-input engine (v2) a gamepad button opens it too, and so
+//     does a click or a tap on the hint (below, PAD BUTTON AND TAP).
 //  3. The menu the engine opens once both players of a lobby are connected
 //     (main.menu.submenu.server, never shown on the title) is added at load
 //     when the screenpack has none. The build adds it to the screenpack's own
@@ -47,6 +49,36 @@
 // tools/test-mods-build.js checks the two agree).
 const NET_MENU_VPATH = 'external/mods/mugen-studio/net-menu.lua';
 const HINT_TEXT = 'PRESS N FOR ONLINE';
+
+// PAD BUTTON AND TAP (v2 only: the modern-input engine's Lua reads each
+// gamepad and the pointer; 2.4's has neither). A phone has no N key and a
+// gamepad-only player has none either, so:
+//  - A gamepad button opens the box: the first of PAD_BUTTONS that the title
+//    screen does not use. The engine's title reads DP_U/DP_D and the left stick
+//    (next, previous), A B X Y RB RT (done), BACK (cancel: jumps to EXIT, held
+//    it opens the info box) and START (hiscores) - defaultMotif.ini [Title
+//    Info] menu.*.action, main.lua f_createMenu - so the Back/View button is
+//    taken and LB is the first free one. A screenpack's own title actions are
+//    read when the box first needs them (BTN:w is LB and BTN:d is LT in the
+//    Standard setup), and a button it uses is skipped. Every connected gamepad
+//    is read through its own Controller Mapping (inputDeviceAction), whether or
+//    not it has a player; a keyboard never is, so keyboard players keep N.
+//  - While a gamepad is connected the hint names that button in the hint's
+//    own letters (PAD_HINT_TEXT, %s = LB), as the first pad's family prints it
+//    (L1 on a PlayStation pad, L on a Nintendo one). The engine's inline glyph
+//    for it was drawn at the 6x9 font's height, and its LB could not be read.
+//  - A click or a tap on the hint's line opens the box: the screen's whole
+//    width, from 8 units past the pill toward the middle to the screen's edge,
+//    wherever no title item is under the pointer. The engine itself maps a
+//    pointer or touch on the canvas into screen coordinates (letterboxing,
+//    scaling and fullscreen included), so the page does nothing. The press is
+//    read in the title menu's own mouse step (the main.menu.mouse hook), before
+//    the menu takes it: menu.done.action has MOUSE:LEFT, so the stock menu
+//    takes a click anywhere, and a taken press stays taken for its frame.
+//    Inside the box a click or tap on a row picks it, and one outside the box
+//    (or a right click) closes it.
+const PAD_HINT_TEXT = 'PRESS N OR %s FOR ONLINE';
+const PAD_BUTTONS = ['LB', 'LT', 'RS', 'LS'];
 
 // THE FONT. fontNew looks in the screenpack's folder (and its font/) before
 // the game's font/, so a pack that ships its own f-6x9.def replaces the
@@ -119,7 +151,8 @@ const ONLINE_ITEMS = [
 // v2: a build for the modern-input engine (vfslib: IKEMEN_V2), which has no
 // getInput: the box reads the menu actions instead. Without it the text is
 // exactly what every build before the modern-input engine generated.
-function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
+// padHint: the hint while a gamepad is connected (v2), %s the button's glyph.
+function netMenuLua({ online = false, hint = HINT_TEXT, padHint = PAD_HINT_TEXT, v2 = false } = {}) {
   const items = online ? ONLINE_ITEMS : PUBLIC_ITEMS;
   const L = [
     '-- Online menu (Mugen Studio). Delete this file to remove the N menu.',
@@ -135,6 +168,10 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '',
     '-- Written by the Studio for this build.',
     'local HINT = ' + luaStr(hint),
+    ...(v2 ? [
+      'local PAD_HINT = ' + luaStr(padHint),
+      'local PAD_BUTTONS = {' + PAD_BUTTONS.map(luaStr).join(', ') + '}',
+    ] : []),
     'local TITLE = \'NETWORK\'',
     'local LOBBY = \'CONNECTED\'',
     'local ITEMS = {',
@@ -350,6 +387,115 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '\treturn x1, y1, x2, y2',
     'end',
     '',
+    ...(v2 ? [
+      '-- THE PAD BUTTON: the first of PAD_BUTTONS the title screen does not use',
+      '-- (its menu actions, the info box key, the attract options key; an engine',
+      '-- button BTN:x as the Standard setup maps it), chosen once. Every connected',
+      '-- gamepad is read through its own mapping (inputDeviceAction), with or',
+      '-- without a player; a keyboard never is: keyboard players have N.',
+      'local BTN = {a = \'A\', b = \'B\', c = \'RT\', x = \'X\', y = \'Y\', z = \'RB\', start = \'START\', d = \'LT\', w = \'LB\', menu = \'BACK\'}',
+      'local padButton = nil',
+      'local function usedBy(v, used)',
+      '\tif type(v) == \'string\' then',
+      '\t\tlocal t = {}',
+      '\t\tfor s in v:gmatch(\'[^,]+\') do t[#t + 1] = s end',
+      '\t\tv = t',
+      '\tend',
+      '\tif type(v) ~= \'table\' then return end',
+      '\tfor _, s in ipairs(v) do',
+      '\t\ts = tostring(s):match(\'^%s*(.-)%s*$\'):upper()',
+      '\t\tlocal b = s:match(\'^BTN:(.+)$\')',
+      '\t\tif b then s = BTN[b:lower()] or s end',
+      '\t\tused[s] = true',
+      '\tend',
+      'end',
+      'local function chooseButton()',
+      '\tif padButton ~= nil then return padButton end',
+      '\tpadButton = false',
+      '\tif type(inputGetDevices) ~= \'function\' or type(inputDeviceAction) ~= \'function\' then return padButton end',
+      '\tlocal used = {}',
+      '\tlocal m = at(motif[main.group], \'menu\')',
+      '\tfor _, k in ipairs({\'next\', \'previous\', \'done\', \'cancel\', \'hiscore\'}) do usedBy(at(at(m, k), \'action\'), used) end',
+      '\tusedBy(at(motif.infobox, \'action\'), used)',
+      '\tif at(motif.attract_mode, \'enabled\') then usedBy(at(at(motif.attract_mode, \'options\'), \'action\'), used) end',
+      '\tfor _, b in ipairs(PAD_BUTTONS) do',
+      '\t\tif not used[b] then',
+      '\t\t\tpadButton = {b}',
+      '\t\t\tbreak',
+      '\t\tend',
+      '\tend',
+      '\tif padButton then',
+      '\t\tprint(\'[net-menu] pad button: \' .. padButton[1])',
+      '\telse',
+      '\t\tprint(\'[net-menu] no pad button: the title screen uses every one\')',
+      '\tend',
+      '\treturn padButton',
+      'end',
+      '-- The connected gamepads, listed again every 30 calls (once a frame on the',
+      '-- title or in the box): a list made every frame is garbage, a hitch on the',
+      '-- website. A browser shows a pad only after its first press anyway.',
+      '-- The first one\'s family names the button in the hint (inputGetGlyphPack:',
+      '-- ps5, switch, xbox360...); \'mouse\' while the pointer was used last, and',
+      '-- then the family read before stays.',
+      'local pads, padsAge, padFirst, padFamily = {}, 30, nil, nil',
+      'local function familyOf(pack)',
+      '\tif pack:match(\'^ps%d*$\') then return \'ps\' end',
+      '\tif pack:match(\'^switch\') or pack == \'joycon\' then return \'nintendo\' end',
+      '\treturn \'other\'',
+      'end',
+      'local function padIds()',
+      '\tpadsAge = padsAge + 1',
+      '\tif padsAge >= 30 then',
+      '\t\tpadsAge = 0',
+      '\t\tlocal list = {}',
+      '\t\tlocal ok, devs = pcall(inputGetDevices)',
+      '\t\tif ok and type(devs) == \'table\' then',
+      '\t\t\tfor _, d in ipairs(devs) do',
+      '\t\t\t\tif type(d) == \'table\' and d.kind == \'gamepad\' and d.connected and d.id then list[#list + 1] = d.id end',
+      '\t\t\tend',
+      '\t\tend',
+      '\t\tpads = list',
+      '\t\tif list[1] ~= padFirst then padFirst, padFamily = list[1], nil end',
+      '\t\tif list[1] and type(inputGetGlyphPack) == \'function\' then',
+      '\t\t\tlocal ok2, pack = pcall(inputGetGlyphPack, list[1])',
+      '\t\t\tif ok2 and type(pack) == \'string\' and pack ~= \'\' and pack ~= \'mouse\' then padFamily = familyOf(pack:lower()) end',
+      '\t\tend',
+      '\tend',
+      '\treturn pads',
+      'end',
+      '-- True on the frame the button is pressed on any connected gamepad.',
+      'local function padPressed()',
+      '\tlocal b = chooseButton()',
+      '\tif not b then return false end',
+      '\tfor _, id in ipairs(padIds()) do',
+      '\t\tlocal ok, on = pcall(inputDeviceAction, id, b)',
+      '\t\tif ok and on then return true end',
+      '\tend',
+      '\treturn false',
+      'end',
+      '-- The hint while a gamepad is connected names the button in letters, as',
+      '-- the pad\'s family prints it: the engine\'s inline glyph for it is drawn at',
+      '-- the font\'s height, and its letters could not be read.',
+      'local PAD_NAMES = {ps = {LB = \'L1\', LT = \'L2\', RS = \'R3\', LS = \'L3\'}, nintendo = {LB = \'L\', LT = \'ZL\'}}',
+      'local padHints = {}',
+      'local function hintText()',
+      '\tlocal b = chooseButton()',
+      '\tif not b or PAD_HINT == \'\' or not padIds()[1] then return HINT end',
+      '\tlocal names = PAD_NAMES[padFamily or \'\']',
+      '\tlocal name = names and names[b[1]] or b[1]',
+      '\tlocal s = padHints[name]',
+      '\tif s == nil then',
+      '\t\ts = (PAD_HINT:gsub(\'%%s\', function() return name end))',
+      '\t\tpadHints[name] = s',
+      '\tend',
+      '\treturn s',
+      'end',
+      '-- A click or a tap: the engine maps the pointer into screen coordinates,',
+      '-- and mouseTake consumes the press.',
+      'local LEFT, RIGHT = {\'MOUSE:LEFT\'}, {\'MOUSE:RIGHT\'}',
+      'local function canTap() return type(mouseOver) == \'function\' and type(mouseTake) == \'function\' end',
+      '',
+    ] : []),
     '-- THE HINT: a dark pill 15-27 units above the bottom (of 240), clear of a',
     '-- screenpack footer strip. A title menu that reaches down there (MUGEN\'s',
     '-- own layout ends inside it, and many packs copy that) moves it to 15-27',
@@ -363,6 +509,16 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '\t\tlocal half = (3 * #HINT + 6) * S',
     '\t\thint = {pill = newRect(0, 0, 0, 0, 64), t = newText(255, 255, 255), x1 = CX - half, x2 = CX + half}',
     '\tend',
+    ...(v2 ? [
+      '\tlocal text = hintText()',
+      '\tif hint.text ~= text then',
+      '\t\t-- the pill fits the text, as the one above fits HINT; placed again',
+      '\t\tlocal half = (3 * #text + 6) * S',
+      '\t\thint.x1, hint.x2 = CX - half, CX + half',
+      '\t\tif hint.text ~= nil then hint.n = nil end',
+      '\t\thint.text = text',
+      '\tend',
+    ] : []),
     '\tlocal n = type(t) == \'table\' and #t or 0',
     '\tif hint.n ~= n then',
     '\t\thint.n = n',
@@ -383,8 +539,42 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '\t\thint.top = top',
     '\tend',
     '\tputRect(hint.pill, hint.x1, hint.y1, hint.x2, hint.y2)',
-    '\tputText(hint.t, HINT, CX, hint.y2 - 3 * S)',
+    '\tputText(hint.t, ' + (v2 ? 'hint.text' : 'HINT') + ', CX, hint.y2 - 3 * S)',
+    ...(v2 ? ['\thint.shown = true'] : []),
     'end',
+    ...(v2 ? [
+      '-- A CLICK OR A TAP ON THE HINT\'S LINE: the screen\'s whole width, from 8',
+      '-- units past the pill toward the middle of the screen to its edge, where no',
+      '-- title item is under the pointer (a row, its art or a scroll arrow keeps',
+      '-- it). Read in the title menu\'s own mouse step, the main.menu.mouse hook,',
+      '-- which runs before that step takes the press: menu.done.action lists',
+      '-- MOUSE:LEFT, so the menu takes a click anywhere, and a taken press stays',
+      '-- taken for its frame. Only in the step after a frame that drew the hint;',
+      '-- the next title draw opens the box.',
+      'local tapped = false',
+      'local function onHintLine()',
+      '\tlocal y1, y2 = hint.y1 - 8 * S, H',
+      '\tif hint.top then y1, y2 = 0, hint.y2 + 8 * S end',
+      '\treturn mouseOver(-W, y1, 2 * W, y2, W, H)',
+      'end',
+      'local function hintTap(screen, sec)',
+      '\tlocal shown = hint ~= nil and hint.shown',
+      '\tif shown then hint.shown = false end',
+      '\tif not shown or busy or disabled or tapped or not canTap() or sec == nil or sec ~= motif[main.group]',
+      '\t\tor stack[#stack] ~= main.menu or netPlay() or fadeActive() or main.menu.f ~= nil',
+      '\t\tor (type(screen) == \'table\' and screen.hover ~= nil) then return end',
+      '\tif onHintLine() and mouseTake(LEFT) then tapped = true end',
+      'end',
+      'if type(hook) == \'table\' and type(hook.add) == \'function\' then',
+      '\thook.add(\'main.menu.mouse\', \'net-menu\', function(screen, t, sec)',
+      '\t\tlocal ok, err = pcall(hintTap, screen, sec)',
+      '\t\tif not ok then',
+      '\t\t\tdisabled = true',
+      '\t\t\tprint(\'[net-menu] off: \' .. tostring(err))',
+      '\t\tend',
+      '\tend)',
+      'end',
+    ] : []),
     '',
     '-- THE BOX: the title background without the screenpack\'s menu, dimmed, and',
     '-- a framed list. Rows 12 units tall under an 18-unit title band.',
@@ -421,6 +611,7 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '\tputRect(box.dim, -W, 0, 2 * W, H)',
     '\tputRect(box.edge, x1 - S, y1 - S, x2 + S, y2 + S)',
     '\tputRect(box.fill, x1, y1, x2, y2)',
+    ...(v2 ? ['\tbox.x1, box.y1, box.x2, box.y2 = x1, y1, x2, y2'] : []),
     '\tlocal ry = y1 + (18 + 12 * (sel - 1)) * S',
     '\tputRect(box.bar, x1 + 4 * S, ry, x2 - 4 * S, ry + 12 * S)',
     '\tputText(box.title, title, CX, y1 + 12 * S)',
@@ -485,10 +676,13 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '',
     ...(v2 ? [
       '-- Draw and read input until a pick or a close. The screenpack\'s own menu',
-      '-- actions move and pick; Esc, the menu cancel action or N close. The',
-      '-- modern-input engine reads menus by action (getAction, the motif\'s .action',
-      '-- lists); an engine without getAction reads them by key (getInput, .key).',
-      '-- Mouse tokens are left out: the box has no click targets.',
+      '-- actions move and pick; Esc, the menu cancel action, N or the pad button',
+      '-- close. The modern-input engine reads menus by action (getAction, the',
+      '-- motif\'s .action lists); an engine without getAction reads them by key',
+      '-- (getInput, .key). Mouse tokens are left out of the actions (a click',
+      '-- anywhere would pick the highlighted row): the box reads the pointer',
+      '-- itself, a click or tap on a row picks it, one outside the box or a right',
+      '-- click closes it.',
       'local function byAction() return type(getAction) == \'function\' end',
       'local function inputsOf(v, keys, actions)',
       '\tif not byAction() then',
@@ -521,6 +715,18 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
       '\tif type(d) == \'table\' then return getKey(\'DELETE\') or pressed(d) end',
       '\treturn getKey(d)',
       'end',
+      '-- A click or tap this frame: the row under it, 0 on the box but on no row,',
+      '-- -1 outside the box, nil for none. Rows as drawBox draws them.',
+      'local function tapAt(n)',
+      '\tif not mouseTake(LEFT) then return nil end',
+      '\tif box == nil or box.x1 == nil then return 0 end',
+      '\tif not mouseOver(box.x1, box.y1, box.x2, box.y2, W, H) then return -1 end',
+      '\tfor i = 1, n do',
+      '\t\tlocal ry = box.y1 + (18 + 12 * (i - 1)) * S',
+      '\t\tif mouseOver(box.x1, ry, box.x2, ry + 12 * S, W, H) then return i end',
+      '\tend',
+      '\treturn 0',
+      'end',
       'local function menuLoop(title, rows, sel, footer, delKey)',
       '\tlocal sec = motif[main.group]',
       '\tlocal m = sec.menu or {}',
@@ -528,12 +734,16 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
       '\tlocal kNext = inputsOf(m.next, {\'D\', \'R\'}, {\'DP_D\', \'LS_Y+\'})',
       '\tlocal kDone = inputsOf(m.done, {\'a\', \'b\', \'c\', \'x\', \'y\', \'z\', \'s\'}, {\'A\', \'B\', \'X\', \'Y\', \'RB\', \'RT\'})',
       '\tlocal kCancel = inputsOf(m.cancel, {\'m\'}, {\'BACK\'})',
+      '\tlocal tap = canTap()',
       '\twhile true do',
       '\t\tdrawBox(title, rows, sel, footer)',
       '\t\tif main.f_preloadTick then main.f_preloadTick(2) end',
       '\t\trefresh()',
-      '\t\tif esc() or pressed(kCancel) or getKey(\'n\') then',
+      '\t\tlocal hit = tap and tapAt(#rows)',
+      '\t\tif esc() or pressed(kCancel) or getKey(\'n\') or padPressed() or hit == -1 or (tap and mouseTake(RIGHT)) then',
       '\t\t\treturn \'close\', sel',
+      '\t\telseif hit and hit > 0 then',
+      '\t\t\treturn \'pick\', hit',
       '\t\telseif pressed(kNext) then',
       '\t\t\tsel = sel % #rows + 1',
       '\t\t\tmoveSnd(sec)',
@@ -780,6 +990,11 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '-- it turns the add-on off and that frame is the stock one.',
     'local stockDraw = main.f_menuCommonDraw',
     'main.f_menuCommonDraw = function(t, item, cy, mt, sec, bg, skipClear, opts)',
+    ...(v2 ? [
+      '\t-- a tap on the hint\'s line, taken in the last menu step: this draw or none',
+      '\tlocal tap = tapped',
+      '\ttapped = false',
+    ] : []),
     '\tif not disabled and not skipClear and sec ~= nil and sec == motif[main.group] and inLobby() and not hasOwnNetwork() then',
     '\t\tlocal rows, sel = lobbyRows(t, item)',
     '\t\tif #rows > 0 then',
@@ -795,7 +1010,8 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
     '\tend',
     '\tif not busy and not disabled and not skipClear and sec ~= nil and sec == motif[main.group]',
     '\t\tand stack[#stack] == main.menu and not netPlay() then',
-    '\t\tif getKey(\'n\') and not fadeActive() and main.menu.f == nil then',
+    v2 ? '\t\tif not fadeActive() and main.menu.f == nil and (getKey(\'n\') or padPressed() or tap) then'
+      : '\t\tif getKey(\'n\') and not fadeActive() and main.menu.f == nil then',
     '\t\t\tresetKey()',
     '\t\t\tbusy = true',
     '\t\t\tlocal ran = openMenu()',
@@ -826,4 +1042,4 @@ function netMenuLua({ online = false, hint = HINT_TEXT, v2 = false } = {}) {
   return L.join('\n');
 }
 
-module.exports = { NET_MENU_VPATH, NET_MENU_FONT_VPATH, HINT_TEXT, netMenuLua, netMenuFontDef };
+module.exports = { NET_MENU_VPATH, NET_MENU_FONT_VPATH, HINT_TEXT, PAD_HINT_TEXT, PAD_BUTTONS, netMenuLua, netMenuFontDef };

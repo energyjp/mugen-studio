@@ -163,7 +163,8 @@ const SETTINGS_DIR = typeof PROGRAM.settings === 'string' && PROGRAM.settings ? 
 // Settings mode only these are read from studio-settings.json: the rest of the
 // layout is the program's, so a stale folder key can never outlive the version
 // that wrote it.
-const USER_KEYS = ['bundle', 'downloadFolder', 'ffmpeg'];
+// updateCheck: About > "Check on start" (updater.js), on when absent.
+const USER_KEYS = ['bundle', 'downloadFolder', 'ffmpeg', 'updateCheck'];
 const USER_FILE = SETTINGS_DIR ? path.join(SETTINGS_DIR, 'studio-settings.json') : LAYOUT_FILE;
 const LOCAL_CONFIG_FILE = path.join(SETTINGS_DIR || APP, 'local-config.json');
 const LOGS_DIR = path.join(SETTINGS_DIR || APP, 'logs');
@@ -454,6 +455,21 @@ function setFfmpeg(value) {
   return ffmpegSetting();
 }
 
+// WHETHER THE STUDIO LOOKS FOR A NEW VERSION ON START (About > Check on
+// start; updater.js). On unless the person turned it off: only false is off.
+// A key a person sets, kept like downloadFolder.
+const updateCheckSetting = () => cfg.updateCheck !== false;
+function setUpdateCheck(on) {
+  const raw = readUserFile();
+  if (on) delete raw.updateCheck;
+  else raw.updateCheck = false;
+  if (SETTINGS_DIR) writeJsonWhole(USER_FILE, raw);
+  else fs.writeFileSync(USER_FILE, JSON.stringify(raw, null, 2) + '\n');
+  if (on) delete cfg.updateCheck;
+  else cfg.updateCheck = false;
+  return updateCheckSetting();
+}
+
 // A SIBLING of the program folder in the repo, INSIDE Dependencies/ in a
 // portable copy. The repo sibling is checked first so a checkout keeps
 // behaving exactly as it always has.
@@ -653,4 +669,6 @@ module.exports = {
   setDownloadFolder,
   get FFMPEG() { return ffmpegSetting(); },
   setFfmpeg,
+  get UPDATE_CHECK() { return updateCheckSetting(); },
+  setUpdateCheck,
 };

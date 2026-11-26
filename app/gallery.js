@@ -87,6 +87,20 @@
 // camera, so the other pairs play on beside the view. One pair alone plays
 // exactly as before (zoom is for several pairs).
 //
+// THE MOUSE (several pairs; an engine with Lua mouseOver - the modern-input
+// web engine; stock 1.0.0 has none, and there the gallery has no drag): a
+// press on a pair makes it the active one and, held, drags it sideways. The
+// engine gives Lua no pointer position, only "is the pointer inside this
+// rectangle" (mouseOver), so the script halves a rectangle across the fight
+// to find the pointer's x. The pair moves by the pointer's step from where
+// it is - giver and receiver the same step in the same frame (the hook's
+// _gal_dx, PosAdd), so a bound scene stays bound and plays on - and its
+// place (G.dx on its slot's) is where every later grab of it stands. Pairs
+// keep DRAG_SEP apart and their order, inside the view while the screen
+// bounds them, and inside the stage's art; zoomed, the camera does not
+// follow while a pair is dragged. A step placed from the screen's edge and a
+// receiver's helper's pair are not dragged.
+//
 // CONTROLS are hotkeys, most on one side of the keyboard, and they move along
 // each step's place (gallerydata.js NAVIGATION: position, version, speed,
 // climax, stage): Left / Right the previous / next position, Up / Down its
@@ -234,6 +248,33 @@
 // the gallery off ('hgallery').
 const GALLERY_LUA_VPATH = 'external/mods/mugen-studio/hgallery.lua';
 const GALLERY_ZSS_VPATH = 'data/hgallery.zss';
+// THE GALLERY'S FONT (the modern-input text only: its on-screen controls).
+// fontNew looks in the screenpack's folder (and its font/) before the game's
+// font/, so a pack that ships its own f-6x9.def replaces the engine's under
+// the gallery's text (the net menu met a 14x14 italic one: netmenu.js THE
+// FONT). The build ships the engine's f-6x9.def again under a name no pack
+// has; its glyphs (File = f-6x9.sff) are found beside it, the engine's
+// font/f-6x9.sff. The script falls back to f-6x9.def without the file.
+const GALLERY_FONT_VPATH = 'font/hgallery-6x9.def';
+function galleryFontDef() {
+  return [
+    '; The engine\'s 6x9 font (font/f-6x9.def), under a name no screenpack ships,',
+    '; for the H gallery\'s on-screen controls (' + GALLERY_LUA_VPATH + '). Written by Mugen Studio.',
+    '',
+    '[FNT v2]',
+    'fntversion = 2,00',
+    'name = "6x9 variable"',
+    '',
+    '[Def]',
+    'Type = bitmap',
+    'BankType = palette',
+    'Size = 5,8',
+    'Spacing = 1,2',
+    'Offset = 0,0',
+    'File = f-6x9.sff',
+    '',
+  ].join('\r\n');
+}
 // The gallery's own stance, a common state in that file: a receiver with no
 // body at rest (gallerydata restStance) stands in it so a grab finds her.
 const STANCE_STATE = 9119901;
@@ -247,6 +288,8 @@ const GALLERY_STATES_KEY = 'States7';
 // Slots the hook has for variables: the pair's setup (held every frame) and a
 // path action's one-shot sets. The data asks for few; more are dropped.
 const MAX_SETUP = 8;
+// THE HOLD: how many ticks before a clock runs out the scene goes back in.
+const K_HOLD_LEAD = 3;
 const MAX_SETS = 4;
 const DEFAULT_PATIENCE = 600;
 // GRAB REACH: a grab that connects only from further off than the default
@@ -545,9 +588,10 @@ function navTables(steps, navs) {
     }
     if (same.length > 1) parts.push('picture ' + (same.map((j) => N[j].speed).sort((a, b) => a - b).indexOf(n.speed) + 1) + '/' + same.length + ' Del/End');
     if (pos.climax) parts.push(!pos.plain ? 'CLIMAX' : n.climax ? 'CLIMAX Space off' : 'Space climax');
-    // (A stage is named as its label names it: the level of his finish
-    // count, of the position's top one.)
-    if (pos.stages.length > 1) parts.push('Home stage ' + (n.stage ? n.stage : 'base') + '/' + pos.stages[pos.stages.length - 1]);
+    // (The player calls a stage MOOD - the receiver's look as it changes with
+    // the finishes she takes, "stage" in the data and the nav field; the map
+    // is the stage here. The level of his finish count, of the position's top one.)
+    if (pos.stages.length > 1) parts.push('Home mood ' + (n.stage ? n.stage : 'base') + '/' + pos.stages[pos.stages.length - 1]);
     const nv = { p: pos.p, v: vi + 1, g: gi + 1, c: n.climax };
     if (fin) nv.f = true;   // Up / Down's note there: 'one finisher' wording
     return { nv, k, ind: parts.length ? parts.join('  ') : 'nothing more in this position' };
@@ -676,6 +720,7 @@ function trimData(data, stage, modes) {
   const pairs = [];
   const dropped = [];
   const kills = [];
+  const holdHelpers = [];   // the helpers a pair with a hold calls: they re-send her state too
   const helpers = [];    // helper receivers' ids: one hook block each
   const helperHides = new Map();   // helper receiver's id -> his explod ids removed on her
   const badgeSets = [];   // { key, id, sets }: a helper receiver's badge slots, numbered from 1
@@ -963,6 +1008,21 @@ function trimData(data, stage, modes) {
     // Party's guild, a minute): cut at once rather than after INTRO_MAX.
     const cs = p.cutscene;
     if (cs && Number.isInteger(cs.helper) && Number.isInteger(cs.ends) && cs.ends > INTRO_MAX) pair.cutscene = { helper: cs.helper, ends: cs.ends };
+    // THE HOLD (gallerydata.js detectHold): the clocks that end his scenes and
+    // hers, which the driver and the hook go back into a few ticks before they
+    // run out. His: { s: state, k: 't' (its time) | 'a' (the end of its
+    // animation), at }, hers: { s: state, at }.
+    const hd = p.hold;
+    if (hd && typeof hd === 'object') {
+      const hisH = (Array.isArray(hd.his) ? hd.his : []).filter((x) => x && Number.isInteger(x.state) && x.state >= 0 && (x.kind === 'a' || (x.kind === 't' && x.at > K_HOLD_LEAD)) && Number.isInteger(x.at) && x.at >= 0)
+        .map((x) => ({ s: x.state, k: x.kind, at: x.at }));
+      const herH = (Array.isArray(hd.her) ? hd.her : []).filter((x) => x && Number.isInteger(x.state) && x.state >= 0 && Number.isInteger(x.at) && x.at > K_HOLD_LEAD)
+        .map((x) => ({ s: x.state, at: x.at }));
+      if (hisH.length || herH.length) {
+        pair.hold = { his: hisH, her: herH };
+        for (const id of steps.map((s) => s.clear).filter(Number.isInteger)) if (!holdHelpers.includes(id)) holdHelpers.push(id);
+      }
+    }
     pairs.push(pair);
   }
   // The modes this build carries: those with a step or an action kept, in
@@ -971,7 +1031,7 @@ function trimData(data, stage, modes) {
   return { stage: stage || '', pairs, commands, cmdAliases, setupSlots, setSlots, kills: kills.sort((a, b) => a - b), dropped, helpers: helpers.sort((a, b) => a - b),
     modes: present, modeData: Object.fromEntries(present.map((id) => [id, modeData[id] || {}])), failed: [...failed].map(([id, why]) => ({ id, why })),
     helperHides: [...helperHides].sort((a, b) => a[0] - b[0]).map(([id, ids]) => ({ id, ids: [...ids].sort((a, b) => a - b) })),
-    badgeSets: badgeSets.map((x) => ({ id: x.id, sets: x.sets })),
+    badgeSets: badgeSets.map((x) => ({ id: x.id, sets: x.sets })), holdOn: pairs.some((p) => p.hold), holdHelpers: holdHelpers.sort((a, b) => a - b),
     pinSets: pinSets.map((p) => ({ id: p.id, pins: p.pins })), goSets: goSets.map((x) => x.g), holdSets: holdSets.map((x) => x.h),
     rerollSets: rerollSets.map((x) => x.list), apprSets: apprSets.map((x) => x.a), swapSets: swapSets.map((x) => x.list),
     companions: [...companions].sort((a, b) => a[0] - b[0]).map(([id, cmds]) => ({ id, cmds: [...cmds].sort((a, b) => a - b) })) };
@@ -1021,6 +1081,55 @@ function modeParts(t, modes) {
   return { parts };
 }
 
+// A CHARACTER'S OWN HUD (galhud.js), hidden in the gallery: opts.hud is
+// { list: [{ select, ids }] } in the build's order; a character is its index
+// + 1 in it (the driver's map _gal_hud on its root, UI.hudExplods). Only in
+// the modern-input text (opts.v2, else IKEMEN_V2), only for characters on a
+// pair of the data, and never an id below 0 (-1 names every explod).
+function hudList(opts, data) {
+  const v2 = opts && opts.v2 !== undefined ? !!opts.v2 : !!process.env.IKEMEN_V2;
+  if (!v2 || !opts || !opts.hud || !Array.isArray(opts.hud.list)) return [];
+  const on = new Set();
+  for (const p of (data && data.pairs) || []) {
+    if (p.giver && p.giver.select) on.add(p.giver.select);
+    if (p.receiver && p.receiver.select) on.add(p.receiver.select);
+  }
+  const out = [];
+  for (const e of opts.hud.list) {
+    const ids = ints(e && e.ids).filter((n) => n >= 0);
+    if (e && typeof e.select === 'string' && on.has(e.select) && ids.length) out.push({ select: e.select, ids: [...new Set(ids)].sort((a, b) => a - b) });
+  }
+  return out;
+}
+// select -> its number, for the Lua (UI.HUDX).
+function hudIndex(opts, data) {
+  const o = {};
+  hudList(opts, data).forEach((e, i) => { o[e.select] = i + 1; });
+  return o;
+}
+function hudZssLines(t, opts) {
+  const list = hudList(opts, t);
+  if (!list.length) return [];
+  const out = [];
+  out.push('# CHARACTERS\' OWN HUD (gallery.js hudList, galhud.js): screen-fixed explods');
+  out.push('# a character keeps up from its negative states or a HUD helper (King\'s');
+  out.push('# guard gauge, a power meter) are hidden in the gallery: hidewithbars,');
+  out.push('# which the engine does not draw while the bars are off (noBarDisplay,');
+  out.push('# above). The driver names the character on its root (_gal_hud); its');
+  out.push('# helpers read the root\'s, as their explods are their own.');
+  list.forEach((e, i) => {
+    const n = i + 1;
+    out.push('# ' + n + ': ' + e.select.replace(/[^\x20-\x7e]/g, '?') + ' (' + e.ids.length + ')');
+    for (const who of ['!isHelper && map(_gal_hud) = ' + n, 'isHelper && root, map(_gal_hud) = ' + n]) {
+      out.push('ignorehitpause if ' + who + ' && gameMode = "hgallery" {');
+      for (const id of e.ids) out.push('\tif numExplod(' + id + ') { modifyExplod{id: ' + id + '; hidewithbars: 1} }');
+      out.push('}');
+    }
+  });
+  out.push('');
+  return out;
+}
+
 // The hook: one line per command name this build's steps use, the variable
 // slots, placement, and the round kept going. `ignorehitpause` on the whole
 // block: without it the block is skipped while the character is in hitpause
@@ -1034,7 +1143,7 @@ function modeParts(t, modes) {
 // NoInput (recvInput): the line runs only while every mode's condition
 // holds. A mode's own maps are named _gal_<id>_*. Without modes the file
 // is what it always was, byte for byte.
-function buildGalleryZss(t, modes) {
+function buildGalleryZss(t, modes, opts) {
   const lines = [];
   const L = (s) => lines.push(s);
   const mp = modeParts(t, modes);
@@ -1090,6 +1199,16 @@ function buildGalleryZss(t, modes) {
   L('\t\t\tturn{}');
   L('\t\t}');
   L('\t\tmap(_gal_place) := 0;');
+  L('\t}');
+  L('\t# A DRAG (several pairs, the mouse): moved by the pointer\'s step from');
+  L('\t# where they are, both of a pair the same step in the same frame, so a');
+  L('\t# bound scene stays bound and plays on. After the placement: a place');
+  L('\t# clears what is left of a drag, and a step after it moves on from it.');
+  L('\t# (PosAdd x goes the way the character faces: times facing, it is the');
+  L('\t# stage\'s x, whichever way each of the two faces in the scene.)');
+  L('\tif map(_gal_dx) != 0 {');
+  L('\t\tposAdd{x: map(_gal_dx) * facing}');
+  L('\t\tmap(_gal_dx) := 0;');
   L('\t}');
   if ((t.pairs || []).some((p) => (p.steps || []).some((s) => s.air))) {
     L('\t# AIR START: a grab state of his with air physics, entered standing, would');
@@ -1221,6 +1340,58 @@ function buildGalleryZss(t, modes) {
   }
   L('}');
   L('');
+  if (t.holdOn) {
+    L('# THE HOLD (gallerydata.js detectHold, the driver\'s _gal_h* maps on him): a scene');
+    L('# whose own clock would end it - his state at time N or at the end of its');
+    L('# animation, her state at time N (Minotaur\'s 1050 loses var(15), her 1055');
+    L('# leaves for 1095 at time > 350) - is gone back into ' + K_HOLD_LEAD + ' ticks before. His');
+    L('# state goes back into itself (its time 0 lines put her in her state again),');
+    L('# and hers is sent again by whoever holds her: he, or the helper he called.');
+    L('# Nothing here but where the driver names a state and a time.');
+    L('# A scene that plays on again must play on IN PLACE: his climaxes step him');
+    L('# back (Minotaur\'s horse: PosAdd x -22 three times a pass) and her afterglow');
+    L('# state throws her (velset -3.5,-3.2 with gravity), so each pass would start');
+    L('# further on. The driver asks (_gal_hanc = 1) when it starts holding a state:');
+    L('# the hook keeps where he stands and where she stands from him once, early in');
+    L('# that pass, and every restart puts him back there, stops her, and puts her');
+    L('# back at that offset from him.');
+    L('ignorehitpause if !isHelper && gameMode = "hgallery" && map(_gal_hanc) = 1 && map(_gal_hk) && stateNo = map(_gal_hs) && stateTime >= 1 {');
+    L('\tmap(_gal_hx) := pos x + cameraPos x;');
+    L('\tmap(_gal_hv) := 1;');
+    L('\tmap(_gal_hdv) := 0;');
+    L('\tif numTarget > 0 {');
+    L('\t\tmap(_gal_hdx) := target, pos x - pos x;');
+    L('\t\tmap(_gal_hdy) := target, pos y - pos y;');
+    L('\t\tmap(_gal_hdv) := 1;');
+    L('\t}');
+    L('\tmap(_gal_hanc) := 0;');
+    L('}');
+    L('ignorehitpause if !isHelper && gameMode = "hgallery" && map(_gal_hk) {');
+    L('\tif (map(_gal_hk) = 1 && stateNo = map(_gal_hs) && stateTime >= map(_gal_ht)) || (map(_gal_hk) = 2 && stateNo = map(_gal_hs) && animTime >= map(_gal_ht)) {');
+    L('\t\tif map(_gal_hv) {');
+    L('\t\t\tposAdd{x: (map(_gal_hx) - pos x - cameraPos x) * facing}');
+    L('\t\t\tif map(_gal_hdv) && numTarget > 0 {');
+    L('\t\t\t\ttargetVelSet{x: 0; y: 0}');
+    L('\t\t\t\ttargetBind{time: 1; pos: map(_gal_hdx) * facing, map(_gal_hdy)}');
+    L('\t\t\t}');
+    L('\t\t}');
+    L('\t\tselfState{value: stateNo}');
+    L('\t}');
+    L('}');
+    L('ignorehitpause if !isHelper && gameMode = "hgallery" && map(_gal_hr) > 0 && numTarget > 0 {');
+    L('\tif target, stateNo = map(_gal_hr) && target, stateTime >= map(_gal_hrt) {');
+    L('\t\ttargetState{value: map(_gal_hr)}');
+    L('\t}');
+    L('}');
+    for (const id of t.holdHelpers || []) {
+      L('ignorehitpause if isHelper(' + id + ') && gameMode = "hgallery" && root, map(_gal_hr) > 0 && numTarget > 0 {');
+      L('\tif target, stateNo = root, map(_gal_hr) && target, stateTime >= root, map(_gal_hrt) {');
+      L('\t\ttargetState{value: root, map(_gal_hr)}');
+      L('\t}');
+      L('}');
+    }
+    L('');
+  }
   L('# The same purge for helpers (-4 runs for them too): a helper reads its');
   L('# root\'s request (a helper\'s own map is a copy made when it spawned). One');
   L('# his -2 keeps up is spawned again the next frame. Its explods and texts go');
@@ -1231,6 +1402,8 @@ function buildGalleryZss(t, modes) {
   L('\tdestroySelf{removeexplods: 1; removetexts: 1}');
   L('}');
   L('');
+  // (The modern-input text only, and only where the build lists any.)
+  for (const x of hudZssLines(t, opts)) L(x);
   if (t.kills && t.kills.length) {
     L('# A helper his summon called goes at every reset, when the driver asks');
     L('# (_gal_k<id> on its root): a dog holds her up to 896 ticks, longer than');
@@ -1547,6 +1720,13 @@ function buildGalleryZss(t, modes) {
 function buildGalleryLua(data, modes, opts) {
   const v2 = opts && opts.v2 !== undefined ? !!opts.v2 : !!process.env.IKEMEN_V2;
   const DATA = { stage: data.stage, setupSlots: data.setupSlots || 0, setSlots: data.setSlots || 0, introMax: INTRO_MAX, pairs: data.pairs };
+  // The build's stages for the MAP tile (the modern-input text only, and
+  // only with more than one: a build with one has no tile). The first is the
+  // default, data.stage: the gallery opens on it as it always did.
+  if (v2 && opts && Array.isArray(opts.stages) && opts.stages.length > 1) DATA.stages = opts.stages.map((x) => ({ name: x.name, path: x.path }));
+  // (The characters whose own HUD explods the hook hides: select -> its
+  // number, galhud.js. The modern-input text only.)
+  const HUDX = hudIndex(opts, data);
   const mp = modeParts(data, modes);
   if (mp.bad) throw new Error('mode ' + mp.bad.id + ': ' + mp.bad.why);
   const chunks = mp.parts.filter((p) => p.lua).map((p) => p.lua + '\n');
@@ -1562,7 +1742,7 @@ function buildGalleryLua(data, modes, opts) {
 --   Down / Up             next / previous version of this position
 --   End / Delete          one speed faster / slower (auto is the top speed)
 --   Space                 the climax on / off
---   Home                  the next stage
+--   Home                  the next mood (her look as the finishes add up)
 --   Page Down / Page Up   next / previous pair, in the active pair's place
 --   1 - 4                 which pair on screen is the active one
 --   + / -                 zoom in / out on the active pair (several pairs:
@@ -1571,7 +1751,10 @@ function buildGalleryLua(data, modes, opts) {
 --   Insert                hides the overlay and the markers, and shows them
 --                         (H too; in the picker Insert adds a pair)
 --   Esc                   leave the gallery
--- The arrow keys are P2's, and P2 is off here: no receiver takes a player's
+${v2 ? `--   Mouse (left button)   several pairs: press on a pair to make it the
+--                         active one, hold and move to drag it sideways;
+--                         let go and it stays there
+` : ''}-- The arrow keys are P2's, and P2 is off here: no receiver takes a player's
 -- input. P1's keys and first pad drive the active pair's giver (his own moves,
 -- beside the gallery's), the way the Scene Viewer hands them over; the other
 -- givers take none. Everything goes back when the gallery is left.
@@ -1636,6 +1819,9 @@ K.RBACK, K.HGAP = 90, 36
 K.BESIDE = 40
 -- -hgallerylog on the command line prints each step to the log, for tests.
 local LOG = getCommandLineValue('-hgallerylog') ~= nil
+-- Tests only (with -hgallerylog): -hgalleryholdoff shuts THE HOLD (the negative
+-- control: the scenes must then end by their own clocks).
+K.NOHOLD = LOG and getCommandLineValue('-hgalleryholdoff') ~= nil
 -- Pairs side by side: at most four (the engine's Simul teams hold four a
 -- side). In 320-wide screen units (a character's own units times
 -- 320 / localCoordX(): every character sees a screen 320 of them wide at zoom
@@ -1662,6 +1848,16 @@ K.ZOOMS = { 0.62, 0.8, 1, 1.25 }
 -- Zoomed, the camera follows the active pair once it is this far from it
 -- (320-wide units).
 K.FOLLOW = 30
+-- DRAGGING A PAIR WITH THE MOUSE (several pairs; the modern-input engine's
+-- text only): pair centers stay DRAG_SEP apart and in their order
+-- (an edge slot stays the edge slot), DRAG_EDGE inside the view's edge where
+-- the screen bounds them (every pair in view), the stage's art likewise; a
+-- pair is hit inside a box DRAG_BODY tall over its ground line and
+-- DRAG_WIDE past its two each side (320-wide units, times the zoom). UI.drag: the button as last seen (was), the pair
+-- being dragged (k), the pointer and the pair's offset where it began (x0,
+-- d0), and the frames since the last release (after: the log's checks).
+K.DRAG_SEP, K.DRAG_EDGE, K.DRAG_BODY, K.DRAG_WIDE = 90, 24, 100, 44
+UI.drag = { was = false, k = nil, hover = nil, after = -1 }
 -- A SCENE IN THE AIR (one pair; a step's 'high', his feet's height in it):
 -- the view zooms out to VIEW_UP / (VIEW_BODY - high), at least VIEW_MIN.
 -- VIEW_UP is about what the view shows above the floor at scale 1 (less the
@@ -1751,9 +1947,9 @@ end
 -- useSlot() made current (G, GIVER, RECV), so each pair plays its own scene.
 local function newG()
   return { k = 1, pi = 1, si = 1, phase = 'idle', t = 0, tries = 0, note = '', restarts = 0,
-    entry = nil, fresh = true, ai = 0, slot = 0, sustain = 0, sustained = {}, held = nil, before = {}, off = 0,
+    entry = nil, fresh = true, ai = 0, slot = 0, sustain = 0, hold = { hk = 0, hs = 0, hr = 0 }, sustained = {}, held = nil, before = {}, off = 0,
     lastRecv = -1, lastRecvTime = 0, recvAt = 0, jumpReady = true, lastJump = -100, lastSt = -1,
-    shown = false, dwellF = 0, dwellIn = 0, mash = 0 }
+    shown = false, dwellF = 0, dwellIn = 0, mash = 0, dx = 0 }
 end
 local G = newG()
 -- The pairs on screen, how many, and the active one.
@@ -1909,7 +2105,7 @@ local function edgeReady(s)
   if not CAM.free then return true end
   if (s and s.place and outer(s)) or rhelperOf(curPair()) then return G.k == SEL and CAM.still >= 3 end
   if s and s.proj then
-    local c = (G.k - (NSLOT + 1) / 2) * SPACING
+    local c = (G.k - (NSLOT + 1) / 2) * SPACING + (G.dx or 0)
     return CAM.still >= 3 and math.abs(c - (CAM.x or 0)) + GAP / 2 <= 160 / (CAM.z or 1) + 20
   end
   return true
@@ -2026,8 +2222,9 @@ local function place()
     gx, rx = -d / 2 * ug, d / 2 * ur
   elseif NSLOT > 1 then
     -- Several pairs: each at its place, from the stage's center (the hook
-    -- takes the camera out), in each character's own units.
-    local c = (G.k - (NSLOT + 1) / 2) * SPACING
+    -- takes the camera out), in each character's own units - where the
+    -- mouse left it (dx), if it was dragged.
+    local c = (G.k - (NSLOT + 1) / 2) * SPACING + (G.dx or 0)
     local ug = onP(GIVER, function() return localCoordX() / 320 end) or 1
     local ur = onP(RECV, function() return localCoordX() / 320 end) or 1
     -- An edge-only summon at the far left: mirrored, he faces the left edge
@@ -2048,6 +2245,8 @@ local function place()
       .. (gap ~= GAP and string.format(' reach %.0f', gap) or ''))
     mset(GIVER, '_gal_x', (b - m * gap / 2) * ug); mset(GIVER, '_gal_abs', 1); mset(GIVER, '_gal_face', m); mset(GIVER, '_gal_place', 1)
     mset(RECV, '_gal_x', (b + m * gap / 2) * ur); mset(RECV, '_gal_abs', 1); mset(RECV, '_gal_face', -m); mset(RECV, '_gal_place', 1)
+    -- (This place has the whole drag in it: none of it is left to add.)
+    mset(GIVER, '_gal_dx', 0); mset(RECV, '_gal_dx', 0)
     return
   end
   mset(GIVER, '_gal_x', fc * gx); mset(GIVER, '_gal_abs', 0); mset(GIVER, '_gal_face', fc); mset(GIVER, '_gal_place', 1)
@@ -2077,6 +2276,56 @@ local function setupOf(p, s)
   s.merged = out
   return out
 end
+-- THE HOLD (gallerydata.js detectHold). A pair with one has the clocks that end
+-- his scenes (his state at time N or at the end of its animation: 't' and 'a')
+-- and hers (her state at time N). While a step of it shows, the state each of
+-- them is in is looked up and the hook is asked (the _gal_h* maps on him) to go
+-- back into it ${K_HOLD_LEAD} ticks before its clock runs out: his state into itself (its
+-- time 0 lines put her in hers again), hers sent again by whoever holds her.
+-- Asked only while a step shows and holds no note: a scene the driver walks to
+-- (grab, path) runs its own way, and one that is given up on is stood up.
+function LEAN.holdBy(p)
+  if p.holdBy == nil then
+    local his, her = {}, {}
+    for _, e in ipairs(p.hold and p.hold.his or {}) do his[e.s] = e end
+    for _, e in ipairs(p.hold and p.hold.her or {}) do her[e.s] = e.at end
+    p.holdBy = { his = his, her = her }
+  end
+  return p.holdBy
+end
+function LEAN.writeHold(p)
+  -- (A pair with no hold asks for nothing: no map written, none to clear.)
+  if K.NOHOLD or (not (p and p.hold) and G.hold.hk == 0 and G.hold.hr == 0) then return end
+  local hk, hs, ht, hr, hrt = 0, 0, 0, 0, 0
+  if p and p.hold and G.phase == 'show' and G.note == '' then
+    local by = LEAN.holdBy(p)
+    local gs = giverState()
+    local e = by.his[gs]
+    if e then
+      hs = gs
+      if e.k == 't' then hk, ht = 1, e.at - ${K_HOLD_LEAD} else hk, ht = 2, -${K_HOLD_LEAD} end
+    end
+    local rs = recvState()
+    local at = by.her[rs]
+    if at then hr, hrt = rs, at - ${K_HOLD_LEAD} end
+  end
+  local anchor = false
+  if hk ~= G.hold.hk or hs ~= G.hold.hs or hr ~= G.hold.hr then
+    -- (A new state to hold: the hook keeps where they stand, once, early in it.)
+    anchor = hk ~= 0 and (hk ~= G.hold.hk or hs ~= G.hold.hs)
+    G.hold.hk, G.hold.hs, G.hold.hr = hk, hs, hr
+    if LOG and (hk ~= 0 or hr ~= 0) then log('hold: his ' .. hs .. (hk == 1 and (' at time ' .. ht) or hk == 2 and ' at the end of its animation' or ' (none)') .. ', hers ' .. hr .. (hr ~= 0 and (' at time ' .. hrt) or ' (none)')) end
+  end
+  mset(GIVER, '_gal_hk', hk); mset(GIVER, '_gal_hs', hs); mset(GIVER, '_gal_ht', ht)
+  mset(GIVER, '_gal_hr', hr); mset(GIVER, '_gal_hrt', hrt)
+  if anchor then mset(GIVER, '_gal_hv', 0); mset(GIVER, '_gal_hanc', 1) end
+  -- (Test only, with -hgallerylog: where the two stand, now and then, while a
+  -- held scene plays, so a loop that walks one of them off shows in the log.)
+  if LOG and p and p.hold and G.phase == 'show' and MATCH.f % 20 == 0 then
+    local function at(n) return onP(n, function() return string.format('x %.0f y %.0f air %.0f st %d t %d anim %d', screenPosX(), screenPosY(), posY(), stateNo(), time(), anim()) end) or '-' end
+    log('hold pos f=' .. MATCH.f .. ' his ' .. at(GIVER) .. ' targets ' .. tostring(onP(GIVER, function() return numTarget() end)) .. ' | her ' .. at(RECV))
+  end
+end
 -- The pair's setup, asked for every frame (the hook holds it on him).
 local function writeSetup()
   local p = curPair()
@@ -2090,6 +2339,7 @@ local function writeSetup()
   mset(RECV, '_gal_stand', (p and p.receiver.stance) or 0)
   -- HIS OTHER BRANCH: the pair's swap set, played on her by the hook's +1.
   mset(RECV, '_gal_sw', (p and p.swapSet) or 0)
+  LEAN.writeHold(p)
   local s = curStep()
   -- AN ANTI-AIR GRAB: she is held in the air (the hook's own state, at the
   -- step's height, on its animation) from the place until his grab takes her.
@@ -2277,6 +2527,14 @@ local function act(s)
     -- each time he comes back there - never on the hub's own re-entries, or
     -- the jump would restart the hub before it acts.
     local st = giverState()
+    -- A scene THE HOLD keeps (his state or hers is on its clocks) never comes
+    -- round to the state the jump waits for: in place, grabbed again at once
+    -- (Minotaur's mount, a jump from his hub 1011, out of his held 1030).
+    if a.at and st ~= a.at and not G.fresh and G.t <= 1 then
+      local p = curPair()
+      local by = p and p.hold and LEAN.holdBy(p)
+      if by and (by.her[recvState()] or by.his[st]) then log('act ' .. G.ai .. ' cannot act from his ' .. st .. ' (the scene is held)'); return actionFailed(nil) end
+    end
     if st ~= G.lastSt and (a.at == nil or st == a.at) then G.jumpReady = true end
     G.lastSt = st
     if G.t == G.lastJump + 1 then
@@ -2729,11 +2987,15 @@ local function standsAt(pn)
   return onP(pn, function()
     local ls = screenWidth() / localCoordX()
     local z, cy = cameraZoom(), cameraPosY()
-    return { screenPosX() * z, (screenPosY() - posY() * ls + cy) * z - cy }
-  end)
+${v2 ? `    -- (screenPosX/Y and posY are in the character's own units: ls of the
+    -- fight's pixels each - 1 on a 320-wide fight, 4/3 for a 320 character
+    -- on a 16:9 stage's 427.)
+    return { screenPosX() * ls * z, (screenPosY() - posY()) * ls * z + cy * z - cy }
+` : `    return { screenPosX() * z, (screenPosY() - posY() * ls + cy) * z - cy }
+`}  end)
 end
 local function markers()
-  if NSLOT < 2 or HIDE then return end
+  if NSLOT < 2 or HIDE${v2 ? ' or PK.open' : ''} then return end
   local gw, gh = screenWidth(), screenHeight()
   local blink = (math.floor(LOOPF / 15) % 2) == 0
   for k = 1, NSLOT do
@@ -2746,10 +3008,26 @@ local function markers()
       -- A line on the ground under the pair, as wide as the pair.
       local w = math.max(30, math.abs(rx - gx) + 24)
       local ly = math.min(gv[2] + 1, gh - 14)
-      mbox('l' .. k, gw, gh, cx - w / 2, ly, cx + w / 2, ly + (act and 3 or 2), c, act and 255 or 170, act and 0 or 85)
-      -- A numbered tab in the middle of it: the active one bigger, outlined,
+${v2 ? `      -- (The on-screen controls' columns, while shown: a pair in view keeps its
+      -- marker between them, beside the pair, never under a button.)
+      local lx1, lx2 = cx - w / 2, cx + w / 2
+      if UI.hud and UI.hud.cols and not UI.hud.bars and cx > 0 and cx < gw then
+        local lo, hi = UI.hud.cw + 5, gw - UI.hud.cw - 5
+        cx = math.max(lo + 9, math.min(hi - 9, cx))
+        lx1, lx2 = math.max(cx - w / 2, lo), math.min(cx + w / 2, hi)
+      end
+      -- (With the bars nothing clips to the picture (the engine's
+      -- uiWindowSpace): a pair zoomed past its edge has no marker, one partly
+      -- out has its line cut at the edge.)
+      local off = UI.hud and UI.hud.bars and (cx < 0 or cx > gw)
+      if UI.hud and UI.hud.bars then lx1, lx2 = math.max(lx1, 0), math.min(lx2, gw) end
+      if off then UI.hud.mb[k] = nil else
+      mbox('l' .. k, gw, gh, lx1, ly, lx2, ly + (act and 3 or 2), c, act and 255 or 170, act and 0 or 85)
+` : `      mbox('l' .. k, gw, gh, cx - w / 2, ly, cx + w / 2, ly + (act and 3 or 2), c, act and 255 or 170, act and 0 or 85)
+`}      -- A numbered tab in the middle of it: the active one bigger, outlined,
       -- blinking.
-      local tw, th = act and 15 or 11, act and 13 or 10
+      local tw, th = act and 15 or 11, act and 13 or 10${v2 ? `
+      if UI.hud then UI.hud.mb[k] = { math.min(lx1, cx - tw / 2 - 1), ly - 1, math.max(lx2, cx + tw / 2 + 1), math.min(ly + 2, gh - th - 1) + th + 1 } end` : ''}
       local ty = math.min(ly + 2, gh - th - 1)
       if act then mbox('o' .. k, gw, gh, cx - tw / 2 - 1, ty - 1, cx + tw / 2 + 1, ty + th + 1, COL.WHITE, 255, 0) end
       local full = not act or blink
@@ -2767,7 +3045,7 @@ local function markers()
       textImgSetWindow(t, 0, 0, math.floor(gw + 0.5), math.floor(gh + 0.5))
       textImgSetPos(t, cx + 0.5, ty + (act and 11 or 9))
       textImgDraw(t)
-    end
+${v2 ? '      end\n' : ''}    end
   end
 end
 
@@ -2958,7 +3236,8 @@ local function pkLog(what)
   local g = pickerGivers()[PK.gi]
   local pi = pkPairIndex()
   print('[hgallery] picker ' .. what .. ' col=' .. PK.col .. ' slot=' .. SEL .. ' giver=' .. PK.gi .. ' recv=' .. PK.ri .. ' scene=' .. PK.sc .. ' pair=' .. tostring(pi)
-    .. ' step=' .. tostring((g and pi) and pkStepOf(g, pi, PK.sc) or nil) .. ' entry=' .. (g and g.name or '?') .. ' rows=' .. tostring((g and pi) and pkRowCount(g, pi) or nil))
+    .. ' step=' .. tostring((g and pi) and pkStepOf(g, pi, PK.sc) or nil) .. ' entry=' .. (g and g.name or '?') .. ' rows=' .. tostring((g and pi) and pkRowCount(g, pi) or nil)${v2 ? `
+    .. ' zone=' .. tostring(PK.zone) .. ' all=' .. (PK.all and PK.ag or 0) .. ' top=' .. tostring(PK.gtop) .. ' armed=' .. tostring(PK.armed or 0)` : ''})
 end
 local function pkSay(text)
   PK.msg, PK.msgT = text, 150
@@ -2977,9 +3256,9 @@ local function pkFollow()
   end
   local g = pickerGivers()[PK.gi]
   PK.sc = g and pkRowOf(g, G.pi, G.si) or G.si
-end
+${v2 ? '  PK.all = false\n' : ''}end
 local function pickerClose()
-  PK.open = false
+  PK.open = false${v2 ? '\n  PK.maps = false' : ''}
   -- Not unpaused yet: the key that chose (Enter, a button) is still down, and
   -- the first free frame would give it to the fighters as a press - Enter is
   -- P1's Start, DongHwan's effects toggle. The loop lets go once the keys are up.
@@ -2987,8 +3266,9 @@ local function pickerClose()
   pkLog('close')
 end
 ${v2 ? `-- (Action tokens: BTN:<name> is the engine button a player's Controller
--- Setup gives that name, DP_* and LS_* the directions.)
-local RELEASE_KEYS = { 'BTN:start', 'BTN:a', 'BTN:b', 'BTN:c', 'BTN:x', 'BTN:y', 'BTN:z', 'DP_U', 'DP_D', 'DP_L', 'DP_R', 'LS_Y-', 'LS_Y+', 'LS_X-', 'LS_X+' }
+-- Setup gives that name, DP_* and LS_* the directions. The mouse buttons
+-- too: the tap that closed the picker reaches neither the HUD nor a drag.)
+local RELEASE_KEYS = { 'BTN:start', 'BTN:a', 'BTN:b', 'BTN:c', 'BTN:x', 'BTN:y', 'BTN:z', 'DP_U', 'DP_D', 'DP_L', 'DP_R', 'LS_Y-', 'LS_Y+', 'LS_X-', 'LS_X+', 'MOUSE:LEFT', 'MOUSE:RIGHT' }
 local function pickerRelease()
   if PK.release and not PK.open and getActionTime(-1, RELEASE_KEYS) == 0 then` : `local RELEASE_KEYS = { 's', 'a', 'b', 'c', 'x', 'y', 'z', 'U', 'D', 'L', 'R' }
 local function pickerRelease()
@@ -3115,8 +3395,8 @@ end
 -- A key that acts on the active pair's scene waits while the picker is open or
 -- waits for keys to go up (it reads the arrows as menu keys), while the fight
 -- is paused (the engine runs a hotkey paused or not), and while a reload is on
--- its way.
-local function keysFree() return ACTIVE and not PK.open and not PK.release and not paused() and CMD == nil end
+-- its way${v2 ? ', or the match is ending for EXIT (its fade)' : ''}.
+local function keysFree() return ACTIVE and not PK.open and not PK.release and not paused() and CMD == nil${v2 ? ' and not UI.hud.exit' : ''} end
 -- The active pair shows step si next. The same grab's scene running: the
 -- step's path runs from where the scene is, with no new grab (paths are
 -- absolute); a grab alone is shown in place only while its states are still
@@ -3171,7 +3451,7 @@ end
 local NAV_KEYS = { LEFT = 'l', RIGHT = 'r', UP = 'u', DOWN = 'd', DELETE = 's', END = 'f', SPACE = 'c', HOME = 'h' }
 local NAV_NOTE = { l = 'one position in this pair', r = 'one position in this pair', u = 'one version of this position',
   d = 'one version of this position', s = 'no other speed in this position', f = 'no other speed in this position',
-  c = 'no climax in this position', h = 'no stages in this position' }
+  c = 'no climax in this position', h = 'no moods in this position' }
 function HGalleryNav(key)
   if not keysFree() then return end
   useSlot(SEL)
@@ -3224,17 +3504,22 @@ end
 function HGalleryDelete()
   if not ACTIVE then return end
   if not PK.open then return HGalleryNav('DELETE') end
-  if CMD ~= nil then return end
+  if CMD ~= nil${v2 ? ' or PK.maps' : ''} then return end
   if NSLOT <= 1 then return pkSay('the last pair stays: Enter changes it') end
   if LOG then print('[hgallery] delete pair ' .. SEL .. ' of ' .. NSLOT) end
   reload({ what = 'del', k = SEL })
 end
 -- Insert (and H): the overlay, its box and the markers hidden or shown again.
 -- The picker draws itself either way (in it, Insert adds a pair).
-function HGalleryOverlay()
+function HGalleryOverlay(${v2 ? 'btn' : ''})
   if not ACTIVE then return end
+${v2 ? `  -- (In the picker H is a letter: the next name with it.)
+  if PK.open then return end
   HIDE = not HIDE
-  if HIDE then tell('Insert shows the overlay', 120) else MSG.t = 0 end
+  -- (Hidden by its button, the SHOW tab it leaves is the way back: no note.
+  -- By Insert or H, the key.)
+  if HIDE then if not btn then tell('Insert shows the controls', 120) end else MSG.t = 0 end` : `  HIDE = not HIDE
+  if HIDE then tell('Insert shows the overlay', 120) else MSG.t = 0 end`}
   HINT = false
   if LOG then print('[hgallery] overlay ' .. (HIDE and 'hidden' or 'shown')) end
 end
@@ -3280,18 +3565,20 @@ end
 function HGalleryInsert()
   if not ACTIVE then return end
   if not PK.open then return HGalleryOverlay() end
-  if PK.col < 2 then return pkSay('pick a receiver first (Right)') end
+${v2 ? `  -- (The cursor pair, at the cursor's position: no arming needed.)
+  UI.pkInsert()
+` : `  if PK.col < 2 then return pkSay('pick a receiver first (Right)') end
   local pi = pkPairIndex()
   pickerAdd(pi, pi and pkPickStep(pi))
-end
+`}end
 function HGalleryPicker()
-  if not ACTIVE then return end
+  if not ACTIVE${v2 ? ' or UI.hud.exit' : ''} then return end
   if PK.open then return pickerClose() end
-  useSlot(SEL)
+${v2 ? "  if LOG and type(os) == 'table' and type(os.clock) == 'function' then UI.pk.t0 = os.clock() end\n" : ''}  useSlot(SEL)
   pkFollow()
   -- The cursor starts on the active pair, in the receiver column.
   PK.col, PK.t, PK.top, PK.msgT = 2, 0, {}, 0
-  -- Already paused with the Pause key: it stays paused when the picker closes.
+${v2 ? '  UI.pkOpen()\n' : ''}  -- Already paused with the Pause key: it stays paused when the picker closes.
   -- (Paused only because the picker is waiting for keys to go up: not that.)
   PK.keepPaused = paused() and not PK.release
   PK.release = false
@@ -3305,10 +3592,10 @@ end
 
 ${v2 ? `-- The menu tokens of the engine before modern-input, as actions.
 local HIT = { U = { 'DP_U', 'LS_Y-' }, D = { 'DP_D', 'LS_Y+' }, L = { 'DP_L', 'LS_X-' }, R = { 'DP_R', 'LS_X+' },
-  a = { 'BTN:a' }, b = { 'BTN:b' }, s = { 'BTN:start' } }
+  a = { 'BTN:a' }, b = { 'BTN:b' }, c = { 'BTN:c' }, s = { 'BTN:start' } }
 local function hit(tok) return getAction(-1, HIT[tok]) == true end
 ` : `local function hit(tok) return getInput(-1, { tok }) == true end
-`}local function pickerInput()
+`}${v2 ? '' : `local function pickerInput()
   local list = pickerGivers()
   local g = list[PK.gi]
   -- Keys that are no menu token: the last one pressed, counted once.
@@ -3546,14 +3833,12 @@ local function pickerDraw()
     pkText('msg', pkFit(PK.msg, width), (x1 + x2) / 2, helpY - LINE * 1.2, COL.GOLD, 0)
   end
 end
-local function pickerTick()
+`}local function pickerTick()
   if not PK.open then return end
   -- The Pause key toggles it too: the picker holds the fight still.
   if not paused() then togglePause(true) end
   PK.t = PK.t + 1
-  pickerInput()
-  if PK.open then pickerDraw() end
-end
+${v2 ? '  UI.pkFrame()\n' : '  pickerInput()\n  if PK.open then pickerDraw() end\n'}end
 
 -- The engine's own Space (external/script/debug.lua, a debug key): the
 -- gallery takes Space while it runs and gives this back when it is left.
@@ -3597,8 +3882,8 @@ end
 -- camera after it) and for a receiver's helper's pair (her root stands
 -- behind him, away from the scene).
 local function pairCenter()
-  local c = (SEL - (NSLOT + 1) / 2) * SPACING
   local g = SLOTS[SEL]
+  local c = (SEL - (NSLOT + 1) / 2) * SPACING + ((g and g.dx) or 0)
   local p = g and DATA.pairs[g.pi]
   local s = p and p.steps[g.si]
   if s == nil or s.place or rhelperOf(p) then return c end
@@ -3674,8 +3959,9 @@ local function camTick()
     if camKey() ~= CAM.key then camAsk()
     -- Zoomed, it follows the active pair: asked again once the pair's center
     -- is FOLLOW from the camera's (a scene that carries her off; smaller
-    -- moves, a thrust, never sway it).
-    elseif ZL ~= 0 and not paused() and math.abs(camPin() - CAM.x) > K.FOLLOW then camAsk() end
+    -- moves, a thrust, never sway it). Not while the mouse drags a pair: the
+    -- view would slide under the pointer; it follows once the pair is let go.
+    elseif ZL ~= 0 and not paused() and UI.drag.k == nil and math.abs(camPin() - CAM.x) > K.FOLLOW then camAsk() end
     if not paused() then
       local x, z = cameraPosX(), cameraZoom()
       if CAM.px and math.abs(x - CAM.px) < 0.01 and math.abs(z - CAM.pz) < 0.0001 then CAM.still = CAM.still + 1
@@ -3697,8 +3983,10 @@ local function camTick()
   end
 end
 -- + / -: the zoom on the active pair, one level in or out. The camera moves
--- next tick (camTick); the level stays when 1-4 changes the active pair.
-function HGalleryZoom(d, key)
+-- next tick (camTick); the level stays when 1-4 changes the active pair.${v2 ? `
+-- quiet (the mouse wheel): at a limit, or with one pair, only the log says
+-- so - a wheel spun on turns no note up.` : ''}
+function HGalleryZoom(d, key${v2 ? ', quiet' : ''})
   if not keysFree() then return end
   local note
   if NSLOT < 2 then note = 'zoom is for several pairs'
@@ -3714,7 +4002,8 @@ function HGalleryZoom(d, key)
     end
   end
   if LOG then print('[hgallery] key ' .. key .. ': ' .. note) end
-  tell(note, 90)
+${v2 ? `  if quiet then return end
+` : ''}  tell(note, 90)
 end
 
 -- Settled: its scene showed once, or it gave up (a note, stuck), or it waits
@@ -3848,6 +4137,14 @@ local function tickSlot()
         .. ' prev ' .. tostring(onR(function() return prevStateNo() end))
       if k ~= G.rrKey then G.rrKey = k; log('reroll watch: his ' .. k) end
     end
+    -- (For the test, while a step shows: each change of his state or hers,
+    -- with the match frame - a scene that holds shows none that leaves it.)
+    if LOG and G.phase == 'show' then
+      local k = tostring(giverState()) .. ' her ' .. tostring(recvState())
+      if k ~= G.hwKey then G.hwKey = k; log('hold watch f=' .. MATCH.f) end
+    elseif G.hwKey then
+      G.hwKey = nil
+    end
     -- From the reset until a frame before the grab: his leftovers go, the
     -- grab's own explods never. And a step given up on, once both stand.
     mset(GIVER, '_gal_clean', ((G.phase == 'place' and G.t < 7) or (G.phase == 'stuck' and G.t >= 3 and G.t < 7)) and 1 or 0)
@@ -3906,24 +4203,2779 @@ local function tickSlot()
   end
 end
 
-hook.add('loop#hgallery', 'hgallery', function()
+${v2 ? `-- ---- several pairs: dragged with the mouse --------------------------------------
+-- The modern-input engine reads the mouse on the game's canvas (its menus)
+-- and gives Lua no pointer position: mouseOver(left, top, right, bottom,
+-- width, height) says whether the pointer is inside a rectangle of a width x
+-- height space - here the fight's own (screenWidth x screenHeight), the
+-- markers' pixels. So the pointer's x is found by halving a rectangle from
+-- the fight's left edge, and a pair is hit inside a box over its ground line.
+-- The left button: its held frames (inputDeviceActionTime over every device:
+-- the mouse acts for the device in use). The mouse never reaches a fighter's
+-- commands (the engine's rule): a click does nothing else in a fight. An
+-- engine without mouseOver (stock 1.0.0, the desktop zip) has no drag.
+--   Press on a pair: it is the active one (as its digit) and follows the
+--   pointer across while the button is held - both of it moved by the
+--   pointer's step from where they are (the hook's _gal_dx), the scene
+--   playing on, bound as it was; let go, it stays there: its place (G.dx,
+--   from its slot's) is where every later grab of it stands.
+function UI.mouseOn()
+  return type(mouseOver) == 'function' and (type(inputDeviceActionTime) == 'function' or type(getActionTime) == 'function')
+end
+function UI.mouseHeld()
+  local t
+  if type(inputDeviceActionTime) == 'function' then t = inputDeviceActionTime(0, { 'MOUSE:LEFT' }) else t = getActionTime(-1, { 'MOUSE:LEFT' }) end
+  return (tonumber(t) or 0) > 0
+end
+-- The pointer's x across the fight, in its pixels (0 to gw); nil when it is
+-- not over the fight.
+function UI.pointerX(gw, gh)
+  if not mouseOver(0, 0, gw, gh, gw, gh) then return nil end
+  local lo, hi = 0, gw
+  for _ = 1, 11 do
+    local mid = (lo + hi) / 2
+    if mouseOver(0, 0, mid, gh, gw, gh) then hi = mid else lo = mid end
+  end
+  return (lo + hi) / 2
+end
+-- (Its y the same way, for the log.)
+function UI.pointerY(gw, gh)
+  if not mouseOver(0, 0, gw, gh, gw, gh) then return nil end
+  local lo, hi = 0, gh
+  for _ = 1, 10 do
+    local mid = (lo + hi) / 2
+    if mouseOver(0, 0, gw, mid, gw, gh) then hi = mid else lo = mid end
+  end
+  return (lo + hi) / 2
+end
+-- Pair k's box on screen (the markers' pixels): DRAG_WIDE past the two of
+-- them, DRAG_BODY over the ground line down to the marker; and their middle.
+function UI.pairBox(k)
+  local gv, rv = standsAt(2 * k - 1), standsAt(2 * k)
+  if not (gv and rv) then return nil end
+  local z = cameraZoom()
+  local y2 = math.max(gv[2], rv[2]) + 16
+  return math.min(gv[1], rv[1]) - K.DRAG_WIDE * z, y2 - 16 - K.DRAG_BODY * z, math.max(gv[1], rv[1]) + K.DRAG_WIDE * z, y2, (gv[1] + rv[1]) / 2
+end
+-- Pair k's place from the stage's center (320-wide units): its slot's, and
+-- the drag's.
+function UI.placeOf(k) return (k - (NSLOT + 1) / 2) * SPACING + (SLOTS[k].dx or 0) end
+-- How far pair k's drag may go (its offset from its slot): DRAG_SEP from
+-- the pairs beside it, in their order; inside the view while the screen
+-- bounds them (every pair in view: the camera stands at the stage's
+-- center); inside the stage's art.
+function UI.dragLimits(k, gw)
+  local base = (k - (NSLOT + 1) / 2) * SPACING
+  local lo, hi = -1e9, 1e9
+  if k > 1 then lo = UI.placeOf(k - 1) + K.DRAG_SEP - base end
+  if k < NSLOT then hi = UI.placeOf(k + 1) - K.DRAG_SEP - base end
+  if not CAM.free then
+    local room = gw / 2 / cameraZoom() - GAP / 2 - K.DRAG_EDGE
+    lo, hi = math.max(lo, -room - base), math.min(hi, room - base)
+  end
+  if STAGE.l and STAGE.r then
+    lo, hi = math.max(lo, STAGE.l + GAP / 2 + K.DRAG_EDGE - base), math.min(hi, STAGE.r - GAP / 2 - K.DRAG_EDGE - base)
+  end
+  return lo, hi
+end
+-- Pair k moved by step (320-wide units): both of it, in their own units,
+-- on top of any earlier step the hook has not taken yet.
+function UI.shift(k, step)
+  local g = SLOTS[k]
+  g.dx = (g.dx or 0) + step
+  -- (A scene whose lean is still being learned is measured from its place.)
+  if g.lean then g.lean.base = g.lean.base + step end
+  for _, pn in ipairs({ 2 * k - 1, 2 * k }) do
+    onP(pn, function() mapSet('_gal_dx', step * localCoordX() / 320, 'add') end)
+  end
+end
+function UI.mouseTick()
+  local D = UI.drag
+  if not UI.mouseOn() then return end
+  local held = UI.mouseHeld()
+  local press = held and not D.was
+  D.was = held
+  -- Let go: the button up, or anything that takes the fight away.
+  if D.k and (not held or D.k > NSLOT or not keysFree() or roundState() ~= 2) then
+    local k = D.k
+    D.k, D.after = nil, 0
+    if SLOTS[k] then
+      if LOG then print(string.format('[hgallery] mouse release pair %d: offset %.1f (from %.1f): ', k, SLOTS[k].dx or 0, D.d0 or 0) .. places() .. ' | ' .. snapshot()) end
+      tell(string.format('pair %d stays here', k), 90)
+    end
+  end
+  -- (The log: where every pair is a second and three seconds after.)
+  if D.after >= 0 then
+    D.after = D.after + 1
+    if LOG and (D.after == 60 or D.after == 180) then print('[hgallery] mouse after release +' .. D.after .. ': ' .. places() .. ' | ' .. snapshot()) end
+    if D.after >= 180 then D.after = -1 end
+  end
+  D.hover = nil
+  if roundState() ~= 2 or not keysFree() then return end
+  if NSLOT < 2 then
+    if press then tell('mouse drag is for several pairs', 90) end
+    return
+  end
+  local gw, gh = screenWidth(), screenHeight()
+  for k = 1, NSLOT do
+    local x1, y1, x2, y2 = UI.pairBox(k)
+    if x1 and mouseOver(x1, y1, x2, y2, gw, gh) and (D.hover == nil or k == SEL) then D.hover = k end
+  end
+  -- (The log: where the pointer is and every pair's box, when it moves.)
+  if LOG and D.k == nil and type(mouseMoved) == 'function' and mouseMoved() then
+    local t = {}
+    for k = 1, NSLOT do
+      local x1, y1, x2, y2 = UI.pairBox(k)
+      t[#t + 1] = k .. string.format(':%.1f-%.1f,%.1f-%.1f', x1 or -1, x2 or -1, y1 or -1, y2 or -1)
+    end
+    print(string.format('[hgallery] mouse at %.1f,%.1f over %s; boxes %s (fight %.1fx%.1f)', UI.pointerX(gw, gh) or -1, UI.pointerY(gw, gh) or -1, tostring(D.hover), table.concat(t, ' '), gw, gh))
+  end
+  if press then
+    local k = D.hover
+    if LOG then print('[hgallery] mouse press on ' .. (k and ('pair ' .. k) or 'no pair') .. string.format(' (pointer %.1f): ', UI.fightX(gw, gh) or -1) .. places()) end
+    if k == nil then return end
+    if k ~= SEL then HGallerySlot(k) end
+    local g = SLOTS[k]
+    local p = DATA.pairs[g.pi]
+    local s = p and p.steps[g.si]
+    -- (Placed from the screen's edge, or her root summoning her there: a
+    -- drag would take the edge away from it.)
+    if (s and s.place) or rhelperOf(p) then return tell('pair ' .. k .. ' plays from the screen edge: it stays', 90) end
+    local px = UI.fightX(gw, gh)
+    if px == nil then return end
+    D.k, D.x0, D.d0 = k, px, g.dx or 0
+    if LOG then print(string.format('[hgallery] mouse drag pair %d from %.1f (zoom %.3f): ', k, px, cameraZoom()) .. places() .. ' | ' .. snapshot()) end
+  elseif D.k then
+    local px = UI.fightX(gw, gh)
+    if px then
+      local lo, hi = UI.dragLimits(D.k, gw)
+      local want = D.d0 + (px - D.x0) / cameraZoom()
+      if lo <= hi then want = math.max(lo, math.min(hi, want)) else want = SLOTS[D.k].dx or 0 end
+      local step = want - (SLOTS[D.k].dx or 0)
+      if math.abs(step) >= 0.05 then UI.shift(D.k, step) end
+      if LOG and LOOPF % 15 == 0 then
+        print(string.format('[hgallery] mouse drag pair %d: pointer %.1f, offset %.1f, its middle on screen %.1f: ', D.k, px, SLOTS[D.k].dx or 0, select(5, UI.pairBox(D.k)) or -1) .. places())
+      end
+    end
+  end
+  -- The pair being dragged, or under the pointer (the mouse used last): a
+  -- frame round it in its color, solid while dragged.
+  local k = D.k or ((type(mouseActive) ~= 'function' or mouseActive()) and D.hover or nil)
+  if k and not HIDE then
+    local x1, y1, x2, y2 = UI.pairBox(k)
+    if x1 then
+      local c, a = COL.COLORS[k], D.k and 255 or 150
+      mbox('dt', gw, gh, x1, y1, x2, y1 + 1, c, a, 255 - a)
+      mbox('db', gw, gh, x1, y2 - 1, x2, y2, c, a, 255 - a)
+      mbox('dl', gw, gh, x1, y1, x1 + 1, y2, c, a, 255 - a)
+      mbox('dr', gw, gh, x2 - 1, y1, x2, y2, c, a, 255 - a)
+    end
+  end
+end
+
+-- ---- the on-screen controls (HUD) -------------------------------------------
+-- Buttons a mouse clicks or a finger taps, drawn by this script in the fight's
+-- own pixels (screenWidth x screenHeight: 240 tall, 320 wide at 4:3, about
+-- 427 at 16:9; camera zoom leaves them alone). Mid-match the engine reads the
+-- pointer only inside the fight's viewport, so every button sits inside it.
+-- Two thumb columns at the screen's edges (a phone held sideways):
+--   left   POS back, VER up, VER down, PAIRS (the picker)
+--   right  POS next, SPEED (one faster per tap, around to the slowest),
+--          CLIMAX (lit while on), STAGE
+-- EXIT (a tap arms it: LEAVE THE GALLERY over the bar, or EXIT again, leaves)
+-- and HIDE in the top corners, a two-line status bar between them, and with
+-- several pairs a row of chips under it: pair 1-4 (the active one), + (the
+-- picker, to add one) and the zoom out / in (magnifiers). Each button calls its key's
+-- own function (HGalleryNav and the rest), so its notes, waits and in-place
+-- moves are the key's; a button the position has nothing for is drawn dim
+-- and a tap gives the key's note. Keys and pads are unchanged.
+-- The pointer is read once a frame (UI.pointerX / pointerY) and hit-tested
+-- against the layout with arithmetic. A press on a button is taken
+-- (mouseTake: it never starts a pair drag) and the button acts on RELEASE
+-- over it; sliding off before letting go cancels. Hidden (HIDE, the H and
+-- Insert keys) only a SHOW tab stays. Nothing is drawn below y 222: the floor
+-- and the pairs' markers stay clear. One rect object per piece is kept and
+-- set again only when it changes (the cost line under -hgallerylog).
+-- (Every table is made inside a function: the register rule at K, COL, UI.)
+function UI.hudInit()
+  UI.hud = { ft = 0, fid = nil, armT = 0, was = false, hold = nil, over = nil, hov = false,
+    cw = 44, cmp = false, cols = false, mb = {}, rs = {}, ts = {}, wc = {}, wn = 0, lcn = 0, gk = nil, L = nil, lk = nil, exit = false, ma = false,
+    bars = false, bw = 0, ox = 0, pw = 320, slim = false, bx1 = 52, bx2 = 268, help = false, helpT = 0, helpBy = 'keys', mouse = false, wsLog = nil, barsOff = false,
+    WU = { 'MOUSE:WHEELUP' }, WD = { 'MOUSE:WHEELDOWN' },
+    hint = { key = nil, lines = {} }, bar = {}, cost = { n = 0, hud = 0, mouse = 0, pk = 0, pkn = 0 } }
+  UI.hc = { FACE = { 14, 16, 26 }, EDGE = { 210, 214, 228 }, PAPER = { 246, 240, 222 }, DIM = { 118, 120, 132 },
+    RED = { 255, 70, 70 }, GOLD = { 255, 196, 52 }, CYAN = { 90, 210, 255 }, PINK = { 255, 92, 150 },
+    GREEN = { 110, 230, 140 }, BONE = { 232, 228, 216 }, INK = { 10, 11, 16 }, WHITE = { 255, 255, 255 },
+    BLACK = { 0, 0, 0 }, SOFT = { 190, 192, 200 } }
+end
+UI.hudInit()
+-- Characters' own HUD explods (galhud.js): each character with any, by its
+-- select path, and its number in the hook's list (map _gal_hud on its root).
+UI.HUDX = ${toLua(HUDX)}
+-- The driver names them: every fighter's number on its root, when it
+-- changes and every 30 frames (a character loaded again starts with no map).
+function UI.hudExplods()
+  local H = UI.hud
+  H.hx = H.hx or {}
+  for k = 1, NSLOT do
+    local g = SLOTS[k]
+    local pr = g and DATA.pairs[g.pi]
+    if pr then
+      for i, sel in ipairs({ pr.giver.select, pr.receiver.select }) do
+        local pn, n = 2 * k - 2 + i, UI.HUDX[sel] or 0
+        if H.hx[pn] ~= n or (n > 0 and LOOPF % 30 == 0) then
+          if LOG and H.hx[pn] ~= n and n > 0 then print('[hgallery] hud explods of ' .. sel .. ' hidden (P' .. pn .. ', list ' .. n .. ')') end
+          H.hx[pn] = n
+          mset(pn, '_gal_hud', n)
+        end
+      end
+    end
+  end
+end
+-- Slim columns (glyphs only) from this many pairs on, in the fight's own
+-- pixels; the bars are used when each is at least BARS_MIN wide.
+K.SLIM_AT, K.BARS_MIN = 4, 50
+-- The map (stage) the gallery plays on: its number in DATA.stages (1, the
+-- build's first, when the data has none). Kept for the session like the
+-- zoom and the hidden HUD (reloads, leaving and coming back), never saved.
+K.map = 1
+-- The gallery's own copy of the engine's 6x9 font (a screenpack may ship
+-- another f-6x9.def); the engine's where the build has none.
+function UI.hudFont()
+  local name = 'f-6x9.def'
+  if main and main.f_fileExists and main.f_fileExists('${GALLERY_FONT_VPATH}') then name = '${GALLERY_FONT_VPATH.replace(/^font\//, '')}' end
+  local ok, f = pcall(fontNew, name, -1)
+  if LOG then print('[hgallery] hud font ' .. name .. ((ok and f ~= nil) and '' or ' did not load: f-6x9.def')) end
+  if ok and f ~= nil then return f end
+  return fontNew('f-6x9.def', -1)
+end
+-- Where the controls are drawn: UI.hud.gw x gh, in 240-high units. Our web
+-- engine lets the script draw and read the mouse over the WHOLE window
+-- during a match (uiWindowSpace: the pillarbox bars beside a fight narrower
+-- than the window); there, on bars at least K.BARS_MIN wide, it is the
+-- window, the fight from ox to ox + pw, and the columns stand in the bars.
+-- Else (a fight as wide as the window, an engine without it: the desktop
+-- exe, stock 1.0.0) it is the fight's own pixels, ox 0, and the columns
+-- stand in the picture - slim (glyphs only) from K.SLIM_AT pairs on. Asked
+-- every frame (the engine clears it at each match's start and end); the
+-- log says when it changes. H.bx1-bx2: the status bar, '?' at its end.
+function UI.hudSpace()
+  local H = UI.hud
+  local gw, gh = screenWidth(), screenHeight()
+  local ww, why = nil, 'no engine support'
+  if type(uiWindowSpace) == 'function' then
+    if H.barsOff then uiWindowSpace(false); why = 'off by the test key'
+    else
+      ww = tonumber(uiWindowSpace(true))
+      if ww == nil then why = 'the game does not keep its aspect'
+      elseif (ww - gw) / 2 < K.BARS_MIN then
+        why = string.format('bars %.1f wide (window %.1f, fight %.1f)', (ww - gw) / 2, ww, gw)
+        uiWindowSpace(false)
+        ww = nil
+      end
+    end
+  end
+  H.bars = ww ~= nil
+  H.bw = H.bars and (ww - gw) / 2 or 0
+  H.ox, H.pw = H.bw, gw
+  H.slim = (not H.bars) and NSLOT >= K.SLIM_AT
+  -- COMPACT tiles (a computer): once a mouse has hovered over the picture
+  -- (a touch screen never reports a hover) every tile is about 72% of the
+  -- touch size - 34 wide, words at 3/4 scale. Lua cannot read the window in
+  -- pixels, so the pointer is what tells a mouse from a finger; a touch
+  -- screen, or a mouse not yet moved, keeps the touch tiles.
+  H.cmp = H.mouse == true
+  H.cw = H.bars and math.min(H.cmp and 34 or 47, H.bw - 6) or (H.cmp and 34 or (H.slim and 30 or 44))
+  if H.bars then H.bx1, H.bx2 = H.ox + 2, H.ox + gw - 2 else H.bx1, H.bx2 = H.cw + 8, math.floor(gw + 0.5) - H.cw - 8 end
+  if LOG then
+    local line = H.bars and string.format('on: window %.2f, fight %.2f, bars %.2f', ww, gw, H.bw) or ('off: ' .. why)
+    if H.wsLog ~= line then H.wsLog = line; print('[hgallery] bars ' .. line) end
+  end
+  UI.hudGeom(H.bars and ww or gw, gh)
+end
+-- The pointer's x in the fight's pixels (past 0 or gw over the bars).
+function UI.fightX(gw, gh)
+  local H = UI.hud
+  if not H.bars then return UI.pointerX(gw, gh) end
+  local x = UI.pointerX(H.gw, H.gh)
+  return x and (x - H.ox) or nil
+end
+-- The fight's size: the caches set their localcoord again when it changes.
+function UI.hudGeom(gw, gh)
+  local H = UI.hud
+  local key = gw * 4096 + gh
+  if H.gk ~= key then
+    H.gk, H.gw, H.gh, H.gwi, H.ghi, H.lcn = key, gw, gh, math.floor(gw + 0.5), math.floor(gh + 0.5), H.lcn + 1
+    H.lk = nil
+  end
+end
+-- One rect of a piece's set (rs[i]), in the fight's pixels: color c, alpha
+-- a (0-1), additive when add. Set again only what changed.
+function UI.hr(rs, i, x1, y1, x2, y2, c, a, add)
+  local H = UI.hud
+  local e = rs[i]
+  if e == nil then e = { r = rectNew() }; rs[i] = e end
+  local r = e.r
+  if e.lc ~= H.lcn then rectSetLocalcoord(r, H.gw, H.gh); e.lc, e.x1 = H.lcn, nil end
+  if e.c ~= c then rectSetColor(r, c[1], c[2], c[3]); e.c = c end
+  local src = math.floor(a * 255 + 0.5)
+  local ak = add and (-1 - src) or src
+  if e.a ~= ak then rectSetAlpha(r, src, add and 255 or 255 - src); e.a = ak end
+  if e.x1 ~= x1 or e.y1 ~= y1 or e.x2 ~= x2 or e.y2 ~= y2 then
+    rectSetWindow(r, x1, y1, x2, y2)
+    e.x1, e.y1, e.x2, e.y2 = x1, y1, x2, y2
+  end
+  rectDraw(r)
+end
+-- A frame t thick inside x1,y1-x2,y2 (four rects from rs[i]).
+function UI.hframe(rs, i, x1, y1, x2, y2, t, c, a, add)
+  UI.hr(rs, i, x1, y1, x2, y1 + t, c, a, add)
+  UI.hr(rs, i + 1, x1, y2 - t, x2, y2, c, a, add)
+  UI.hr(rs, i + 2, x1, y1 + t, x1 + t, y2 - t, c, a, add)
+  UI.hr(rs, i + 3, x2 - t, y1 + t, x2, y2 - t, c, a, add)
+end
+-- A hard shadow 2 down and right: only what shows past the box (two rects).
+function UI.hshadow(rs, i, x1, y1, x2, y2, a)
+  UI.hr(rs, i, x2, y1 + 2, x2 + 2, y2 + 2, UI.hc.BLACK, a)
+  UI.hr(rs, i + 1, x1 + 2, y2, x2, y2 + 2, UI.hc.BLACK, a)
+end
+-- A play arrow from x (rs[i] on, one rect a column): n columns u wide, the
+-- base n * u each way from cy and u less each way a column, so it comes to
+-- a point. dir 1 points right, -1 left. The HUD's POS arrows are n 4, u 2;
+-- the picker's SHOW is the same arrow at half that, n 4, u 1.
+function UI.htri(rs, i, x, cy, n, u, dir, c, a)
+  for j = 0, n - 1 do
+    local h, cx = (n - j) * u, x + ((dir > 0) and j or (n - 1 - j)) * u
+    UI.hr(rs, i + j, cx, cy - h, cx + u, cy + h, c, a)
+  end
+end
+-- One text of a piece's set (ts[i]): at x, its baseline at y; align 0
+-- centered, 1 from x, -1 up to x; win, a kept { x1, y1, x2, y2 }, clips it.
+function UI.ht(ts, i, str, x, y, c, a, align, sc, win)
+  local H = UI.hud
+  local e = ts[i]
+  if e == nil then
+    local t = textImgNew()
+    textImgSetFont(t, UI.font)
+    e = { ti = t }
+    ts[i] = e
+  end
+  local t = e.ti
+  sc = sc or 1
+  if e.lc ~= H.lcn or e.sc ~= sc then
+    textImgSetLocalcoord(t, H.gwi, H.ghi)
+    textImgSetScale(t, sc, sc)
+    e.lc, e.sc, e.x, e.w = H.lcn, sc, nil, nil
+  end
+  local w = win or H
+  if e.w ~= w then
+    if win then textImgSetWindow(t, win[1], win[2], win[3], win[4]) else textImgSetWindow(t, 0, 0, H.gwi, H.ghi) end
+    e.w = w
+  end
+  if e.al ~= align then textImgSetAlign(t, align); e.al = align end
+  if e.s ~= str then textImgSetText(t, str); e.s = str end
+  local ak = math.floor(a * 255 + 0.5)
+  if e.c ~= c or e.a ~= ak then textImgSetColor(t, c[1], c[2], c[3], ak); e.c, e.a = c, ak end
+  if e.x ~= x or e.y ~= y then textImgSetPos(t, x, y); e.x, e.y = x, y end
+  textImgDraw(t)
+end
+-- A string's width in the font at scale 1 (the fight's units), measured
+-- by the engine: the font is variable width.
+function UI.hw(str)
+  local H = UI.hud
+  local w = H.wc[str]
+  if w then return w end
+  if H.mt == nil then H.mt = textImgNew(); textImgSetFont(H.mt, UI.font); textImgSetScale(H.mt, 1, 1) end
+  w = tonumber(textImgGetTextWidth(H.mt, str)) or (#str * 6)
+  if H.wn > 300 then H.wc, H.wn = {}, 0 end
+  H.wc[str], H.wn = w, H.wn + 1
+  return w
+end
+-- str cut with '..' to fit maxw (no space or opening bracket left before
+-- the '..').
+function UI.hcut(str, maxw)
+  if UI.hw(str) <= maxw then return str end
+  for n = #str - 1, 1, -1 do
+    local s = string.gsub(string.sub(str, 1, n), '[%s%(%[]+$', '')
+    if s ~= '' and UI.hw(s .. '..') <= maxw then return s .. '..' end
+  end
+  return ''
+end
+-- str cut at a word to fit maxw: whole words, then '..', never after a
+-- space, a colon or an opening bracket, nor inside brackets it opened, and
+-- a number or a one-letter key stays with the word before it ("POSITION
+-- 1", "SPEED 3", "PRESS B", "HOLD Y)"). '' when not even the first word
+-- fits (the caller decides what goes).
+function UI.hcutw(str, maxw)
+  if UI.hw(str) <= maxw then return str end
+  for n = #str - 1, 1, -1 do
+    if string.sub(str, n + 1, n + 1) == ' ' and not string.find(str, '^%d', n + 2)
+      and not string.find(str, '^%w[%)%],.:;!?]*$', n + 2) and not string.find(str, '^%w[%)%],.:;!?]* ', n + 2) then
+      local s = string.gsub(string.sub(str, 1, n), '[%s%(%[:;,/&%-]+$', '')
+      local _, o = string.gsub(s, '[%(%[]', '')
+      local _, c = string.gsub(s, '[%)%]]', '')
+      if s ~= '' and o <= c and UI.hw(s .. '..') <= maxw then return s .. '..' end
+    end
+  end
+  return ''
+end
+-- The speed line of the step's indicator ("speed 2/5 Del/End", "phase 2/3",
+-- "picture 1/2", "speed auto/5"): its word, where it is, the top.
+function UI.hudSpeedOf(s)
+  local w, here, top = string.match(s.ind or '', '(%a+) (%w+)/?(%d*) Del/End')
+  return w, here, top
+end
+-- The buttons for the active pair's step, made when the step, the pairs, the
+-- zoom, the fight's size or the space (bars, slim) change. In the HUD's
+-- space (UI.hudSpace): in the bars, a column 47 wide in each, 3 from the
+-- picture (EXIT / HIDE, POS, VER / SPEED, VER / CLIMAX, PAIRS / STAGE, then
+-- the pair chips in a 2 x 2 grid / zoom out and in); in the picture, the
+-- columns at its edges (44 wide, 30 and glyphs only when slim) and the chips
+-- and zoom in a row under the status bar. '?' (the keys' help) at the status
+-- bar's right end.
+function UI.hudLayout()
+  local H, C = UI.hud, UI.hc
+  useSlot(SEL)
+  local p, s = curPair(), curStep()
+  if p == nil or s == nil then return nil end
+  local armed = H.armT > 0
+  local key = G.pi .. '|' .. G.si .. '|' .. SEL .. '|' .. NSLOT .. '|' .. H.gwi .. '|' .. ZL .. '|' .. tostring(HIDE) .. '|' .. tostring(armed)
+    .. '|' .. tostring(H.bars) .. '|' .. tostring(H.slim) .. '|' .. tostring(H.help) .. '|' .. tostring(H.cmp)
+  if H.lk == key and H.L then return H.L end
+  local gw, k = H.gwi, s.k
+  local L = {}
+  local cw, bars = H.cw, H.bars
+  -- The two columns' edges: lx1-lx2 and rx1-rx2. (Compact tiles in the bars
+  -- stand in the middle of each bar: the bar is wider than they are.)
+  local cmp = H.cmp
+  local lx1, lx2, rx1, rx2
+  if bars then
+    if cmp then
+      lx1 = math.floor((H.ox - cw) / 2)
+      lx2 = lx1 + cw
+      rx1 = H.ox + H.pw + math.floor((H.bw - cw) / 2)
+    else
+      lx2 = H.ox - 3
+      lx1, rx1 = lx2 - cw, H.ox + H.pw + 3
+    end
+    rx2 = rx1 + cw
+  else
+    lx1, lx2, rx1, rx2 = 4, 4 + cw, gw - 4 - cw, gw - 4
+  end
+  -- The build's maps (stages): a MAP tile where there is more than one.
+  local maps = #UI.mapList() > 1
+  -- Rows: the top pair, then POS, VER / SPEED, VER / CLIMAX, PAIRS / MOOD
+  -- and MAP (the right column's fifth). MOOD and MAP are half-height tiles
+  -- (a glyph and a word on one line). Compact: one set of rows for the
+  -- bars and the picture, from under EXIT / HIDE. Touch: the bars' rows
+  -- run 34-202; the picture's from 52 to 220 (nothing is drawn below 222:
+  -- the floor and the pairs' markers stay clear); slim (glyphs only, from
+  -- K.SLIM_AT pairs) stop at 158: four pairs at the fit stand below it, and
+  -- the edge pairs' props are not covered - so its MAP stands in the top row.
+  local rows, lp
+  if cmp then
+    rows = { { 34, 70 }, { 73, 99 }, { 102, 126 }, { 129, 151 }, { 154, 174 } }
+    lp = rows[4]
+  elseif bars then
+    rows = { { 34, 86 }, { 90, 118 }, { 122, 150 }, { 154, 176 }, { 180, 202 } }
+    lp = { 154, 182 }
+  elseif H.slim then
+    rows = { { 34, 74 }, { 78, 102 }, { 106, 130 }, { 134, 156 } }
+    lp = { 134, 158 }
+  else
+    rows = { { 52, 100 }, { 104, 134 }, { 138, 168 }, { 172, 194 }, { 198, 220 } }
+    lp = { 172, 220 }
+  end
+  -- MAP in the right column (every layout but the slim one's), else in the
+  -- top row beside the zoom.
+  local mapCol = maps and rows[5] ~= nil and not H.slim
+  if HIDE then
+    if bars then L[1] = { id = 'sh', kind = 'show', x1 = rx1, y1 = 4, x2 = rx2, y2 = 30, acc = C.BONE, word = 'SHOW' }
+    else L[1] = { id = 'sh', kind = 'show', x1 = gw - 42, y1 = 4, x2 = gw - 4, y2 = 32, acc = C.BONE, word = 'SHOW' } end
+  else
+    L[#L + 1] = { id = 'ex', x1 = lx1, y1 = 4, x2 = lx2, y2 = 30, acc = C.BONE, side = 't', word = 'EXIT' }
+    -- EXIT's first tap: its confirm over the status bar, away from EXIT
+    -- itself (two taps on one spot are a phone's double-tap zoom).
+    if armed then
+      L[#L + 1] = { id = 'lv', kind = 'leave', x1 = H.bx1, y1 = 4, x2 = H.bx2 - 24, y2 = 30, acc = C.RED, word = UI.hcut('LEAVE THE GALLERY', H.bx2 - H.bx1 - 36) }
+    end
+    -- The keys' help: a small square at the status bar's end, lit while open.
+    L[#L + 1] = { id = 'hp', kind = 'help', x1 = H.bx2 - 22, y1 = 4, x2 = H.bx2, y2 = 30, acc = C.GOLD, on = H.help, name = 'KEYS' }
+    L[#L + 1] = { id = 'hi', x1 = rx1, y1 = 4, x2 = rx2, y2 = 30, acc = C.BONE, side = 't', word = 'HIDE' }
+    -- The columns share one row grid, 3-4 apart: each edge pairs with one
+    -- across the screen.
+    local r1, r2, r3, r4 = rows[1], rows[2], rows[3], rows[4]
+    L[#L + 1] = { id = 'pl', x1 = lx1, y1 = r1[1], x2 = lx2, y2 = r1[2], acc = C.GOLD, side = 'l', word = 'POS', name = 'POS BACK', glyph = 'tl', dim = (k.l or 0) <= 0 }
+    L[#L + 1] = { id = 'vu', x1 = lx1, y1 = r2[1], x2 = lx2, y2 = r2[2], acc = C.GOLD, side = 'l', word = 'VER', name = 'VER UP', glyph = 'tu', dim = (k.u or 0) <= 0 }
+    L[#L + 1] = { id = 'vd', x1 = lx1, y1 = r3[1], x2 = lx2, y2 = r3[2], acc = C.GOLD, side = 'l', word = 'VER', name = 'VER DOWN', glyph = 'td', dim = (k.d or 0) <= 0 }
+    L[#L + 1] = { id = 'pa', x1 = lx1, y1 = lp[1], x2 = lx2, y2 = lp[2], acc = C.BONE, side = 'l', word = 'PAIRS', name = 'PAIRS', glyph = 'sq' }
+    L[#L + 1] = { id = 'pr', x1 = rx1, y1 = r1[1], x2 = rx2, y2 = r1[2], acc = C.GOLD, side = 'r', word = 'POS', name = 'POS NEXT', glyph = 'tr', dim = (k.r or 0) <= 0 }
+    -- Speed: the step's own words for it ("SPEED", "PHASE", "PICTURE");
+    -- none, no speed to step here. Its value: BASE or AUTO alone (the
+    -- meter gives the level), else where it is of the top ("2/3").
+    local w, here, top = UI.hudSpeedOf(s)
+    local word = w and string.upper(w) or 'SPEED'
+    local sname = word
+    if UI.hw(word) * (cmp and 0.75 or 1) > cw - 6 then word = string.sub(word, 1, 3) end
+    local n, m = 0, tonumber(top) or 0
+    if here == 'auto' then n = math.max(1, m) elseif tonumber(here) then n = tonumber(here) end
+    if m < 1 then m = math.max(1, n) end
+    -- (No speed here: three dim pips and no value, as BASE's meter - one
+    -- pip over a dash read as '!'.)
+    local val = ''
+    if w then val = tonumber(here) and (here .. ((top ~= '') and ('/' .. top) or '')) or string.upper(here) else m, n = 3, 0 end
+    L[#L + 1] = { id = 'sp', x1 = rx1, y1 = r2[1], x2 = rx2, y2 = r2[2], acc = C.CYAN, side = 'r', word = word, name = sname, glyph = 'me', val = val, segs = m, lit = n, dim = w == nil }
+    -- Climax: lit while on (a position that is only its climax stays lit).
+    local on = s.nv.c == true
+    L[#L + 1] = { id = 'cl', x1 = rx1, y1 = r3[1], x2 = rx2, y2 = r3[2], acc = C.PINK, side = 'r', word = 'CLIMAX', name = 'CLIMAX', glyph = 'bu', dim = (k.c or 0) == 0, on = on }
+    -- MOOD (the receiver's look as the finishes add up: the data's "stage"
+    -- and the Home key) and MAP (the build's stages), half-height: a glyph
+    -- and a word on one line.
+    L[#L + 1] = { id = 'st', x1 = rx1, y1 = r4[1], x2 = rx2, y2 = r4[2], acc = C.GREEN, side = 'r', word = 'MOOD', name = 'MOOD', glyph = 'ba', row = true, dim = (k.h or 0) <= 0 }
+    if mapCol then
+      L[#L + 1] = { id = 'mp', x1 = rx1, y1 = rows[5][1], x2 = rx2, y2 = rows[5][2], acc = C.GREEN, side = 'r', word = 'MAP', name = 'MAP', glyph = 'ma', row = true }
+    end
+    -- The pairs' chips, + while there is room (green: a pair), and the zoom
+    -- out / in (magnifiers): in the bars always (one pair: its chip, + and
+    -- the zoom dim) at the bottom of each bar - the chips in a 2 x 2 grid,
+    -- room for four with the +, the zoom side by side; in the picture in a
+    -- row under the bar (one pair: its chip and +, the quick add, as in the
+    -- bars; the zoom with several).
+    local zi, zt = zoomIndex(zoomLevels()), #zoomLevels()
+    local sq, st = 22, 25
+    if cmp then sq, st = 20, 23 end
+    if bars then
+      local cy1 = cmp and 190 or 187
+      local gx0, zx0 = lx1, rx1
+      if cmp then gx0, zx0 = math.floor(H.ox / 2 - 21.5), math.floor(H.ox + H.pw + H.bw / 2 - 21.5) end
+      for c = 1, math.min(NSLOT + 1, MAX_SLOTS) do
+        local x, y = gx0 + ((c - 1) % 2) * st, cy1 + math.floor((c - 1) / 2) * st
+        if c <= NSLOT then L[#L + 1] = { id = 'c' .. c, kind = 'chip', n = c, x1 = x, y1 = y, x2 = x + sq, y2 = y + sq }
+        else L[#L + 1] = { id = 'ad', kind = 'plus', x1 = x, y1 = y, x2 = x + sq, y2 = y + sq, acc = C.GREEN } end
+      end
+      local zy = cy1 + st
+      L[#L + 1] = { id = 'zm', kind = 'zoom', sign = -1, x1 = zx0, y1 = zy, x2 = zx0 + sq, y2 = zy + sq, acc = C.BONE, dim = NSLOT < 2 or zi <= 1 }
+      L[#L + 1] = { id = 'zp', kind = 'zoom', sign = 1, x1 = zx0 + st, y1 = zy, x2 = zx0 + st + sq, y2 = zy + sq, acc = C.BONE, dim = NSLOT < 2 or zi >= zt }
+    else
+      -- (Tiles 28 touch / 20 compact, 30 / 22 apart.)
+      local t, step = 28, 30
+      if cmp then t, step = 20, 22 end
+      for c = 1, NSLOT do
+        local x = lx2 + 4 + (c - 1) * step
+        L[#L + 1] = { id = 'c' .. c, kind = 'chip', n = c, x1 = x, y1 = 34, x2 = x + t, y2 = 34 + t }
+      end
+      if NSLOT < MAX_SLOTS then
+        local x = lx2 + 4 + NSLOT * step
+        L[#L + 1] = { id = 'ad', kind = 'plus', x1 = x, y1 = 34, x2 = x + t, y2 = 34 + t, acc = C.GREEN }
+      end
+      local mx2 = rx1 - 4
+      if NSLOT > 1 then
+        L[#L + 1] = { id = 'zm', kind = 'zoom', sign = -1, x1 = rx1 - 2 * t - 6, y1 = 34, x2 = rx1 - t - 6, y2 = 34 + t, acc = C.BONE, dim = zi <= 1 }
+        L[#L + 1] = { id = 'zp', kind = 'zoom', sign = 1, x1 = rx1 - t - 4, y1 = 34, x2 = rx1 - 4, y2 = 34 + t, acc = C.BONE, dim = zi >= zt }
+        mx2 = rx1 - 2 * t - 10 - (gw >= 400 and 30 or 0)
+      end
+      -- The slim layout's MAP: the top row, left of the zoom (and its
+      -- label on a wide screen).
+      if maps and not mapCol then
+        local mw = cmp and 34 or 40
+        L[#L + 1] = { id = 'mp', x1 = mx2 - mw, y1 = 34, x2 = mx2, y2 = 34 + t, acc = C.GREEN, side = 't', word = 'MAP', name = 'MAP', glyph = 'ma', row = true }
+      end
+    end
+  end
+  for _, b in ipairs(L) do
+    H.rs[b.id] = H.rs[b.id] or {}
+    H.ts[b.id] = H.ts[b.id] or {}
+  end
+  H.L, H.lk = L, key
+  if LOG then
+    local t = {}
+    for _, b in ipairs(L) do
+      t[#t + 1] = string.format('%s:%g,%g-%g,%g', b.id, b.x1, b.y1, b.x2, b.y2) .. (b.val and ('=' .. b.val) or '') .. (b.on and '*' or '') .. (b.dim and '(off)' or '')
+    end
+    print('[hgallery] hud layout ' .. string.format('%gx%g %s ', H.gw, H.gh, bars and string.format('bars(ox %.2f)', H.ox) or (H.slim and 'slim' or 'picture')) .. table.concat(t, ' '))
+    if not H.wlog then
+      H.wlog = true
+      print(string.format('[hgallery] hud font widths POS=%g CLIMAX=%g SPEED=%g STAGE=%g PAIRS=%g BASE/3=%g I=%g M=%g', UI.hw('POS'), UI.hw('CLIMAX'), UI.hw('SPEED'), UI.hw('STAGE'), UI.hw('PAIRS'), UI.hw('BASE/3'), UI.hw('I'), UI.hw('M')))
+    end
+  end
+  return L
+end
+-- The button under the fight's point x, y.
+function UI.hudHit(L, x, y)
+  if L == nil or x == nil or y == nil then return nil end
+  for _, b in ipairs(L) do
+    if x >= b.x1 and x < b.x2 and y >= b.y1 and y < b.y2 then return b end
+  end
+  return nil
+end
+-- The speed cycler: one faster; from the fastest (or the last picture)
+-- around to the slowest, down the steps' own Delete chain.
+function UI.hudSpeed()
+  if not keysFree() then return end
+  useSlot(SEL)
+  local s, p = curStep(), curPair()
+  if s == nil or p == nil then return end
+  if s.k.f == -1 then
+    local t, n = G.si, 0
+    while n < 32 do
+      local st = p.steps[t]
+      local d = st and st.k.s
+      if d == nil or d <= 0 then break end
+      t, n = d, n + 1
+    end
+    if t ~= G.si then
+      if LOG then print('[hgallery] hud speed around -> scene ' .. t) end
+      return gotoStep(t)
+    end
+  end
+  HGalleryNav('END')
+end
+-- EXIT, its second tap: the gallery is left as Esc leaves it - the match
+-- ends with no reload asked (CMD nil), and the mode's loop ends (no prototype
+-- mode is asked for another match).
+function UI.hudExit()
+  if not ACTIVE or CMD ~= nil then return end
+  if paused() then return tell('paused: Pause first, then EXIT', 90) end
+  UI.hud.exit = true
+  if LOG then print('[hgallery] hud exit: leaving the gallery') end
+  if PK.open then pickerClose() end
+  useSlot(SEL)
+  leaving()
+  CMD = nil
+  endMatch()
+end
+function UI.hudAct(b)
+  local id, H = b.id, UI.hud
+  if id == 'pl' then HGalleryNav('LEFT')
+  elseif id == 'pr' then HGalleryNav('RIGHT')
+  elseif id == 'vu' then HGalleryNav('UP')
+  elseif id == 'vd' then HGalleryNav('DOWN')
+  elseif id == 'sp' then UI.hudSpeed()
+  elseif id == 'cl' then HGalleryNav('SPACE')
+  elseif id == 'st' then HGalleryNav('HOME')
+  elseif id == 'pa' then HGalleryPicker()
+  elseif id == 'hp' then
+    -- (A tap on '?' with no mouse ever seen hovering is a touch screen's:
+    -- its help says what to tap, not the keys.)
+    H.helpBy = H.mouse and 'keys' or 'touch'
+    UI.hudHelp()
+  elseif id == 'hi' or id == 'sh' then HGalleryOverlay(true)
+  elseif id == 'zm' then HGalleryZoom(-1, 'MINUS')
+  elseif id == 'zp' then HGalleryZoom(1, 'EQUALS')
+  elseif id == 'mp' then HGalleryMaps()
+  elseif id == 'ad' then
+    -- The picker, ARMED to add a pair beside the others: the next tap on
+    -- a receiver adds her pair in the next slot.
+    HGalleryPicker()
+    if PK.open and not PK.armed then UI.pkArm() end
+  elseif b.kind == 'chip' then HGallerySlot(b.n)
+  elseif id == 'ex' then
+    if H.armT > 0 then H.armT = 0; return UI.hudExit() end
+    H.armT = 150
+    if LOG then print('[hgallery] hud exit armed') end
+  elseif id == 'lv' then H.armT = 0; return UI.hudExit()
+  end
+end
+-- One button: its state from the pointer, then the pieces.
+--   rest     hard shadow, face, a lip of light along the top, edge, and a
+--            stripe of its accent on the screen's side
+--   hover    (the mouse) a fuller face, the edge in the accent
+--   pressed  on its shadow (+1, +1), the face in the accent, dark ink
+--   lit      (the climax on) a pink face and two pulsing rings
+--   dim      (nothing to do here) faint, no stripe
+--   armed    (EXIT's first tap) red, "SURE?"; LEAVE THE GALLERY beside it
+function UI.hudBtn(b)
+  local H, C = UI.hud, UI.hc
+  local rs, ts = H.rs[b.id], H.ts[b.id]
+  local down = (H.hold == b.id and H.over == b) or (H.fid == b.id and H.ft > 0)
+  local hov = (not down) and H.hov and H.hold == nil and H.over == b
+  local x1, y1, x2, y2 = b.x1, b.y1, b.x2, b.y2
+  if down then x1, y1, x2, y2 = x1 + 1, y1 + 1, x2 + 1, y2 + 1 end
+  local acc = b.acc or C.BONE
+  local gc, ga, wc, wa = acc, 1, C.PAPER, 1
+  local word = b.word
+  if b.kind == 'chip' then
+    -- A pair's chip: the active one filled with its color, the others on a
+    -- face as solid as the keys' help, so the digit reads over whatever a
+    -- character draws fixed to the screen there (King's guard gauge).
+    local pc = COL.COLORS[b.n]
+    if b.n == SEL then
+      UI.hshadow(rs, 1, x1, y1, x2, y2, down and 0 or 0.45)
+      UI.hr(rs, 3, x1, y1, x2, y2, pc, 0.95)
+      UI.hframe(rs, 5, x1, y1, x2, y2, 1, C.BLACK, 1)
+      wc = C.BLACK
+    else
+      if not down then UI.hshadow(rs, 1, x1, y1, x2, y2, 0.45) end
+      UI.hr(rs, 3, x1, y1, x2, y2, down and pc or C.FACE, down and 0.95 or (hov and 0.92 or 0.85))
+      UI.hframe(rs, 5, x1, y1, x2, y2, 2, pc, hov and 1 or 0.9)
+      wc = down and C.INK or pc
+    end
+    return UI.ht(ts, 1, tostring(b.n), (x1 + x2) / 2 + 0.5, y1 + math.floor((y2 - y1) / 2) + 4, wc, 1, 0)
+  end
+  if b.kind == 'help' then
+    -- '?': the keys' help; gold and solid while it is open.
+    if b.on then
+      UI.hr(rs, 3, x1, y1, x2, y2, acc, down and 1 or 0.9)
+      UI.hframe(rs, 5, x1, y1, x2, y2, 1, C.BLACK, 1)
+    else
+      if not down then UI.hshadow(rs, 1, x1, y1, x2, y2, 0.45) end
+      UI.hr(rs, 3, x1, y1, x2, y2, down and acc or C.FACE, down and 0.95 or (hov and 0.92 or 0.85))
+      UI.hframe(rs, 5, x1, y1, x2, y2, 1, hov and acc or C.EDGE, hov and 0.95 or 0.35)
+    end
+    return UI.ht(ts, 1, '?', math.floor((x1 + x2) / 2) + 0.5, y1 + 17, (b.on or down) and C.INK or acc, 1, 0)
+  end
+  if b.kind == 'show' then
+    UI.hshadow(rs, 1, x1, y1, x2, y2, down and 0 or 0.45)
+    UI.hr(rs, 3, x1, y1, x2, y2, down and acc or C.FACE, down and 0.9 or (hov and 0.72 or 0.5))
+    UI.hr(rs, 4, x1, y1, x2, y1 + 2, acc, 1)
+    return UI.ht(ts, 1, word, (x1 + x2) / 2 + 0.5, y1 + 19, down and C.INK or C.PAPER, 0.9, 0)
+  end
+  if b.kind == 'leave' then
+    -- EXIT's confirm: solid red, its words in white.
+    UI.hshadow(rs, 1, x1, y1, x2, y2, down and 0 or 0.45)
+    UI.hr(rs, 3, x1, y1, x2, y2, C.RED, down and 1 or (hov and 1 or 0.95))
+    UI.hr(rs, 4, x1 + 1, y1 + 1, x2 - 1, y1 + 2, C.WHITE, 0.25, true)
+    UI.hframe(rs, 5, x1, y1, x2, y2, 1, down and C.WHITE or C.RED, 1)
+    return UI.ht(ts, 1, word, math.floor((x1 + x2) / 2) + 0.5, y1 + 17, down and C.INK or C.WHITE, 1, 0)
+  end
+  local armed = b.id == 'ex' and H.armT > 0
+  -- (The chips' row - + and the magnifiers - on the chips' solid face.)
+  local row = b.kind == 'plus' or b.kind == 'zoom'
+  if b.dim then
+    -- Off: the face an enabled tile has (a bright stage shows a button, not
+    -- an empty square), no stripe, its edge faint, the glyph and word grey.
+    UI.hshadow(rs, 1, x1, y1, x2, y2, 0.45)
+    UI.hr(rs, 3, x1, y1, x2, y2, C.FACE, row and 0.85 or 0.55)
+    UI.hframe(rs, 5, x1, y1, x2, y2, 1, C.EDGE, 0.18)
+    gc, ga, wc, wa = C.DIM, 0.75, C.DIM, 0.75
+  elseif down then
+    UI.hr(rs, 3, x1, y1, x2, y2, armed and C.RED or acc, 0.9)
+    UI.hframe(rs, 5, x1, y1, x2, y2, 1, armed and C.RED or acc, 1)
+    gc, wc = C.INK, C.INK
+    if armed then word = 'SURE?' end
+  elseif armed then
+    UI.hshadow(rs, 1, x1, y1, x2, y2, 0.45)
+    UI.hr(rs, 3, x1, y1, x2, y2, C.RED, 0.7)
+    UI.hframe(rs, 5, x1, y1, x2, y2, 1, C.RED, 1)
+    gc, wc, word = C.WHITE, C.WHITE, 'SURE?'
+  elseif b.on then
+    -- Lit: two rings round it, pulsing (drawn over the scene, not added to
+    -- it: they hold on a light stage too), its word kept, its burst solid.
+    local p = 0.65 + 0.35 * math.sin(LOOPF * 6.2832 / 40)
+    UI.hframe(rs, 14, x1 - 3, y1 - 3, x2 + 3, y2 + 3, 1, C.PINK, 0.6 * p)
+    UI.hframe(rs, 18, x1 - 2, y1 - 2, x2 + 2, y2 + 2, 1, C.PINK, 0.3 * p)
+    UI.hshadow(rs, 1, x1 - 3, y1 - 3, x2 + 3, y2 + 3, 0.45)
+    UI.hr(rs, 3, x1, y1, x2, y2, C.PINK, 0.72)
+    UI.hr(rs, 4, x1 + 1, y1 + 1, x2 - 1, y1 + 2, C.WHITE, 0.16, true)
+    UI.hframe(rs, 5, x1, y1, x2, y2, 1, C.PINK, 1)
+    gc, wc = C.WHITE, C.WHITE
+  else
+    UI.hshadow(rs, 1, x1, y1, x2, y2, 0.45)
+    UI.hr(rs, 3, x1, y1, x2, y2, C.FACE, row and (hov and 0.92 or 0.85) or (hov and 0.72 or 0.55))
+    UI.hr(rs, 4, x1 + 1, y1 + 1, x2 - 1, y1 + 2, C.WHITE, 0.16, true)
+    UI.hframe(rs, 5, x1, y1, x2, y2, 1, hov and acc or C.EDGE, hov and 0.95 or 0.35)
+    -- The stripe on the screen's side.
+    if b.side == 'l' then UI.hr(rs, 9, x1, y1, x1 + 2, y2, acc, 1)
+    elseif b.side == 'r' then UI.hr(rs, 9, x2 - 2, y1, x2, y2, acc, 1)
+    elseif b.side == 't' then UI.hr(rs, 9, x1, y1, x2, y1 + 2, acc, 1) end
+  end
+  -- (Centered on the face less its edge and stripe: a 6-letter word fills it.)
+  local cx = math.floor((x1 + x2 + ((b.side == 'l' and 1) or (b.side == 'r' and -1) or 0)) / 2)
+  local g = b.glyph
+  -- (Slim columns: the glyph alone, centered up and down - its name shows
+  -- on the status bar's line 2 while hovered or pressed. SPEED keeps its
+  -- meter and value.)
+  local slim = H.slim and not H.cmp and (b.side == 'l' or b.side == 'r')
+  -- (Compact, a computer's: the glyph centered over the word, which stands
+  -- on the tile's last line at 3/4 scale.)
+  local cm = H.cmp and (b.side == 'l' or b.side == 'r')
+  local ws = H.cmp and 0.75 or nil
+  -- (A tile under 32 tall - the bars' rows are 28 - has its glyph 2 up and
+  -- its word 1 down, so 3 units stay between them; taller ones keep theirs.)
+  local gy, ty = y1, 0
+  if not slim and not cm and b.y2 - b.y1 < 32 then gy, ty = y1 - 2, 1 end
+  if slim then
+    local mid = math.floor((y1 + y2) / 2)
+    gy = mid - (((g == 'tl' or g == 'tr') and 22) or ((g == 'tu' or g == 'td') and 9) or (g == 'bu' and 10) or 11)
+  elseif cm then
+    local mid = math.floor((y1 + y2 - 8) / 2)
+    gy = mid - (((g == 'tl' or g == 'tr') and 22) or ((g == 'tu' or g == 'td') and 9) or (g == 'bu' and 10) or 11)
+  end
+  if b.row and not slim then
+    -- MOOD and MAP: a glyph and the word on one line, centered together.
+    local cmp = H.cmp
+    local gwid = (g == 'ma') and (cmp and 10 or 14) or (cmp and 9 or 12)
+    local gap = cmp and 3 or 4
+    local x0 = math.floor(cx - (gwid + gap + UI.hw(word) * (ws or 1)) / 2)
+    local cyr = math.floor((y1 + y2) / 2)
+    if g == 'ma' then
+      -- A folded map: a frame, two folds, a pin.
+      local hh = cmp and 4 or 5
+      UI.hframe(rs, 10, x0, cyr - hh, x0 + gwid, cyr + hh, 1, gc, ga)
+      local f1, f2 = x0 + math.floor(gwid / 3), x0 + math.floor(gwid * 2 / 3)
+      UI.hr(rs, 14, f1, cyr - hh + 1, f1 + 1, cyr + hh - 1, gc, ga * 0.55)
+      UI.hr(rs, 15, f2, cyr - hh + 1, f2 + 1, cyr + hh - 1, gc, ga * 0.55)
+      if not cmp then UI.hr(rs, 16, x0 + 6, cyr - 1, x0 + 8, cyr + 1, gc, ga) end
+    else
+      -- MOOD: three rising bars.
+      local bw, st, by = cmp and 2 or 3, cmp and 3 or 4, cyr + (cmp and 4 or 5)
+      local hs = cmp and { 3, 5, 7 } or { 4, 7, 10 }
+      for i = 1, 3 do UI.hr(rs, 9 + i, x0 + (i - 1) * st, by - hs[i], x0 + (i - 1) * st + bw, by, gc, ga) end
+    end
+    return UI.ht(ts, 1, word, x0 + gwid + gap, cyr + (cmp and 3 or 4), wc, wa, 1, ws)
+  end
+  if b.kind == 'plus' then
+    -- + (a pair): bars, not the font's.
+    local cy = math.floor((y1 + y2) / 2)
+    if not (b.dim or down) then gc = acc end
+    UI.hr(rs, 10, cx - 5, cy - 1, cx + 5, cy + 1, gc, ga)
+    UI.hr(rs, 11, cx - 1, cy - 5, cx + 1, cy + 5, gc, ga)
+    return
+  end
+  if b.kind == 'zoom' then
+    -- The zoom: a magnifier - a ring of 2-unit bars cut at the corners, its
+    -- handle down to the right, - or + inside - so it never reads as the
+    -- green + that adds a pair.
+    local lx, ly = cx - 2, math.floor((y1 + y2) / 2) - 2
+    if not (b.dim or down) then gc = acc end
+    UI.hr(rs, 10, lx - 3, ly - 6, lx + 3, ly - 4, gc, ga)
+    UI.hr(rs, 11, lx - 3, ly + 4, lx + 3, ly + 6, gc, ga)
+    UI.hr(rs, 12, lx - 6, ly - 3, lx - 4, ly + 3, gc, ga)
+    UI.hr(rs, 13, lx + 4, ly - 3, lx + 6, ly + 3, gc, ga)
+    UI.hr(rs, 14, lx - 5, ly - 5, lx - 3, ly - 3, gc, ga)
+    UI.hr(rs, 15, lx + 3, ly - 5, lx + 5, ly - 3, gc, ga)
+    UI.hr(rs, 16, lx - 5, ly + 3, lx - 3, ly + 5, gc, ga)
+    UI.hr(rs, 17, lx + 3, ly + 3, lx + 5, ly + 5, gc, ga)
+    UI.hr(rs, 18, lx + 5, ly + 5, lx + 7, ly + 7, gc, ga)
+    UI.hr(rs, 19, lx + 7, ly + 7, lx + 9, ly + 9, gc, ga)
+    UI.hr(rs, 20, lx - 2, ly - 1, lx + 2, ly + 1, gc, ga)
+    if b.sign > 0 then UI.hr(rs, 21, lx - 1, ly - 2, lx + 1, ly + 2, gc, ga) end
+    return
+  end
+  if g == 'tl' or g == 'tr' then
+    -- POS: a play arrow 8 wide, 16 tall.
+    UI.htri(rs, 10, cx - 4, gy + 22, 4, 2, (g == 'tr') and 1 or -1, gc, ga)
+    if not slim then UI.ht(ts, 1, word, cx + 0.5, cm and (y2 - 3) or (y2 - 6), wc, wa, 0, ws) end
+  elseif g == 'tu' or g == 'td' then
+    -- VER: a triangle of 6 rows, 12 wide.
+    for i = 0, 2 do
+      local hw = (g == 'tu') and (2 + 2 * i) or (6 - 2 * i)
+      UI.hr(rs, 10 + i, cx - hw, gy + 6 + 2 * i, cx + hw, gy + 8 + 2 * i, gc, ga)
+    end
+    if not slim then UI.ht(ts, 1, word, cx + 0.5, cm and (y2 - 3) or (y2 - 5), wc, wa, 0, ws) end
+  elseif g == 'sq' then
+    -- PAIRS: four squares.
+    UI.hr(rs, 10, cx - 5, gy + 6, cx - 1, gy + 10, gc, ga)
+    UI.hr(rs, 11, cx + 1, gy + 6, cx + 5, gy + 10, gc, ga)
+    UI.hr(rs, 12, cx - 5, gy + 12, cx - 1, gy + 16, gc, ga)
+    UI.hr(rs, 13, cx + 1, gy + 12, cx + 5, gy + 16, gc, ga)
+    if not slim then UI.ht(ts, 1, word, cx + 0.5, cm and (y2 - 3) or (y2 - 5 + ty), wc, wa, 0, ws) end
+  elseif g == 'bu' then
+    -- CLIMAX: a burst, 12 across.
+    local cy = gy + 10 + ty
+    UI.hr(rs, 10, cx - 4, cy - 4, cx + 4, cy + 4, gc, ga * ((b.on and not down) and 1 or 0.45))
+    UI.hr(rs, 11, cx - 6, cy - 1, cx + 6, cy + 1, gc, ga)
+    UI.hr(rs, 12, cx - 1, cy - 6, cx + 1, cy + 6, gc, ga)
+    UI.hr(rs, 13, cx - 3, cy - 3, cx + 3, cy + 3, gc, ga)
+    if not slim then UI.ht(ts, 1, word, cx + 0.5, cm and (y2 - 3) or (y2 - 4), wc, wa, 0, ws) end
+  elseif g == 'ba' then
+    -- STAGE: three rising bars.
+    local by = gy + 16
+    UI.hr(rs, 10, cx - 6, by - 4, cx - 3, by, gc, ga)
+    UI.hr(rs, 11, cx - 2, by - 7, cx + 1, by, gc, ga)
+    UI.hr(rs, 12, cx + 2, by - 10, cx + 5, by, gc, ga)
+    if not slim then UI.ht(ts, 1, word, cx + 0.5, y2 - 5 + ty, wc, wa, 0) end
+  elseif g == 'me' then
+    -- SPEED: its word, a meter of one segment per speed, where it is - 2
+    -- units between each (the font's capitals take 8 rows down to a row
+    -- past their baseline: word 3-11, meter 13-16, value 18-26 from the top).
+    -- Slim: no word (its name on line 2), the meter and value centered.
+    local m = math.min(b.segs, 8)
+    local sw = math.max(2, math.min(5, math.floor(((slim and 20 or (cm and 22 or 30)) - (m - 1)) / m)))
+    local x0 = cx - math.floor((m * (sw + 1) - 1) / 2)
+    local my = slim and (math.floor((y1 + y2) / 2) - 6) or (y1 + (cm and 11 or 13))
+    if not slim then UI.ht(ts, 1, word, cx + 0.5, y1 + (cm and 9 or 10), wc, wa, 0, ws) end
+    for i = 1, m do
+      local lit = i <= b.lit
+      local c = (b.dim or down) and gc or (lit and C.CYAN or C.WHITE)
+      local a = b.dim and ga or ((lit or down) and 1 or 0.22)
+      local x = x0 + (i - 1) * (sw + 1)
+      UI.hr(rs, 21 + i, x, my, x + sw, my + 3, c, a)
+    end
+    UI.ht(ts, 2, b.val, cx + 0.5, my + (cm and 11 or 12), (b.dim or down) and wc or C.CYAN, wa, 0, ws)
+  else
+    UI.ht(ts, 1, word, cx + 0.5, (y1 + y2) / 2 + 4, wc, wa, 0)
+  end
+end
+-- The status bar, as tall as EXIT and HIDE beside it. Line 1: the active
+-- pair (with several, its number in its color; the names in paper), or a
+-- note, or what the scene waits for; where it is (POS, VER) in gold. Line 2:
+-- the position's name (its group and label, as the old overlay said them)
+-- and which scene of the pair it is, with its verdict.
+function UI.hudBar()
+  local H, C = UI.hud, UI.hc
+  local p, s = curPair(), curStep()
+  if p == nil or s == nil then return end
+  H.rs.bar = H.rs.bar or {}
+  H.ts.bar = H.ts.bar or {}
+  local rs, ts, B = H.rs.bar, H.ts.bar, H.bar
+  local gw = H.gwi
+  -- (From bx1 to the '?' square at bx2's end; the whole of it with no
+  -- buttons: a screenpack with the mouse off.)
+  local x1, x2 = H.bx1, H.mo and (H.bx2 - 24) or H.bx2
+  local multi = NSLOT > 1
+  -- (Near solid: a bright stage never stripes through its small lines.)
+  UI.hr(rs, 1, x1, 4, x2, 30, C.FACE, 0.84)
+  UI.hr(rs, 2, x1, 4, x1 + 3, 30, multi and COL.COLORS[G.k] or C.GOLD, 1)
+  UI.hr(rs, 3, x1, 30, x2, 31, C.GOLD, 0.3)
+  local st = status()
+  local key = G.pi .. '|' .. G.si .. '|' .. G.k .. '|' .. NSLOT .. '|' .. gw .. '|' .. x1 .. '|' .. x2 .. '|' .. st
+  if B.key ~= key then
+    B.key = key
+    local v1, v2 = string.match(s.ind or '', 'ver (%d+)/(%d+)')
+    local right = 'POS ' .. s.nv.p .. '/' .. #p.nav
+    local full = right .. '  VER ' .. (v1 or '1') .. '/' .. (v2 or '1')
+    local room = (x2 - 6) - (x1 + 8)
+    if v1 or room - UI.hw(full) >= 120 then right = full end
+    B.num, B.nw = '', 0
+    if st ~= '' then
+      local left = string.upper(st)
+      B.lc = (MSG.t > 0) and C.WHITE or C.SOFT
+      -- (A note that does not fit beside where it is takes the whole line.)
+      if UI.hw(left) > room - UI.hw(right) - 10 then right = '' end
+      -- (Cut at a word, a bracketed hint whole: "WAITING FOR IT..".)
+      local lw = (right == '') and room or (room - UI.hw(right) - 10)
+      B.left = UI.hcutw(left, lw)
+      if B.left == '' then B.left = UI.hcut(left, lw) end
+    else
+      B.lc = C.PAPER
+      if multi then B.num = tostring(G.k); B.nw = UI.hw(B.num) + 5 end
+      local nroom = room - B.nw - UI.hw(right) - 10
+      local g, tail = string.upper(p.giver.display), ' X ' .. string.upper(p.receiver.display)
+      -- (Short of room the giver's name is cut first, at a word: hers
+      -- stays whole.)
+      if UI.hw(g .. tail) <= nroom then B.left = g .. tail
+      elseif nroom - UI.hw(tail) >= 24 then
+        local gc = UI.hcutw(g, nroom - UI.hw(tail))
+        if gc == '' then gc = UI.hcut(g, nroom - UI.hw(tail)) end
+        B.left = gc .. tail
+      else B.left = UI.hcut(string.upper(p.receiver.display), nroom) end
+    end
+    B.right = right
+    local label, grp = s.label or '', s.group or ''
+    if grp ~= '' and string.sub(label, 1, #grp + 2) == grp .. ': ' then label = string.sub(label, #grp + 3) end
+    if s.ext then label = '[' .. s.ext .. '] ' .. label end
+    label = string.upper(label)
+    local whole = (grp ~= '') and (string.upper(grp) .. ': ' .. label) or label
+    local sc = 'SCENE ' .. G.si .. '/' .. #p.steps
+    local vd = (s.verdict and s.verdict ~= '') and ('[' .. string.upper(s.verdict) .. ']') or ''
+    local r2 = (vd ~= '') and (sc .. '  ' .. vd) or sc
+    -- (No buttons, no '?': the keys' help is the / key, said here.)
+    if not H.mo then r2 = '? KEYS' end
+    -- (A group that is only "Position n": POS a/b on line 1 says it, so a
+    -- narrow bar (4:3, the bars' bar) leaves it out.)
+    local pos = right ~= '' and label ~= '' and string.match(string.upper(grp), '^POSITION %d+$')
+    if pos and room < 300 then whole = label end
+    local fits = function(t, r) return UI.hw(t) <= room - ((r ~= '') and (UI.hw(r) + 10) or 0) end
+    -- What goes first when it is short of room, nothing cut: that group,
+    -- then SCENE, then the verdict; only then is the label cut, at a word.
+    local tries = { r2 }
+    if H.mo then
+      if vd ~= '' then tries[2] = vd end
+      tries[#tries + 1] = ''
+    end
+    -- (A "POSITION n" is written "POS n" before anything goes, so a cut
+    -- keeps which one.)
+    local short = (string.gsub(whole, 'POSITION (%d)', 'POS %1'))
+    B.l2, B.r2 = nil, nil
+    for _, r in ipairs(tries) do
+      if fits(whole, r) then B.l2, B.r2 = whole, r
+      elseif short ~= whole and fits(short, r) then B.l2, B.r2 = short, r
+      elseif pos and fits(label, r) then B.l2, B.r2 = label, r end
+      if B.l2 then break end
+    end
+    if B.l2 == nil then
+      B.r2 = tries[#tries]
+      local t = pos and label or short
+      local rw = room - ((B.r2 ~= '') and (UI.hw(B.r2) + 10) or 0)
+      B.l2 = UI.hcutw(t, rw)
+      if B.l2 == '' then B.l2 = UI.hcut(t, rw) end
+    end
+    if LOG then print('[hgallery] hud bar ' .. B.num .. ' ' .. B.left .. ' | ' .. B.right .. ' / ' .. B.l2 .. ' | ' .. B.r2) end
+  end
+  if B.nw > 0 then UI.ht(ts, 5, B.num, x1 + 8, 15, COL.COLORS[G.k], 1, 1) end
+  UI.ht(ts, 1, B.left, x1 + 8 + B.nw, 15, B.lc, 1, 1)
+  UI.ht(ts, 2, B.right, x2 - 6, 15, C.GOLD, 1, -1)
+  -- (Slim columns: the name of the button hovered or pressed on line 2.)
+  local nb = H.slim and H.over and (H.hold == H.over.id or (H.hov and H.hold == nil)) and H.over.name and (H.over.side == 'l' or H.over.side == 'r') and H.over or nil
+  if nb then
+    UI.ht(ts, 3, nb.name .. (nb.dim and ': NOTHING HERE' or ''), x1 + 8, 26, C.GOLD, 1, 1)
+  else
+    UI.ht(ts, 3, B.l2, x1 + 8, 26, C.SOFT, 1, 1)
+    UI.ht(ts, 4, B.r2, x2 - 6, 26, C.SOFT, H.mo and 0.8 or 0.55, -1)
+  end
+end
+-- A part of the step's line of what its position has, as the keys' help
+-- says it: the key first, no value (the buttons show where it is) -
+-- "ver 1/2 Up/Dn" is "UP/DN VER", "speed base/3 Del/End" "DEL/END SPEED";
+-- nil for a part with no key ("CLIMAX" alone).
+function UI.hudKeyOf(part)
+  local w, k = string.match(part, '^(%a+ finish) (Up/Dn)$')
+  if w == nil then w, k = string.match(part, '^(%a+) %w+/?%w* (%a+/%a+)$') end
+  if w then return string.upper(k .. ' ' .. w) end
+  if part == 'Space climax' or part == 'CLIMAX Space off' then return 'SPACE CLIMAX' end
+  if string.find(part, '^Home mood') then return 'HOME MOOD' end
+  return nil
+end
+-- The keys' help, only when asked: '?' at the status bar's end or the /
+-- key opens it, and the same, a tap anywhere else or 10 seconds close it.
+-- Never on a key press (keyboard users know their keys). Under the status
+-- bar (and the chips in the picture), as wide as the bar.
+function UI.hudHelp()
+  local H = UI.hud
+  if not ACTIVE or PK.open or PK.release or H.exit then return end
+  H.help = not H.help
+  H.helpT = H.help and 600 or 0
+  if LOG then print('[hgallery] keys help ' .. (H.help and 'open' or 'closed')) end
+end
+-- (Hotkeys run their text as a chunk of its own, where only globals are
+-- seen: UI is this script's local, so the / key calls these.)
+function HGalleryHelp() UI.hud.helpBy = 'keys'; UI.hudHelp() end
+function HGalleryBarsTest() UI.hud.barsOff = not UI.hud.barsOff end
+function UI.hudHints()
+  local H, C = UI.hud, UI.hc
+  local s = curStep()
+  if s == nil then return end
+  local gw = H.gwi
+  local bx1, bx2 = H.bx1 + 4, H.bx2 - 4
+  local w = bx2 - bx1 - 12
+  local hk = (s.ind or '') .. '|' .. NSLOT .. '|' .. gw .. '|' .. w .. '|' .. H.helpBy .. '|' .. tostring(H.bars)
+  local hint = H.hint
+  if hint.key ~= hk then
+    hint.key = hk
+    local parts = {}
+    if H.helpBy == 'touch' then
+      -- A touch screen: what to tap and drag (the buttons say the rest).
+      if NSLOT > 1 then parts = { 'TAP A PAIR TO MAKE IT ACTIVE', 'DRAG IT TO MOVE IT' }
+      else parts = { 'POS AND VER STEP THROUGH THE SCENES' } end
+      parts[#parts + 1] = '|'
+      parts[#parts + 1] = 'PAIRS: PICK ANOTHER PAIR'
+      if NSLOT < MAX_SLOTS then parts[#parts + 1] = '+: ONE MORE PAIR' end
+      parts[#parts + 1] = 'MOOD: HER NEXT LOOK'
+      if #UI.mapList() > 1 then parts[#parts + 1] = 'MAP: PICK A MAP' end
+      parts[#parts + 1] = 'HIDE: THE PICTURE ALONE'
+      parts[#parts + 1] = 'EXIT TWICE: LEAVE'
+    else
+      for part in string.gmatch((s.ind or '') .. '  ', '(.-)  ') do
+        local t = (part ~= '') and UI.hudKeyOf(part) or nil
+        if t then parts[#parts + 1] = t end
+      end
+      -- (Then the rest in one flow: no line holds one key alone.)
+      parts[#parts + 1] = '|'
+      for _, t in ipairs({ 'LEFT/RIGHT POS', 'PGUP/PGDN PAIR', 'TAB PAIRS', 'ESC LEAVE' }) do parts[#parts + 1] = t end
+      if #UI.mapList() > 1 then parts[#parts + 1] = 'MAP TILE: PICK A MAP' end
+      if NSLOT > 1 then parts[#parts + 1] = '1-' .. NSLOT .. ' ACTIVE PAIR'; parts[#parts + 1] = '+/- WHEEL ZOOM' end
+      parts[#parts + 1] = 'INSERT HIDES THE HUD'
+    end
+    parts[#parts + 1] = '? CLOSES THIS'
+    local lines, cur = {}, ''
+    for _, t in ipairs(parts) do
+      if t == '|' then
+        if cur ~= '' then lines[#lines + 1] = cur; cur = '' end
+      elseif cur == '' then cur = UI.hcut(t, w)
+      elseif UI.hw(cur .. '  ' .. t) <= w then cur = cur .. '  ' .. t
+      else lines[#lines + 1] = cur; cur = UI.hcut(t, w) end
+    end
+    if cur ~= '' then lines[#lines + 1] = cur end
+    hint.lines = lines
+    hint.first = #parts
+    if LOG then print('[hgallery] keys help lines (' .. H.helpBy .. '): ' .. table.concat(lines, ' / ')) end
+  end
+  H.rs.hint = H.rs.hint or {}
+  H.ts.hint = H.ts.hint or {}
+  -- (On ink near solid (.92), so a bright stage's window bars never stripe
+  -- through; 12 units a line.)
+  local y0 = H.bars and 34 or 66
+  local n = #hint.lines
+  H.hintBox = { bx1, y0, bx2, y0 + n * 12 + 4 }
+  UI.hr(H.rs.hint, 1, bx1, y0, bx2, y0 + n * 12 + 4, C.INK, 0.92)
+  UI.hr(H.rs.hint, 2, bx1, y0, bx2, y0 + 1, C.GOLD, 0.5)
+  for i, t in ipairs(hint.lines) do
+    UI.ht(H.ts.hint, i, t, math.floor((bx1 + bx2) / 2) + 0.5, y0 + i * 12, (i == 1) and C.GOLD or C.SOFT, 1, 0)
+  end
+end
+-- Hidden: a note while one is up, at the top.
+function UI.hudNote()
+  local H, C = UI.hud, UI.hc
+  if MSG.t <= 0 then return end
+  H.rs.note = H.rs.note or {}
+  H.ts.note = H.ts.note or {}
+  local t = UI.hcut(string.upper(MSG.text), H.gwi - 110)
+  local w = UI.hw(t)
+  local cx = math.floor(H.gwi / 2)
+  UI.hr(H.rs.note, 1, cx - w / 2 - 6, 8, cx + w / 2 + 6, 22, C.BLACK, 0.6)
+  UI.ht(H.ts.note, 1, t, cx + 0.5, 19, C.WHITE, 1, 0)
+end
+function UI.hudTick()
+  local H = UI.hud
+  if H.ft > 0 then H.ft = H.ft - 1 end
+  if H.armT > 0 then H.armT = H.armT - 1 end
+  -- The keys' help closes by itself after 10 seconds (or when it cannot
+  -- show: the picker, EXIT).
+  if H.help then
+    H.helpT = H.helpT - 1
+    if H.helpT <= 0 or PK.open or H.exit then
+      H.help, H.helpT = false, 0
+      if LOG then print('[hgallery] keys help closed (time or picker)') end
+    end
+  end
+  -- (Which device was used last: the picker's info line words its hint by it.)
+  H.ma = type(mouseActive) == 'function' and mouseActive() or false
+  -- A screenpack that turns the mouse off ([Mouse] enabled = 0): no button
+  -- could ever act (the engine reads no press), so none is drawn; line 2
+  -- says '? KEYS' (the / key) instead.
+  if H.mo == nil then
+    local m = type(motif) == 'table' and motif.mouse or nil
+    local off = type(m) == 'table' and (m.enabled == false or m.enabled == 0)
+    H.mo = UI.mouseOn() and not off
+    if LOG then print('[hgallery] hud buttons ' .. (H.mo and 'on' or 'off (the / key opens the keys help)') .. ': motif mouse enabled = ' .. tostring(type(m) == 'table' and m.enabled)) end
+  end
+  UI.hudSpace()
+  useSlot(SEL)
+  local L = nil
+  -- (Nothing once EXIT ends the match: its fade plays out.)
+  if (roundState() == 2 or MODE.liveOf(curStep())) and not PK.open and not PK.release and not H.exit then
+    if HIDE then
+      UI.hudNote()
+      if roundState() == 2 and H.mo then L = UI.hudLayout() end
+    else
+      -- (EXIT armed: its LEAVE bar stands in the status bar's place.)
+      if not (H.armT > 0 and H.mo and roundState() == 2 and CMD == nil) then UI.hudBar() end
+      if H.help then UI.hudHints() end
+      if roundState() == 2 and CMD == nil and H.mo then L = UI.hudLayout() end
+    end
+  end
+  H.cols = L ~= nil and not HIDE
+  -- The pointer, once a frame (when it moved, or the button is in play).
+  if UI.mouseOn() and type(mouseTake) == 'function' then
+    local held = UI.mouseHeld()
+    local press, rel = held and not H.was, H.was and not held
+    H.was = held
+    local moved = type(mouseMoved) == 'function' and mouseMoved()
+    -- (The picker reads the pointer itself while it is open.)
+    if (press or rel or held or moved or H.px == nil) and not PK.open then H.px, H.py = UI.pointerX(H.gw, H.gh), UI.pointerY(H.gw, H.gh) end
+    -- (A mouse: the pointer moved with no button held now or a frame ago. The
+    -- frame a finger lifts after a drag moves it too, and is no mouse.)
+    if moved and not held then
+      H.hov = true
+      if not rel then H.mouse = true end
+    elseif press then H.hov = false end
+    local over = UI.hudHit(L, H.px, H.py)
+    H.over = over
+    if press and LOG then print(string.format('[hgallery] hud pointer down at %.1f,%.1f on %s', H.px or -1, H.py or -1, over and over.id or 'nothing')) end
+    -- (The keys' help open: a press anywhere but on '?' closes it, and goes
+    -- on to what it pressed.)
+    if press and H.help and not (over and over.id == 'hp') then
+      H.help, H.helpT = false, 0
+      if LOG then print('[hgallery] keys help closed (a tap elsewhere)') end
+    end
+    if press and over and mouseTake({ 'MOUSE:LEFT' }) then
+      H.hold = over.id
+      UI.drag.was = true
+      if LOG then print('[hgallery] hud press ' .. over.id .. (over.dim and ' (nothing to do)' or '') .. ' at scene ' .. G.si) end
+    elseif H.hold then
+      if held then
+        -- (No drag starts from a press a button took.)
+        UI.drag.was = true
+      else
+        local id = H.hold
+        H.hold = nil
+        if over and over.id == id then
+          H.fid, H.ft = id, 8
+          if LOG then print('[hgallery] hud tap ' .. id .. (over.dim and ' (nothing to do)' or '') .. ' at scene ' .. G.si) end
+          UI.hudAct(over)
+          L = (L and roundState() == 2 and not PK.open and CMD == nil and not H.exit) and UI.hudLayout() or nil
+        elseif LOG then print('[hgallery] hud cancel ' .. id .. ' (let go off it)') end
+      end
+    end
+  end
+  -- The wheel: the zoom, a notch up in, down out (as + and -; at a limit or
+  -- with one pair only the log says so). Hidden too, like the keys. The
+  -- picker reads it itself while open (its grid's pages), never both.
+  if H.mo and not PK.open and not PK.release and type(inputDeviceActionTime) == 'function' and keysFree() then
+    if (tonumber(inputDeviceActionTime(0, H.WU)) or 0) > 0 then HGalleryZoom(1, 'WHEELUP', true)
+    elseif (tonumber(inputDeviceActionTime(0, H.WD)) or 0) > 0 then HGalleryZoom(-1, 'WHEELDOWN', true) end
+  end
+  if L then for _, b in ipairs(L) do UI.hudBtn(b) end end
+  -- (Wide screens: ZOOM beside its two buttons.)
+  if L and NSLOT > 1 and not HIDE and not H.bars and H.gwi >= 400 then
+    H.ts.zl = H.ts.zl or {}
+    for _, b in ipairs(L) do
+      if b.id == 'zm' then UI.ht(H.ts.zl, 1, 'ZOOM', b.x1 - 4, b.y1 + (H.cmp and 14 or 18), UI.hc.SOFT, 0.85, -1, H.cmp and 0.75 or nil) end
+    end
+  end
+  if LOG and L and not HIDE and NSLOT > 1 and LOOPF % 60 == 0 then UI.hudMarkCheck(L) end
+end
+-- (The log, several pairs: each pair's marker and body box against the
+-- buttons, when it changes: what a button covers.)
+function UI.hudMarkCheck(L)
+  local gh = screenHeight()
+  local t, hit = {}, {}
+  for k = 1, NSLOT do
+    local gv, rv = standsAt(2 * k - 1), standsAt(2 * k)
+    if gv and rv then
+      -- (The marker as markers() drew it this frame: its line and its tab.)
+      local m = UI.hud.mb[k]
+      if m == nil then
+        local cx = (gv[1] + rv[1]) / 2
+        local w = math.max(30, math.abs(rv[1] - gv[1]) + 24)
+        local ly = math.min(gv[2] + 1, gh - 14)
+        m = { cx - w / 2 - 1, ly - 1, cx + w / 2 + 1, math.min(ly + 2, gh - 14) + 14 }
+      end
+      local ox = UI.hud.ox
+      local mx1, my1, mx2, my2 = m[1] + ox, m[2], m[3] + ox, m[4]
+      t[#t + 1] = string.format('%d:%.0f-%.0f,%.0f-%.0f', k, mx1, mx2, my1, my2)
+      local bx1, by1, bx2, by2 = UI.pairBox(k)
+      if bx1 then bx1, bx2 = bx1 + ox, bx2 + ox end
+      -- (In the bars a pair zoomed off the picture is drawn nowhere: the
+      -- buttons beside it cover nothing.)
+      local seen = not UI.hud.bars or ((mx1 + mx2) / 2 > ox and (mx1 + mx2) / 2 < ox + UI.hud.pw)
+      for _, b in ipairs(L) do
+        if seen and b.x1 < mx2 and b.x2 > mx1 and b.y1 < my2 and b.y2 > my1 then hit[#hit + 1] = b.id .. '/marker' .. k end
+        if seen and bx1 and b.x1 < bx2 and b.x2 > bx1 and b.y1 < by2 and b.y2 > by1 then hit[#hit + 1] = b.id .. '/body' .. k end
+      end
+    end
+  end
+  local line = table.concat(t, ' ') .. ' covers: ' .. (#hit > 0 and table.concat(hit, ',') or 'none')
+  if line ~= UI.hud.markLine then
+    UI.hud.markLine = line
+    print(string.format('[hgallery] hud markers (zoom %.3f) ', cameraZoom()) .. line)
+  end
+end
+-- Every frame: the controls, then the drag (it reads a press they left).
+-- (Under -hgallerylog: what the two cost, on average, every 600 frames.)
+function UI.hudFrame()
+  local C = UI.hud.cost
+  UI.hudExplods()
+  if not (LOG and type(os) == 'table' and type(os.clock) == 'function') then UI.hudTick(); UI.mouseTick(); return end
+  local c0 = os.clock()
+  UI.hudTick()
+  local c1 = os.clock()
+  UI.mouseTick()
+  local c2 = os.clock()
+  C.n, C.hud, C.mouse = C.n + 1, C.hud + (c1 - c0), C.mouse + (c2 - c1)
+  if C.n >= 600 then
+    print(string.format('[hgallery] hud cost per frame: controls %.1f us, drag %.1f us (%d frames, %d pairs, %s)', C.hud / C.n * 1e6, C.mouse / C.n * 1e6, C.n, NSLOT,
+      PK.open and 'picker open' or (HIDE and 'hidden' or 'shown'))
+      .. ((C.pkn or 0) > 0 and string.format('; picker %.1f us a frame while open (%d frames)', C.pk / C.pkn * 1e6, C.pkn) or ''))
+    C.n, C.hud, C.mouse, C.pk, C.pkn = 0, 0, 0, 0, 0
+  end
+end
+
+-- ---- the pair picker (the modern-input text): select icons, tapped or keyed --
+-- Tab, the HUD's PAIRS or its + (to add) open it; it pauses the fight as
+-- before and is drawn over the whole fight in its own pixels (the HUD's: gw
+-- x 240). Its data is the old picker's: pickerGivers() (a giver, or a
+-- companion of his, each with its pairs), pkRows (a pair's positions), and
+-- pickerChoose / pickerAdd / HGalleryDelete load, add and remove.
+--   header  (0-33) a slot per pair on screen (its color, its giver's and
+--           its receiver's icons; the next empty one is a + that ARMS an
+--           add), REMOVE (the active pair) and CLOSE, all 28 tall
+--   info    (34-48) what the pointer is over - a pair, or what a button
+--           does - else the cursor pair; her positions, the pair she is on
+--           screen as, the selected position's name or one hint
+--   rail    the givers (more than four: those on screen and the current
+--           one, then ALL: every giver as a grid)
+--   grid    (from 50) the giver's receivers as their select icons (9 x 4 at
+--           16:9, 6 x 4 at 4:3), paged by the wheel, PgUp/PgDn, letters and
+--           (more than one page) the page rail at the right
+--   footer  (205-240) the cursor pair's positions, + ADD (CANCEL while
+--           armed) and SHOW (GO TO for a pair on screen, ADD while armed)
+-- A tap (a click) on a receiver loads her pair in the active pair's place,
+-- or beside the others while armed; held 24 frames or right-clicked she is
+-- only selected, and her positions wait in the footer for a tap. Hovering
+-- names a tile and never moves the cursor. Every target acts on RELEASE over
+-- the target its press began on (a slide-off cancels), and its press is
+-- taken (mouseTake), so neither the HUD nor a drag sees it.
+-- Keys, the old ones kept: the arrows across four zones (the pairs on
+-- screen, the rail, the grid, the positions), Enter (pad a, start) shows,
+-- Insert (pad c) adds, Delete removes, Tab closes, Backspace (pad b) goes
+-- back a zone and then closes, PgUp/PgDn a page, Home/End the giver, 1-4 the
+-- active pair, a letter the next name that starts with it - unless it is a
+-- player's key (P1's WASD, K, L...): those move and choose, as on master.
+-- Icons: the select system's preloaded small icon (9000,0; else 9000,1 cut
+-- to a square; else a monogram), one Anim per character and size.
+function UI.pkInit()
+  UI.pk = { rs = {}, ts = {}, icons = {}, pend = {}, refs = {}, L = nil, lk = nil, was = false, rwas = false, hold = nil, holdT = 0,
+    gy = 50, letter = nil, letterT = 0,
+    long = false, over = nil, hov = false, fid = nil, ft = 0, px = nil, py = nil, mouse = false, ck = nil, sck = nil,
+    made = 0, seek = 0, alltags = nil, first = false, budget = 6, disk = 1, t0 = nil, mono = {}, lkey = {}, inf = {},
+    TL = { 'MOUSE:LEFT' }, TR = { 'MOUSE:RIGHT' }, WU = { 'MOUSE:WHEELUP' }, WD = { 'MOUSE:WHEELDOWN' },
+    MONO = { { 86, 66, 104 }, { 58, 86, 116 }, { 64, 104, 84 }, { 116, 80, 60 }, { 108, 60, 78 }, { 80, 84, 98 } } }
+end
+UI.pkInit()
+-- The zone the keys are in; PK.col keeps the old picker's number for the
+-- log (0 the pairs on screen, 1 the givers, 2 the receivers, 3 positions).
+function UI.pkZone(z)
+  PK.zone = z
+  PK.col = (z == 'strip' and 0) or (z == 'rail' and 1) or (z == 'pos' and 3) or 2
+end
+function UI.pkRight()
+  return UI.mouseOn() and type(inputDeviceActionTime) == 'function' and (tonumber(inputDeviceActionTime(0, UI.pk.TR)) or 0) > 0 or false
+end
+-- Opened (HGalleryPicker): the cursor on the active pair, its page.
+function UI.pkOpen()
+  local P = UI.pk
+  UI.pkZone('grid')
+  PK.all, PK.ag, PK.gtop, PK.ptop, PK.armed, PK.kc, PK.rc = false, PK.gi, -1, 0, nil, SEL, 1
+  P.was = UI.mouseOn() and UI.mouseHeld() or false
+  P.rwas = UI.pkRight()
+  P.hold, P.over, P.fid, P.ft, P.ck, P.sck, P.lk, P.first = nil, nil, nil, 0, nil, nil, nil, true
+end
+-- The cursor pair (nil in the ALL view) and its entry.
+function UI.pkCur()
+  local g = pickerGivers()[PK.gi]
+  if PK.all or g == nil then return nil, g end
+  return g.pairs[PK.ri], g
+end
+-- A giver's name as the picker writes it: a companion entry's own.
+function UI.pkGiverName(g, pi)
+  if g and g.comp then return g.name end
+  return DATA.pairs[pi].giver.display
+end
+-- The step a tap loads a pair at: a companion entry's row of the pair's
+-- scene; the giver's own, nil (the pair's remembered scene itself).
+function UI.pkStepFor(pi)
+  local g = pickerGivers()[PK.gi]
+  if g and g.comp then return pkStep(pi, pkRowFor(pi)) end
+  return nil
+end
+-- Position row r of the pair: its base step; its current or remembered
+-- row, the remembered scene (versions and speed kept) - unless the row was
+-- picked itself (a chip, the positions zone): then its base too, as Enter
+-- on a position always showed it.
+function UI.pkStepAt(pi, r, picked)
+  local g = pickerGivers()[PK.gi]
+  if g == nil or r == nil or (r == pkRowFor(pi) and not picked) then return UI.pkStepFor(pi) end
+  return pkStepOf(g, pi, r)
+end
+function UI.pkArm()
+  if PK.armed then PK.armed = nil; return pkLog('disarmed') end
+  if NSLOT >= MAX_SLOTS then return pkSay('no room: ' .. MAX_SLOTS .. ' pairs is the most') end
+  PK.armed = NSLOT + 1
+  pkLog('armed')
+end
+-- Armed, a tap adds; the arming ends with the add (a refused one keeps it).
+function UI.pkAdd(pi, si)
+  pickerAdd(pi, si)
+  if CMD ~= nil then PK.armed = nil end
+end
+-- SHOW (Enter): the cursor pair at row r - in the active pair's place,
+-- beside the others while armed, or (on screen) made active, moved there in
+-- place. picked: the row was chosen itself (a chip, the positions zone).
+function UI.pkShowAt(r, picked)
+  local pi = UI.pkCur()
+  if pi == nil then return pkSay('pick a giver first') end
+  local si = UI.pkStepAt(pi, r, picked)
+  if PK.armed then return UI.pkAdd(pi, si) end
+  return pickerChoose(pi, si)
+end
+-- Insert (pad c): the cursor pair beside the others, no arming needed.
+function UI.pkInsert()
+  if PK.maps then return end
+  local pi = UI.pkCur()
+  if pi == nil then return pkSay('pick a giver first') end
+  pickerAdd(pi, UI.pkStepAt(pi, (PK.zone == 'pos') and PK.sc or nil, true))
+end
+-- Another giver entry in the grid: the cursor stays on the same receiver
+-- where he has her (the old rule), on her page.
+function UI.pkSetGiver(gi)
+  local list = pickerGivers()
+  if list[gi] == nil then return end
+  local pi = UI.pkCur()
+  local was = pi and string.lower(DATA.pairs[pi].receiver.select) or nil
+  PK.gi, PK.ri, PK.all, PK.gtop = gi, 1, false, -1
+  for ri, p in ipairs(list[gi].pairs) do
+    if string.lower(DATA.pairs[p].receiver.select) == was then PK.ri = ri; break end
+  end
+  PK.sc = pkRowFor(list[gi].pairs[PK.ri])
+  pkLog('giver')
+end
+-- Shared icons (copies of one character, a helper on her root's icon, a
+-- companion on his giver's): for each such index the letter where the
+-- names part (A/B/C for three Sophitias); nil where the icon is its own.
+function UI.pkTags(names, sels)
+  local function base(s) return (string.gsub(string.lower(s), '%s+%w%w?$', '')) end
+  local nb, ns, groups, tags = {}, {}, {}, {}
+  for i = 1, #names do
+    local b, s = base(names[i]), string.lower(sels[i])
+    nb[b], ns[s] = (nb[b] or 0) + 1, (ns[s] or 0) + 1
+  end
+  for i = 1, #names do
+    local s, b = string.lower(sels[i]), base(names[i])
+    local key = (ns[s] > 1 and ('s' .. s)) or (nb[b] > 1 and ('b' .. b)) or nil
+    if key then groups[key] = groups[key] or {}; table.insert(groups[key], i) end
+  end
+  for _, idx in pairs(groups) do
+    local first = string.lower(names[idx[1]])
+    local n = #first
+    for _, i in ipairs(idx) do
+      local s, m = string.lower(names[i]), 0
+      while m < n and m < #s and string.byte(s, m + 1) == string.byte(first, m + 1) do m = m + 1 end
+      n = m
+    end
+    local used, free = {}, {}
+    for _, i in ipairs(idx) do
+      local c = string.match(string.sub(names[i], n + 1), '%w')
+      if c then c = string.upper(c) end
+      if c and not used[c] then used[c] = true; tags[i] = c else free[#free + 1] = i end
+    end
+    local l = 65
+    for _, i in ipairs(free) do
+      while used[string.char(l)] and l < 90 do l = l + 1 end
+      tags[i] = string.char(l)
+      used[string.char(l)] = true
+    end
+  end
+  return tags
+end
+function UI.pkEntryTags(g)
+  if g.tags == nil then
+    local names, sels = {}, {}
+    for i, p in ipairs(g.pairs) do names[i], sels[i] = DATA.pairs[p].receiver.display, DATA.pairs[p].receiver.select end
+    g.tags = UI.pkTags(names, sels)
+  end
+  return g.tags
+end
+function UI.pkAllTags()
+  local P = UI.pk
+  if P.alltags == nil then
+    local names, sels = {}, {}
+    for i, e in ipairs(pickerGivers()) do names[i], sels[i] = e.name, e.select end
+    P.alltags = UI.pkTags(names, sels)
+  end
+  return P.alltags
+end
+-- A character's select icon fitted into a sz x sz box: its 9000,0 (the cell
+-- the select screen draws) scaled to fit - by a whole number between 0.9 and
+-- 2.2, so a 25 x 25 icon stays crisp - else its 9000,1 cut to its top
+-- square. One Anim per character and size, made the first time it shows;
+-- false: none (a character not in the select list, or no such sprite: the
+-- monogram). With BootLoadingMode 1 or 2 a character not preloaded yet is
+-- asked for (queueCharPreload, high), polled every 30 frames, and drawn as
+-- its monogram meanwhile (nil, never kept). At most six new ones a frame
+-- (P.budget), and one search of the disk (P.disk: a name the select list
+-- does not hold as written, a couple of ms in the browser): a page of new
+-- faces comes in over a few frames, never as one long frame.
+function UI.pkIcon(sel, sz)
+  local P = UI.pk
+  local sl = string.lower(sel)
+  local key = sl .. '|' .. sz
+  local e = P.icons[key]
+  if e ~= nil then return e end
+  -- (One waiting for its preload costs nothing until its next poll: the
+  -- budget is for icons that can be made. The poll's time is the loop's
+  -- frame count, which a second open of the picker does not set back.)
+  local ref = P.refs[sl]
+  if ref and P.pend[ref] and LOOPF < P.pend[ref] then return nil end
+  if P.budget <= 0 then return nil end
+  P.budget = P.budget - 1
+  -- (Looked up only: a character the select list lacks is never added. The
+  -- select list's own key first; the engine's search of the disk only for a
+  -- name written another way.)
+  P.seek = P.seek + 1
+  local ok = true
+  if ref == nil then
+    ref = type(main.t_charDef) == 'table' and main.t_charDef[sl] or nil
+    if ref == nil then
+      if P.disk <= 0 then return nil end
+      P.disk = P.disk - 1
+      ok, ref = pcall(main.f_findCharRef, sel)
+    end
+    if ok and ref ~= nil then P.refs[sl] = ref end
+  end
+  if not ok or ref == nil then
+    P.icons[key] = false
+    if LOG then print('[hgallery] picker icon ' .. sel .. ' ' .. sz .. ': not in the select list (monogram)') end
+    return false
+  end
+  if type(getCharPreloadStatus) == 'function' then
+    local w = P.pend[ref]
+    local st = tostring(getCharPreloadStatus(ref))
+    if st ~= 'ready' then
+      if (w == nil or st == 'idle') and type(queueCharPreload) == 'function' then queueCharPreload(ref, 2) end
+      if LOG and w == nil then print('[hgallery] picker icon ' .. sel .. ' waits for its preload (' .. st .. ')') end
+      P.pend[ref] = LOOPF + 30
+      return nil
+    end
+    P.pend[ref] = nil
+  end
+  e = false
+  pcall(function()
+    for _, sp in ipairs({ { 9000, 0 }, { 9000, 1 } }) do
+      local a = animGetPreloadedCharData(ref, sp[1], sp[2], false)
+      local info = a and animGetSpriteInfo(a, sp[1], sp[2])
+      if info and info.Size and (info.Size[1] or 0) > 0 and (info.Size[2] or 0) > 0 then
+        local w, h = info.Size[1], info.Size[2]
+        local s = math.max(sz / w, sz / h)
+        if sp[2] == 0 then
+          s = math.min(sz / w, sz / h)
+          if s >= 0.9 and s < 2.2 then s = math.max(1, math.floor(s + 0.1)) end
+        end
+        animUpdate(a)
+        e = { a = a, s = s, w = w * s, h = h * s, ox = ((info.Offset and info.Offset[1]) or 0) * s, oy = ((info.Offset and info.Offset[2]) or 0) * s,
+          cover = sp[2] == 1, n = sp[2], pw = w, ph = h }
+        return
+      end
+    end
+  end)
+  P.icons[key] = e
+  P.made = P.made + 1
+  if LOG then print('[hgallery] picker icon ' .. sel .. ' ' .. sz .. ': ' .. (e and string.format('9000,%d %dx%d at %.2f', e.n, e.pw, e.ph, e.s) or 'no 9000,0 or 9000,1 (monogram)')) end
+  return e
+end
+-- Icon e in the box at x, y (its top left), sz square: centered (cut to the
+-- top square: centered across, from the top), on whole pixels, clipped.
+function UI.pkDrawIcon(e, x, y, sz)
+  local H = UI.hud
+  local a = e.a
+  -- (Clipped only when it does not fit: a cut 9000,1, or a 9000,0 scaled up
+  -- past the box. One that fits draws with the whole fight as its window.)
+  local clip = e.cover or e.w > sz or e.h > sz
+  if e.lc ~= H.lcn then
+    animSetLocalcoord(a, H.gw, H.gh)
+    animSetScale(a, e.s, e.s)
+    if not clip then animSetWindow(a, 0, 0, H.gw, H.gh) end
+    e.lc, e.x = H.lcn, nil
+  end
+  local dx = math.floor(x + (sz - e.w) / 2 + 0.5)
+  local dy = e.cover and y or math.floor(y + (sz - e.h) / 2 + 0.5)
+  if e.x ~= dx or e.y ~= dy then
+    animSetPos(a, dx + e.ox, dy + e.oy)
+    if clip then animSetWindow(a, x, y, x + sz, y + sz) end
+    e.x, e.y = dx, dy
+  end
+  animDraw(a)
+  if clip then UI.pkUnclip() end
+end
+-- (The web renderer keeps the last sprite's window as the clip until another
+-- sprite sets one - a rect sets none - so every rect drawn after a clipped
+-- icon or text vanished outside it, frames and tiles alike. A dot nobody
+-- sees, with the whole fight as its window, puts the clip back.)
+function UI.pkUnclip()
+  local P = UI.pk
+  P.un = P.un or {}
+  UI.ht(P.un, 1, '.', 2, 9, UI.hc.BLACK, 1 / 255, 1)
+end
+-- No icon: a monogram - a muted face from the name, two faint diagonal
+-- bands, two letters, the name's start under them (an 18 box: the face and
+-- a letter). Rects ri, ri + 1 and texts ti to ti + 2 of the set. (Few
+-- glyphs: a page of monograms is a page of text sprites.)
+function UI.pkMono(rs, ts, ri, ti, name, x, y, sz, a, tag, bare)
+  local P, C = UI.pk, UI.hc
+  local m = P.mono[name]
+  if m == nil then
+    local h = 0
+    for i = 1, #name do h = (h * 31 + string.byte(name, i)) % 9973 end
+    local up = string.upper(name)
+    local w1, w2 = string.match(up, '^%W*(%w)%w*%W+(%w)')
+    local ini = w1 and (w1 .. w2) or string.sub(string.gsub(up, '%W', ''), 1, 2)
+    -- (The name on the strip cut to its width with '..', never to a few
+    -- letters that read as another name.)
+    local nm = string.gsub(up, '[^%w ]', '')
+    m = { face = P.MONO[(h % #P.MONO) + 1], ini = ini, one = string.sub(ini, 1, 1), strip = UI.hcut(nm, 32) }
+    m.strip2 = UI.hcut(nm, 22)
+    P.mono[name] = m
+  end
+  UI.hr(rs, ri, x, y, x + sz, y + sz, m.face, 0.95 * a)
+  if sz < 30 then return UI.ht(ts, ti, m.one, x + sz / 2 + 0.5, y + 13, C.PAPER, a, 0) end
+  local win = rs[1000 + ri]
+  if win == nil or win[1] ~= x or win[2] ~= y then win = { x, y, x + sz, y + sz }; rs[1000 + ri] = win end
+  UI.ht(ts, ti, '//', x - 4, y + 34, C.WHITE, 0.1 * a, 1, 4, win)
+  -- (Unclipped: the next sprite's window puts the clip back.)
+  UI.ht(ts, ti + 1, m.ini, x + sz / 2 + 0.5, y + 21, C.PAPER, a, 0, 2)
+  -- (A giver's tile - the rail, ALL - has his count there instead: the
+  -- info line names him.)
+  if bare then return end
+  UI.hr(rs, ri + 1, x, y + sz - 9, x + sz, y + sz, C.BLACK, 0.6 * a)
+  -- (A tile's letter tag sits on the strip's left: the name moves over.)
+  if tag then UI.ht(ts, ti + 2, m.strip2, x + 11 + (sz - 11) / 2 + 0.5, y + sz - 1, C.PAPER, 0.9 * a, 0)
+  else UI.ht(ts, ti + 2, m.strip, x + sz / 2 + 0.5, y + sz - 1, C.PAPER, 0.9 * a, 0) end
+end
+-- Position row r of pair pi (entry g): its number, and its label as the old
+-- picker's position column wrote it ("3: BENT OVER").
+function UI.pkPosLabel(g, pi, r)
+  local s = DATA.pairs[pi].steps[pkStepOf(g, pi, r)]
+  if s == nil then return '?', '' end
+  local label, grp = s.label or '', s.group or ''
+  if grp ~= '' and string.sub(label, 1, #grp + 2) == grp .. ': ' then label = string.sub(label, #grp + 3) end
+  if s.ext then label = '[' .. s.ext .. '] ' .. label end
+  -- (No number before a group that is already named by it: "POSITION 2".)
+  local pre = (string.upper(grp) == 'POSITION ' .. s.nv.p) and '' or (s.nv.p .. ': ')
+  return tostring(s.nv.p), string.upper(pre .. ((grp ~= '') and (grp .. ': ') or '') .. label)
+end
+-- The layout (fight units; gw = the HUD's whole width): made again only
+-- when what it shows changes. Keeps the cursor in view: the page that holds
+-- it when it opens or the giver changes, else scrolled the least.
+function UI.pkLayout()
+  local P = UI.pk
+  local gw = UI.hud.gwi
+  local list = pickerGivers()
+  local cols = math.max(1, math.floor((gw - 80) / 38))
+  if list[PK.gi] == nil then PK.gi = 1 end
+  local g = list[PK.gi]
+  local n = PK.all and #list or #g.pairs
+  if PK.all then PK.ag = math.max(1, math.min(n, PK.ag)) else PK.ri = math.max(1, math.min(n, PK.ri)) end
+  local npg = math.max(1, math.ceil(math.ceil(n / cols) / 4))
+  local maxTop = (npg - 1) * 4
+  local idx = PK.all and PK.ag or PK.ri
+  local row = math.floor((idx - 1) / cols)
+  local ck = PK.all and -idx or (PK.gi * 65536 + idx)
+  local moved = P.ck ~= ck
+  if PK.gtop < 0 then PK.gtop = math.floor(row / 4) * 4
+  elseif moved then
+    if row < PK.gtop then PK.gtop = row elseif row > PK.gtop + 3 then PK.gtop = row - 3 end
+  end
+  PK.gtop = math.max(0, math.min(maxTop, PK.gtop))
+  P.ck = ck
+  local pi = (not PK.all) and g.pairs[PK.ri] or nil
+  local rows = pi and pkRows(g, pi) or nil
+  local maxc = math.floor((gw - 144) / 30)
+  local shown = 0
+  if rows then
+    if moved then PK.sc, PK.ptop = pkRowFor(pi), 0 end
+    PK.sc = math.max(1, math.min(#rows, PK.sc))
+    shown = (#rows > maxc) and (maxc - 1) or #rows
+    local sck = ck * 64 + PK.sc
+    if P.sck ~= sck then
+      P.sck = sck
+      if PK.sc - 1 < PK.ptop then PK.ptop = PK.sc - 1 elseif PK.sc > PK.ptop + shown then PK.ptop = PK.sc - shown end
+    end
+    PK.ptop = math.max(0, math.min(#rows - shown, PK.ptop))
+  end
+  local K = P.lkey
+  if P.lk and P.L and K[1] == gw and K[2] == NSLOT and K[3] == SEL and K[4] == PK.gi and K[5] == idx and K[6] == PK.all and K[7] == PK.gtop
+    and K[8] == PK.ptop and K[9] == PK.armed and K[10] == PK.zone and K[11] == PK.sc then return P.L end
+  K[1], K[2], K[3], K[4], K[5], K[6], K[7], K[8], K[9], K[10], K[11] = gw, NSLOT, SEL, PK.gi, idx, PK.all, PK.gtop, PK.ptop, PK.armed, PK.zone, PK.sc
+  local L = { gw = gw, cols = cols, n = n, npg = npg, maxTop = maxTop, page = math.min(npg, math.floor(PK.gtop / 4 + 0.5) + 1),
+    tiles = {}, rail = {}, btns = {}, pi = pi, rows = rows, g = g, railCur = 1, gy = P.gy }
+  L.pgs = L.page .. '/' .. npg
+  -- The header (targets 28 tall): a slot per pair on screen, the next one
+  -- empty, REMOVE (the active pair), CLOSE.
+  for k = 1, MAX_SLOTS do
+    local x = 4 + (k - 1) * 56
+    if k <= NSLOT then
+      local pr = DATA.pairs[SLOTS[k].pi]
+      L.btns[#L.btns + 1] = { id = 'k' .. k, kind = 'slot', k = k, ks = tostring(k), x1 = x, y1 = 3, x2 = x + 54, y2 = 31,
+        gs = pr.giver.select, rsel = pr.receiver.select, gn = pr.giver.display, rn = pr.receiver.display, pi = SLOTS[k].pi }
+    elseif k == NSLOT + 1 then
+      L.btns[#L.btns + 1] = { id = 'k' .. k, kind = 'slotadd', k = k, x1 = x, y1 = 3, x2 = x + 54, y2 = 31 }
+    end
+  end
+  L.btns[#L.btns + 1] = { id = 'rm', kind = 'rm', x1 = gw - 86, y1 = 3, x2 = gw - 44, y2 = 31, dim = NSLOT <= 1 }
+  L.btns[#L.btns + 1] = { id = 'cl', kind = 'close', x1 = gw - 40, y1 = 3, x2 = gw - 4, y2 = 31 }
+  -- The page rail (none for a single page).
+  local gy = P.gy
+  if npg > 1 then
+    L.btns[#L.btns + 1] = { id = 'pu', kind = 'pg', d = -1, x1 = gw - 30, y1 = gy, x2 = gw - 4, y2 = gy + 36, dim = PK.gtop <= 0 }
+    L.btns[#L.btns + 1] = { id = 'pd', kind = 'pg', d = 1, x1 = gw - 30, y1 = gy + 114, x2 = gw - 4, y2 = gy + 150, dim = PK.gtop >= maxTop }
+    L.btns[#L.btns + 1] = { id = 'tr', kind = 'track', x1 = gw - 30, y1 = gy + 38, x2 = gw - 4, y2 = gy + 112 }
+  end
+  -- The footer: the cursor pair's positions (the last chip "+n" pages them).
+  if rows then
+    local under = pkRowFor(pi)
+    for j = 1, shown do
+      local r = PK.ptop + j
+      local x = 24 + (j - 1) * 30
+      local num, lab = UI.pkPosLabel(g, pi, r)
+      L.btns[#L.btns + 1] = { id = 'c' .. r, kind = 'chip', r = r, x1 = x, y1 = 208, x2 = x + 28, y2 = 236, under = r == under, num = num, lab = lab }
+    end
+    if #rows > shown then
+      local x = 24 + shown * 30
+      L.btns[#L.btns + 1] = { id = 'cm', kind = 'more', x1 = x, y1 = 208, x2 = x + 28, y2 = 236, more = #rows - shown, ms = '+' .. (#rows - shown), step = shown }
+    end
+  end
+  L.btns[#L.btns + 1] = { id = 'ad', kind = 'add', x1 = gw - 118, y1 = 208, x2 = gw - 70, y2 = 236, dim = PK.all or NSLOT >= MAX_SLOTS }
+  L.btns[#L.btns + 1] = { id = 'sh', kind = 'show', x1 = gw - 66, y1 = 208, x2 = gw - 4, y2 = 236, dim = pi == nil, on = pi and slotOf(pi) or nil }
+  -- The entries on screen (the active pair's first).
+  local onE = {}
+  for k = 1, NSLOT do
+    local e = pkEntryFor(SLOTS[k].pi, SLOTS[k].si)
+    if e and (onE[e] == nil or k == SEL) then onE[e] = k end
+  end
+  -- The rail: every entry (four or fewer), else those on screen (the active
+  -- pair's first) and the current one, three at most, then ALL.
+  local ents = {}
+  if #list <= 4 then
+    for gi = 1, #list do ents[gi] = gi end
+  else
+    local seen = {}
+    local act = pkEntryFor(SLOTS[SEL].pi, SLOTS[SEL].si)
+    if act then seen[act] = true; ents[1] = act end
+    for k = 1, NSLOT do
+      local e = pkEntryFor(SLOTS[k].pi, SLOTS[k].si)
+      if e and not seen[e] then seen[e] = true; ents[#ents + 1] = e end
+    end
+    if not seen[PK.gi] then
+      if #ents >= 3 then ents[3] = PK.gi else ents[#ents + 1] = PK.gi end
+    end
+    while #ents > 3 do table.remove(ents) end
+  end
+  local atags = UI.pkAllTags()
+  for i, gi in ipairs(ents) do
+    local e = list[gi]
+    local y = gy + (i - 1) * 38
+    L.rail[i] = { id = 'r' .. i, kind = 'rail', gi = gi, x1 = 4, y1 = y, x2 = 40, y2 = y + 36, sel = e.select, name = e.name,
+      cnt = #e.pairs, cs = tostring(#e.pairs), on = onE[gi], ons = onE[gi] and tostring(onE[gi]), cur = (not PK.all) and gi == PK.gi, tag = atags[gi] }
+    if L.rail[i].cur then L.railCur = i end
+  end
+  if #list > 4 then
+    local y = gy + #ents * 38
+    L.rail[#ents + 1] = { id = 'ra', kind = 'all', x1 = 4, y1 = y, x2 = 40, y2 = y + 36, cur = PK.all }
+    if PK.all then L.railCur = #ents + 1 end
+  end
+  L.railEnd = (#L.rail > 0) and L.rail[#L.rail].y2 or gy
+  -- The grid: its page. (ALL: no letters - the count badge, and the info
+  -- line names each giver.)
+  local tags = PK.all and {} or UI.pkEntryTags(g)
+  for v = 1, 4 * cols do
+    local i = PK.gtop * cols + v
+    if i > n then break end
+    local x, y = 48 + ((v - 1) % cols) * 38, gy + math.floor((v - 1) / cols) * 38
+    local t = { id = 'g' .. i, kind = 'tile', i = i, x1 = x, y1 = y, x2 = x + 36, y2 = y + 36, tag = tags[i] }
+    if PK.all then
+      local e = list[i]
+      t.gi, t.sel, t.name, t.cnt, t.cs, t.on = i, e.select, e.name, #e.pairs, tostring(#e.pairs), onE[i]
+    else
+      local p = g.pairs[i]
+      local pr = DATA.pairs[p]
+      t.pi, t.sel, t.name, t.on = p, pr.receiver.select, pr.receiver.display, slotOf(p)
+      t.act = t.on ~= nil and t.on == SEL
+    end
+    if t.on then t.ons = tostring(t.on) end
+    L.tiles[v] = t
+  end
+  P.L, P.lk = L, true
+  if LOG then
+    local s = {}
+    for _, set in ipairs({ L.btns, L.rail, L.tiles }) do
+      for _, b in ipairs(set) do
+        s[#s + 1] = b.id .. ':' .. b.x1 .. ',' .. b.y1 .. '-' .. b.x2 .. ',' .. b.y2 .. (b.name and ('=' .. string.gsub(b.name, '%s', '_')) or '')
+          .. (b.on and ('@' .. b.on) or '') .. (b.tag and ('#' .. b.tag) or '') .. (b.dim and '(dim)' or '')
+      end
+    end
+    print('[hgallery] picker layout ' .. gw .. 'x240 cols=' .. cols .. ' page=' .. L.page .. '/' .. npg .. ' n=' .. n .. ' ' .. table.concat(s, ' '))
+  end
+  return L
+end
+-- The target under the fight's point x, y: the buttons and the rail from
+-- their table, the grid by arithmetic (its 2-unit gaps are no tile's).
+function UI.pkHit(L, x, y)
+  if L == nil or x == nil or y == nil then return nil end
+  for _, b in ipairs(L.btns) do
+    if x >= b.x1 and x < b.x2 and y >= b.y1 and y < b.y2 then return b end
+  end
+  for _, b in ipairs(L.rail) do
+    if x >= b.x1 and x < b.x2 and y >= b.y1 and y < b.y2 then return b end
+  end
+  local gy = L.gy
+  if y >= gy and y < gy + 152 and x >= 48 then
+    local c, r = math.floor((x - 48) / 38), math.floor((y - gy) / 38)
+    if c < L.cols and r < 4 and (x - 48) - c * 38 < 36 and (y - gy) - r * 38 < 36 then return L.tiles[r * L.cols + c + 1] end
+  end
+  return nil
+end
+-- The grid scrolled by d rows (a page is 4), the cursor left where it is.
+function UI.pkScroll(d)
+  local L = UI.pkLayout()
+  local t = math.max(0, math.min(L.maxTop, PK.gtop + d))
+  if t ~= PK.gtop then PK.gtop = t; if LOG then print('[hgallery] picker scroll ' .. d .. ': page ' .. (math.min(L.npg, math.floor(t / 4 + 0.5) + 1)) .. '/' .. L.npg .. ' top row ' .. t) end end
+end
+-- The position chips paged ("+n", the wheel over the footer).
+function UI.pkChips(d)
+  local L = UI.pkLayout()
+  if not L.rows then return end
+  local maxc = math.floor((L.gw - 144) / 30)
+  if #L.rows <= maxc then return end
+  local shown = maxc - 1
+  local t = PK.ptop + d * shown
+  if d > 0 and PK.ptop >= #L.rows - shown then t = 0 elseif d < 0 and PK.ptop <= 0 then t = #L.rows - shown end
+  PK.ptop = math.max(0, math.min(#L.rows - shown, t))
+  if LOG then print('[hgallery] picker positions from ' .. (PK.ptop + 1) .. ' of ' .. #L.rows) end
+end
+-- Long press or right click on a tile: selected, not loaded.
+function UI.pkSelect(t)
+  if t.kind ~= 'tile' then return end
+  if PK.all then PK.ag = t.i else PK.ri = t.i end
+  UI.pkZone('grid')
+  UI.pkLayout()
+  pkLog('select')
+end
+-- A target tapped (released over where its press began).
+function UI.pkAct(t)
+  local k = t.kind
+  if k == 'tile' then
+    if PK.all then return UI.pkSetGiver(t.gi) end
+    PK.ri = t.i
+    UI.pkZone('grid')
+    if PK.armed then return UI.pkAdd(t.pi, UI.pkStepFor(t.pi)) end
+    return pickerChoose(t.pi, UI.pkStepFor(t.pi))
+  elseif k == 'rail' then UI.pkZone('grid'); return UI.pkSetGiver(t.gi)
+  elseif k == 'all' then
+    PK.all, PK.ag, PK.gtop = true, PK.gi, -1
+    UI.pkZone('grid')
+    return pkLog('all')
+  elseif k == 'slot' then PK.armed = nil; return HGallerySlot(t.k)
+  elseif k == 'slotadd' then return UI.pkArm()
+  elseif k == 'add' then
+    if NSLOT >= MAX_SLOTS then return pkSay('no room: ' .. MAX_SLOTS .. ' pairs is the most') end
+    if PK.all then return pkSay('pick a giver first') end
+    return UI.pkArm()
+  elseif k == 'rm' then return HGalleryDelete()
+  elseif k == 'close' then return pickerClose()
+  elseif k == 'pg' then return UI.pkScroll(4 * t.d)
+  elseif k == 'track' then return UI.pkScroll((UI.pk.py or 0) < (t.mid or 123) and -4 or 4)
+  elseif k == 'chip' then return UI.pkShowAt(t.r, true)
+  elseif k == 'more' then return UI.pkChips(1)
+  elseif k == 'show' then return UI.pkShowAt(PK.sc, PK.zone == 'pos')
+  end
+end
+-- The pointer (one: a mouse or a finger, the engine does not tell them
+-- apart): read once a frame, hit-tested against the layout.
+function UI.pkPointer()
+  local P = UI.pk
+  if not (UI.mouseOn() and type(mouseTake) == 'function') then return end
+  local L = UI.pkLayout()
+  local gw, gh = UI.hud.gw, UI.hud.gh
+  local held, rheld = UI.mouseHeld(), UI.pkRight()
+  local press, rel, rpress = held and not P.was, P.was and not held, rheld and not P.rwas
+  P.was, P.rwas = held, rheld
+  local moved = type(mouseMoved) == 'function' and mouseMoved()
+  if press or rel or held or moved or rpress or P.px == nil then P.px, P.py = UI.pointerX(gw, gh), UI.pointerY(gw, gh) end
+  -- (Hover is the mouse's: a finger never moves without a press.)
+  if moved and not held then P.hov, P.mouse = true, true elseif press then P.hov = false end
+  local over = UI.pkHit(L, P.px, P.py)
+  P.over = over
+  if type(inputDeviceActionTime) == 'function' and P.py and not held then
+    local d = ((tonumber(inputDeviceActionTime(0, P.WD)) or 0) > 0 and 1) or ((tonumber(inputDeviceActionTime(0, P.WU)) or 0) > 0 and -1) or 0
+    if d ~= 0 then
+      if LOG then print(string.format('[hgallery] picker wheel %d at %.1f,%.1f', d, P.px or -1, P.py)) end
+      if P.py >= 205 then UI.pkChips(d) else UI.pkScroll(d) end
+    end
+  end
+  if rpress and over and mouseTake(P.TR) then
+    if LOG then print('[hgallery] picker right-click on ' .. over.id) end
+    return UI.pkSelect(over)
+  end
+  if press then
+    if LOG then print(string.format('[hgallery] picker pointer down at %.1f,%.1f on %s', P.px or -1, P.py or -1, over and over.id or 'nothing')) end
+    if over and mouseTake(P.TL) then P.hold, P.long, P.holdT = over.id, false, 0 end
+  elseif P.hold then
+    if held then
+      P.holdT = tonumber(type(inputDeviceActionTime) == 'function' and inputDeviceActionTime(0, P.TL) or getActionTime(-1, P.TL)) or 0
+      if not P.long and over and over.id == P.hold and over.kind == 'tile' and P.holdT >= 24 then
+        P.long = true
+        if LOG then print('[hgallery] picker long press on ' .. over.id) end
+        UI.pkSelect(over)
+      end
+    else
+      local id = P.hold
+      P.hold = nil
+      if P.long then
+        if LOG then print('[hgallery] picker let go after the long press on ' .. id) end
+      elseif over and over.id == id then
+        P.fid, P.ft = id, 8
+        if LOG then print('[hgallery] picker tap ' .. id .. (over.dim and ' (dim)' or '')) end
+        UI.pkAct(over)
+      elseif LOG then print('[hgallery] picker cancel ' .. id .. ' (let go off it)') end
+    end
+  end
+end
+-- The grid's cursor moved by the arrows: across a row (Right on to the next
+-- row, the last tile around to the first), Left from the first column to
+-- the rail, Up from the top row to the pairs on screen (one pair: around),
+-- Down from the bottom row to the positions.
+function UI.pkGrid(dx, dy)
+  local L = UI.pkLayout()
+  local n, cols = L.n, L.cols
+  local idx = PK.all and PK.ag or PK.ri
+  local c = (idx - 1) % cols
+  local ni = idx
+  if dx > 0 then ni = (idx < n) and (idx + 1) or 1
+  elseif dx < 0 then
+    if c == 0 then UI.pkZone('rail'); PK.rc = L.railCur; return pkLog('left') end
+    ni = idx - 1
+  elseif dy < 0 then
+    if idx > cols then ni = idx - cols
+    elseif NSLOT > 1 then PK.kc = SEL; UI.pkZone('strip'); return pkLog('up')
+    else
+      local last = (math.ceil(n / cols) - 1) * cols + c + 1
+      ni = (last <= n) and last or math.max(c + 1, last - cols)
+    end
+  elseif dy > 0 then
+    if idx + cols <= n then ni = idx + cols
+    elseif math.floor((idx - 1) / cols) < math.floor((n - 1) / cols) then ni = n
+    elseif not PK.all then UI.pkZone('pos'); return pkLog('down')
+    else ni = c + 1 end
+  end
+  if PK.all then PK.ag = ni else PK.ri = ni end
+  pkLog('move ' .. ((dx ~= 0) and dx or (dy * cols)))
+end
+-- A letter: the next name that starts with it.
+function UI.pkLetter(ch)
+  local list = pickerGivers()
+  local n = PK.all and #list or #list[PK.gi].pairs
+  local cur = PK.all and PK.ag or PK.ri
+  for d = 1, n do
+    local i = ((cur - 1 + d) % n) + 1
+    local nm = PK.all and list[i].name or DATA.pairs[list[PK.gi].pairs[i]].receiver.display
+    if string.upper(string.match(nm, '%w') or '') == ch then
+      if PK.all then PK.ag = i else PK.ri = i end
+      UI.pkZone('grid')
+      return pkLog('letter ' .. ch)
+    end
+  end
+  return pkSay('no name starts with ' .. ch)
+end
+function UI.pkKeys()
+  local P = UI.pk
+  local k = getKey()
+  if k ~= '' then resetKey() end
+  local up, dn, lf, rt = hit('U'), hit('D'), hit('L'), hit('R')
+  local ok, back, ins = hit('s') or hit('a'), hit('b') or k == 'BACKSPACE', hit('c')
+  -- A letter jumps to a name only when it is no player's key: P1's letters
+  -- are his directions and buttons (the Studio's WASD, K L ;), which move
+  -- and choose here as on master. It waits two frames, and any direction or
+  -- button read meanwhile (the engine may read his press a frame after the
+  -- key) takes it.
+  if up or dn or lf or rt or ok or back or ins then P.letter = nil
+  elseif k ~= '' and string.find(k, '^%l$') then P.letter, P.letterT = string.upper(k), 3 end
+  if P.letter then
+    P.letterT = P.letterT - 1
+    if P.letterT > 0 then return end
+    local ch = P.letter
+    P.letter = nil
+    return UI.pkLetter(ch)
+  end
+  if k == 'PAGEUP' or k == 'PAGEDOWN' then
+    local L = UI.pkLayout()
+    local d = (k == 'PAGEUP') and -1 or 1
+    UI.pkScroll(4 * d)
+    local i = math.max(1, math.min(L.n, (PK.all and PK.ag or PK.ri) + 4 * L.cols * d))
+    if PK.all then PK.ag = i else PK.ri = i end
+    UI.pkZone('grid')
+    return pkLog('page ' .. d)
+  end
+  if k == 'HOME' or k == 'END' then
+    local list = pickerGivers()
+    return UI.pkSetGiver(((PK.gi - 1 + ((k == 'HOME') and -1 or 1)) % #list) + 1)
+  end
+  if ins then return UI.pkInsert() end
+  if not (up or dn or lf or rt or ok or back) then return end
+  local z = PK.zone
+  if z == 'strip' and NSLOT < 2 then UI.pkZone('grid'); z = 'grid' end
+  if z == 'grid' then
+    if back then
+      if PK.all then PK.all, PK.gtop = false, -1; return pkLog('back') end
+      UI.pkZone('rail'); PK.rc = UI.pkLayout().railCur; return pkLog('left')
+    end
+    if ok then
+      if PK.all then return UI.pkSetGiver(PK.ag) end
+      return UI.pkShowAt(PK.sc)
+    end
+    if lf then return UI.pkGrid(-1, 0) elseif rt then return UI.pkGrid(1, 0) elseif up then return UI.pkGrid(0, -1) end
+    return UI.pkGrid(0, 1)
+  elseif z == 'rail' then
+    local L = UI.pkLayout()
+    if back then return pickerClose() end
+    if up or dn then
+      PK.rc = ((PK.rc - 1 + (up and -1 or 1)) % #L.rail) + 1
+      local t = L.rail[PK.rc]
+      if t.kind == 'rail' then
+        -- (Live: the grid follows the rail; the rail holds the current giver.)
+        UI.pkSetGiver(t.gi)
+        for i, r in ipairs(UI.pkLayout().rail) do if r.gi == t.gi then PK.rc = i end end
+      end
+      return pkLog('move ' .. (up and -1 or 1))
+    end
+    if rt or ok then
+      local t = L.rail[PK.rc]
+      if t and t.kind == 'all' then PK.all, PK.ag, PK.gtop = true, PK.gi, -1 end
+      UI.pkZone('grid')
+      return pkLog('right')
+    end
+  elseif z == 'strip' then
+    if lf or rt then PK.kc = ((PK.kc - 1 + (lf and -1 or 1)) % NSLOT) + 1; return pkLog('move ' .. (lf and -1 or 1)) end
+    if ok then PK.armed = nil; return HGallerySlot(PK.kc) end
+    if dn or back then UI.pkZone('grid'); return pkLog('down') end
+  else
+    local L = UI.pkLayout()
+    if not L.rows then UI.pkZone('grid'); return end
+    if lf or rt then PK.sc = ((PK.sc - 1 + (lf and -1 or 1)) % #L.rows) + 1; return pkLog('move ' .. (lf and -1 or 1)) end
+    if up or back then UI.pkZone('grid'); return pkLog('up') end
+    if ok then return UI.pkShowAt(PK.sc, true) end
+  end
+end
+-- Rect and text sets of one piece (cached by its key).
+function UI.pkSet(key)
+  local P = UI.pk
+  local rs = P.rs[key]
+  if rs == nil then rs = {}; P.rs[key] = rs; P.ts[key] = {} end
+  return rs, P.ts[key]
+end
+-- A target's state: dim, down (held over it, or 8 frames after its tap),
+-- hover (the mouse over it), else rest.
+function UI.pkState(t)
+  local P = UI.pk
+  if t.dim then return 'dim' end
+  if (P.hold == t.id and P.over and P.over.id == t.id) or (P.fid == t.id and P.ft > 0) then return 'down' end
+  if P.hov and P.hold == nil and P.over and P.over.id == t.id then return 'hover' end
+  return nil
+end
+-- A glass face (the HUD's tokens): rest, hover, down (+1, +1, the face in
+-- its accent), dim; a 2-unit stripe of the accent on top ('t') or at the
+-- left ('l'). -> the box as drawn, the words' ink and alpha.
+function UI.pkGlass(rs, b, acc, st, a, stripe)
+  local C = UI.hc
+  local x1, y1, x2, y2 = b.x1, b.y1, b.x2, b.y2
+  if st == 'down' then
+    x1, y1, x2, y2 = x1 + 1, y1 + 1, x2 + 1, y2 + 1
+    UI.hr(rs, 1, x1, y1, x2, y2, acc, 0.9 * a)
+    UI.hframe(rs, 2, x1, y1, x2, y2, 1, acc, a)
+    return x1, y1, x2, y2, C.INK, 1
+  end
+  if st == 'dim' then
+    UI.hshadow(rs, 6, x1, y1, x2, y2, 0.2 * a)
+    UI.hr(rs, 1, x1, y1, x2, y2, C.FACE, 0.28 * a)
+    UI.hframe(rs, 2, x1, y1, x2, y2, 1, C.EDGE, 0.12 * a)
+    return x1, y1, x2, y2, C.DIM, 0.5
+  end
+  local hov = st == 'hover'
+  UI.hshadow(rs, 6, x1, y1, x2, y2, 0.45 * a)
+  UI.hr(rs, 1, x1, y1, x2, y2, C.FACE, (hov and 0.72 or 0.55) * a)
+  UI.hr(rs, 8, x1 + 1, y1 + 1, x2 - 1, y1 + 2, C.WHITE, 0.16 * a, true)
+  UI.hframe(rs, 2, x1, y1, x2, y2, 1, hov and acc or C.EDGE, (hov and 0.95 or 0.35) * a)
+  if stripe == 't' then UI.hr(rs, 9, x1, y1, x2, y1 + 2, acc, a)
+  elseif stripe == 'l' then UI.hr(rs, 9, x1, y1, x1 + 2, y2, acc, a) end
+  return x1, y1, x2, y2, C.PAPER, 1
+end
+function UI.pkBtn(b, L, a)
+  local C = UI.hc
+  local rs, ts = UI.pkSet(b.id)
+  local st = UI.pkState(b)
+  local k = b.kind
+  if k == 'slot' then
+    -- A pair on screen: its color bar, number, giver and receiver.
+    local multi = NSLOT > 1
+    local pc = multi and COL.COLORS[b.k] or C.BONE
+    local act = b.k == SEL
+    local x1, y1, x2, y2 = b.x1, b.y1, b.x2, b.y2
+    if st == 'down' then x1, y1, x2, y2 = x1 + 1, y1 + 1, x2 + 1, y2 + 1 else UI.hshadow(rs, 6, x1, y1, x2, y2, 0.45 * a) end
+    UI.hr(rs, 1, x1, y1, x2, y2, C.FACE, ((st == 'hover') and 0.72 or 0.55) * a)
+    if st == 'down' then UI.hr(rs, 8, x1, y1, x2, y2, C.WHITE, 0.3 * a, true)
+    elseif act and multi then UI.hr(rs, 8, x1, y1, x2, y2, pc, 0.3 * a) end
+    UI.hr(rs, 9, x1, y1, x1 + 4, y2, pc, a)
+    UI.hframe(rs, 2, x1, y1, x2, y2, act and 2 or 1, pc, (act and 1 or 0.55) * a)
+    UI.ht(ts, 1, b.ks, x1 + 10, y1 + 18, pc, a, 0)
+    if b.gic == nil then b.gic = UI.pkIcon(b.gs, 18) end
+    if b.gic then UI.pkDrawIcon(b.gic, x1 + 15, y1 + 5, 18) else UI.pkMono(rs, ts, 20, 10, b.gn, x1 + 15, y1 + 5, 18, a) end
+    if b.ric == nil then b.ric = UI.pkIcon(b.rsel, 18) end
+    if b.ric then UI.pkDrawIcon(b.ric, x1 + 34, y1 + 5, 18) else UI.pkMono(rs, ts, 22, 14, b.rn, x1 + 34, y1 + 5, 18, a) end
+    return
+  end
+  if k == 'slotadd' then
+    -- The next empty slot: a dashed outline and a +; armed, in its color.
+    local armed = PK.armed == b.k
+    local c = armed and COL.COLORS[b.k] or C.GREEN
+    local x1, y1, x2, y2 = b.x1, b.y1, b.x2, b.y2
+    if st == 'down' then x1, y1, x2, y2 = x1 + 1, y1 + 1, x2 + 1, y2 + 1 end
+    if armed then
+      UI.hr(rs, 1, x1, y1, x2, y2, c, 0.25 * a)
+      UI.hframe(rs, 2, x1, y1, x2, y2, 2, c, a)
+    else
+      UI.hr(rs, 1, x1, y1, x2, y2, C.FACE, ((st == 'hover' or st == 'down') and 0.6 or 0.35) * a)
+      local i = 10
+      for x = x1, x2 - 4, 7 do
+        UI.hr(rs, i, x, y1, x + 4, y1 + 1, c, 0.8 * a)
+        UI.hr(rs, i + 1, x, y2 - 1, x + 4, y2, c, 0.8 * a)
+        i = i + 2
+      end
+      for y = y1 + 4, y2 - 5, 7 do
+        UI.hr(rs, i, x1, y, x1 + 1, y + 4, c, 0.8 * a)
+        UI.hr(rs, i + 1, x2 - 1, y, x2, y + 4, c, 0.8 * a)
+        i = i + 2
+      end
+    end
+    local cx, cy = math.floor((x1 + x2) / 2), math.floor((y1 + y2) / 2)
+    UI.hr(rs, 6, cx - 5, cy - 1, cx + 5, cy + 1, c, a)
+    UI.hr(rs, 7, cx - 1, cy - 5, cx + 1, cy + 5, c, a)
+    return
+  end
+  if k == 'track' then
+    -- The page rail's track: a thumb for the page, p/n on a black box.
+    local cx = math.floor((b.x1 + b.x2) / 2)
+    local t1, tl = b.y1 + 2, b.y2 - b.y1 - 4
+    UI.hr(rs, 1, cx - 1, t1, cx + 1, t1 + tl, C.DIM, 0.5 * a)
+    local th = math.max(8, math.floor(tl / L.npg + 0.5))
+    local ty = t1 + ((L.maxTop > 0) and math.floor((tl - th) * PK.gtop / L.maxTop + 0.5) or 0)
+    UI.hr(rs, 2, cx - 2, ty, cx + 2, ty + th, C.GOLD, a)
+    b.mid = ty + th / 2
+    local s = L.pgs
+    local w = UI.hw(s)
+    local my = math.floor((b.y1 + b.y2) / 2)
+    UI.hr(rs, 3, cx - math.floor(w / 2) - 3, my - 6, cx + math.ceil(w / 2) + 3, my + 6, C.BLACK, 0.85 * a)
+    UI.ht(ts, 1, s, cx + 0.5, my + 4, C.PAPER, a, 0)
+    return
+  end
+  if k == 'show' then
+    -- SHOW: solid gold, its word and a play arrow on one line (the HUD's
+    -- POS arrow, smaller); GO TO for a pair on screen, ADD while armed; with
+    -- several pairs (or armed) a strip in the color of the slot it acts on.
+    local x1, y1, x2, y2 = b.x1, b.y1, b.x2, b.y2
+    local word = PK.armed and 'ADD' or (b.on and 'GO TO' or 'SHOW')
+    local down = st == 'down'
+    local ink, ia = C.INK, a
+    if st == 'dim' then
+      UI.hshadow(rs, 6, x1, y1, x2, y2, 0.2 * a)
+      UI.hr(rs, 1, x1, y1, x2, y2, C.GOLD, 0.2 * a)
+      UI.hframe(rs, 2, x1, y1, x2, y2, 1, C.GOLD, 0.25 * a)
+      ink, ia, word = C.DIM, 0.6 * a, 'SHOW'
+    else
+      if down then x1, y1, x2, y2 = x1 + 1, y1 + 1, x2 + 1, y2 + 1 else UI.hshadow(rs, 6, x1, y1, x2, y2, 0.45 * a) end
+      UI.hr(rs, 1, x1, y1, x2, y2, C.GOLD, ((st == 'hover' or down) and 1 or 0.92) * a)
+      if down then UI.hr(rs, 8, x1, y1, x2, y2, C.WHITE, 0.3 * a, true) end
+    end
+    local slot = (st ~= 'dim') and (PK.armed or ((NSLOT > 1) and (b.on or SEL))) or nil
+    local sx = x1
+    if slot then UI.hr(rs, 9, x1, y1, x1 + 6, y2, COL.COLORS[slot], a); sx = x1 + 6 end
+    local w = UI.hw(word)
+    local x0 = math.floor((sx + x2 - (w + 8)) / 2)
+    local cy = math.floor((y1 + y2) / 2)
+    UI.ht(ts, 1, word, x0, cy + 4, ink, ia, 1)
+    -- (The arrow: the HUD's POS arrow at half its size, 4 wide and 8 tall,
+    -- level with the word's capitals.)
+    UI.htri(rs, 10, x0 + w + 4, cy + 1, 4, 1, 1, ink, ia)
+    return
+  end
+  local acc = (k == 'add' and C.GREEN) or (k == 'rm' and C.RED) or ((k == 'chip' or k == 'more') and C.GOLD) or C.BONE
+  -- (The add toggle while armed: CANCEL, its stripe the armed slot's color.)
+  local armed = k == 'add' and PK.armed
+  if armed then acc = COL.COLORS[PK.armed] end
+  local x1, y1, x2, y2, ink, ia = UI.pkGlass(rs, b, acc, st, a, (k == 'close' or k == 'rm' or armed) and 't' or nil)
+  local cx, cy = math.floor((x1 + x2) / 2), math.floor((y1 + y2) / 2)
+  local gc = (st == 'dim' or st == 'down') and ink or acc
+  local ga = ia * a
+  if k == 'close' then
+    UI.ht(ts, 1, 'CLOSE', cx + 0.5, cy + 5, ink, ia * a, 0)
+  elseif k == 'rm' then
+    UI.ht(ts, 1, 'REMOVE', cx + 0.5, cy + 5, ink, ia * a, 0)
+  elseif k == 'pg' then
+    for i = 0, 2 do
+      local hw = (b.d < 0) and (1 + 2 * i) or (5 - 2 * i)
+      UI.hr(rs, 10 + i, cx - hw, cy - 3 + 2 * i, cx + hw, cy - 1 + 2 * i, gc, ga)
+    end
+  elseif k == 'chip' then
+    local under = b.under and st ~= 'down'
+    UI.ht(ts, 1, b.num, cx + 0.5, y1 + 18, (under and C.GOLD) or ink, ia * a, 0)
+    if under then UI.hr(rs, 10, x1 + 7, y2 - 6, x2 - 7, y2 - 4, C.GOLD, a) end
+  elseif k == 'more' then
+    if st ~= 'down' then UI.hframe(rs, 10, x1, y1, x2, y2, 1, C.GOLD, 0.9 * a) end
+    UI.ht(ts, 1, b.ms, cx + 0.5, y1 + 18, (st == 'down') and ink or C.GOLD, ia * a, 0)
+  elseif k == 'add' and armed then
+    UI.ht(ts, 1, 'CANCEL', cx + 0.5, cy + 5, ink, ia * a, 0)
+  elseif k == 'add' then
+    local w = UI.hw('ADD')
+    local x0 = math.floor(cx - (w + 14) / 2)
+    UI.hr(rs, 10, x0, cy + 1, x0 + 10, cy + 3, gc, ga)
+    UI.hr(rs, 11, x0 + 4, cy - 3, x0 + 6, cy + 7, gc, ga)
+    UI.ht(ts, 1, 'ADD', x0 + 14, cy + 5, ink, ia * a, 1)
+  end
+end
+-- One tile (36 x 36): its shadow, edge and backing, the icon (or the
+-- monogram), its badges - on screen (the slot's color and number; the
+-- active pair's also a bar along the bottom), a letter where its icon is
+-- shared, the giver's pair count - and its state over it.
+function UI.pkTile(key, t, a)
+  local P, C = UI.pk, UI.hc
+  local rs, ts = UI.pkSet(key)
+  local st = UI.pkState(t)
+  local x1, y1, x2, y2 = t.x1, t.y1, t.x2, t.y2
+  local down = st == 'down'
+  if down then x1, y1, x2, y2 = x1 + 1, y1 + 1, x2 + 1, y2 + 1
+  else UI.hr(rs, 1, x1 + 2, y1 + 2, x2 + 2, y2 + 2, C.BLACK, 0.4 * a) end
+  -- (Pressed: on its shadow, a white edge and a light wash - the face stays
+  -- readable through a long press.)
+  local edge, ea = C.WHITE, ((st == 'hover' or down) and 0.95) or 0.22
+  if (t.kind == 'all' or t.cur) and not down then edge, ea = C.GOLD, 1 end
+  UI.hr(rs, 2, x1, y1, x2, y2, edge, ea * a)
+  UI.hr(rs, 3, x1 + 1, y1 + 1, x2 - 1, y2 - 1, C.INK, 0.85 * a)
+  if t.kind == 'all' then
+    local cx = math.floor((x1 + x2) / 2)
+    UI.hr(rs, 12, cx - 7, y1 + 6, cx - 1, y1 + 12, C.GOLD, a)
+    UI.hr(rs, 13, cx + 1, y1 + 6, cx + 7, y1 + 12, C.GOLD, a)
+    UI.hr(rs, 14, cx - 7, y1 + 14, cx - 1, y1 + 20, C.GOLD, a)
+    UI.hr(rs, 15, cx + 1, y1 + 14, cx + 7, y1 + 20, C.GOLD, a)
+    UI.ht(ts, 1, 'ALL', cx + 0.5, y1 + 31, C.GOLD, a, 0)
+  else
+    -- (Kept on the tile once known; nil - not ready - is asked again.)
+    if t.ic == nil then t.ic = UI.pkIcon(t.sel, 34) end
+    if t.ic then UI.pkDrawIcon(t.ic, x1 + 1, y1 + 1, 34) else UI.pkMono(rs, ts, 20, 10, t.name, x1 + 1, y1 + 1, 34, a, t.tag, t.cnt ~= nil) end
+  end
+  if st == 'hover' or down then UI.hr(rs, 4, x1 + 1, y1 + 1, x2 - 1, y2 - 1, C.WHITE, 0.12 * a, true) end
+  if t.on then
+    local pc = COL.COLORS[t.on]
+    if t.act then UI.hr(rs, 6, x1, y2 - 3, x2, y2, pc, a) end
+    UI.hr(rs, 5, x1, y1, x1 + 10, y1 + 10, pc, a)
+    UI.ht(ts, 2, t.ons, x1 + 5.5, y1 + 9, C.BLACK, a, 0)
+  end
+  if t.tag then
+    UI.hr(rs, 7, x1, y2 - 10, x1 + 10, y2, C.BLACK, 0.82 * a)
+    UI.ht(ts, 3, t.tag, x1 + 5.5, y2 - 1, C.PAPER, a, 0)
+  end
+  if t.cnt then
+    local s = t.cs
+    local w = UI.hw(s)
+    UI.hr(rs, 8, x2 - w - 4, y2 - 10, x2, y2, C.BLACK, 0.78 * a)
+    UI.ht(ts, 4, s, x2 - 2, y2 - 1, C.GOLD, a, -1)
+  end
+  -- (The rail's selected entry: a gold bar at the screen's edge.)
+  if t.kind == 'rail' and t.cur then UI.hr(rs, 9, 0, y1, 2, y2, C.GOLD, a) end
+  -- Held: the bar that fills up to the long press.
+  if P.hold == t.id and not P.long and t.kind == 'tile' and P.holdT > 4 then
+    UI.hr(rs, 11, x1, y2 - 3, x1 + math.floor(36 * math.min(1, P.holdT / 24)), y2, C.GOLD, a)
+  end
+end
+-- The cursors: the grid's (a white frame, pulsing while the keys are in
+-- the grid; never gold, which pair 3's yellow looks like), and the key
+-- zone's when it is the rail, the pairs on screen or the positions.
+function UI.pkCursors(L, a)
+  local C = UI.hc
+  local rs = UI.pkSet('cur')
+  local p = 0.7 + 0.3 * math.sin(PK.t * 6.2832 / 40)
+  local idx = PK.all and PK.ag or PK.ri
+  local t = nil
+  for _, x in ipairs(L.tiles) do if x.i == idx then t = x end end
+  if t then
+    UI.hframe(rs, 1, t.x1 - 3, t.y1 - 3, t.x2 + 3, t.y2 + 3, 1, C.BLACK, 0.8 * a)
+    UI.hframe(rs, 5, t.x1 - 2, t.y1 - 2, t.x2 + 2, t.y2 + 2, 2, C.WHITE, ((PK.zone == 'grid') and p or 0.55) * a)
+  end
+  local z = nil
+  if PK.zone == 'rail' then z = L.rail[PK.rc]
+  else
+    for _, b in ipairs(L.btns) do
+      if (PK.zone == 'strip' and b.kind == 'slot' and b.k == PK.kc) or (PK.zone == 'pos' and b.kind == 'chip' and b.r == PK.sc) then z = b end
+    end
+  end
+  if z then
+    UI.hframe(rs, 9, z.x1 - 3, z.y1 - 3, z.x2 + 3, z.y2 + 3, 1, C.BLACK, 0.8 * a)
+    UI.hframe(rs, 13, z.x1 - 2, z.y1 - 2, z.x2 + 2, z.y2 + 2, 2, C.WHITE, p * a)
+  end
+end
+-- The line under the header. Left: what the pointer is over - a pair, a
+-- giver, or a button and what it does ("REMOVE PAIR 2: ...") - else the
+-- cursor's pair (armed: "ADD PAIR k: TAP A TILE"). Right, from the edge in:
+-- the position under the keys' cursor, the chip under the pointer or (a
+-- finger: no hover) the selected one, else one hint for the device used
+-- last, or a note in their place; the pair she is on screen as, in its
+-- color ("PAIR 1"); her number of positions ("4 POS").
+function UI.pkInfo(L, a)
+  local P, C = UI.pk, UI.hc
+  local rs, ts = UI.pkSet('info')
+  local gw = L.gw
+  local o = P.hov and P.over or nil
+  local I = P.inf
+  local msg = PK.msgT > 0 and PK.msg or false
+  if I.L ~= L or I.o ~= o or I.armed ~= PK.armed or I.msg ~= msg or I.mouse ~= P.mouse or I.ma ~= UI.hud.ma then
+    I.L, I.o, I.armed, I.msg, I.mouse, I.ma = L, o, PK.armed, msg, P.mouse, UI.hud.ma
+    UI.pkInfoText(L, o, I)
+  end
+  -- (Its baseline 3 units over the grid's cursor frames. The fields on the
+  -- right from the edge in, 13 apart with a thin rule between two.)
+  local x = gw - 4
+  UI.ht(ts, 1, I.left, 4, 44, I.lc, a, 1)
+  UI.ht(ts, 2, I.r2, x, 44, I.c2, a, -1)
+  if I.w2 > 0 then x = x - I.w2 - 13 end
+  if I.w2 > 0 and (I.w3 > 0 or I.r1 ~= '') then UI.hr(rs, 1, x + 6, 37, x + 7, 45, C.DIM, 0.9 * a) end
+  UI.ht(ts, 4, I.r3, x, 44, I.c3, a, -1)
+  if I.w3 > 0 then x = x - I.w3 - 13 end
+  if I.w3 > 0 and I.r1 ~= '' then UI.hr(rs, 2, x + 6, 37, x + 7, 45, C.DIM, 0.9 * a) end
+  UI.ht(ts, 3, I.r1, x, 44, C.GOLD, a, -1)
+end
+-- A pair's names as the line writes them, in maxw: the giver's cut first
+-- (at a word), so hers stays whole; a cut that would leave him only a few
+-- letters drops him.
+function UI.pkNames(g, pi, maxw)
+  local gn, rn = string.upper(UI.pkGiverName(g, pi)), string.upper(DATA.pairs[pi].receiver.display)
+  local tail = '  X  ' .. rn
+  if UI.hw(gn .. tail) <= maxw then return gn .. tail end
+  local gr = maxw - UI.hw(tail)
+  if gr >= 24 then
+    local cut = UI.hcutw(gn, gr)
+    if cut == '' then cut = UI.hcut(gn, gr) end
+    if #(string.gsub(cut, '%W', '')) >= 6 then return cut .. tail end
+  end
+  return UI.hcut(rn, maxw)
+end
+function UI.pkInfoText(L, o, I)
+  local P, C = UI.pk, UI.hc
+  local gw = L.gw
+  local pi, gi = L.pi, PK.all and PK.ag or nil
+  local ok = o and o.kind
+  if ok == 'tile' then pi, gi = o.pi, o.gi elseif ok == 'rail' then pi, gi = nil, o.gi end
+  -- What a button does (its pair, where it has one).
+  local pre, bpi, btxt = nil, nil, nil
+  if ok == 'rm' then
+    if NSLOT > 1 then pre, bpi = 'REMOVE PAIR ' .. SEL .. ': ', SLOTS[SEL].pi else btxt = 'THE LAST PAIR STAYS: A TILE CHANGES IT' end
+  elseif ok == 'slot' then pre, bpi = 'PAIR ' .. o.k .. ': ', o.pi
+  elseif ok == 'slotadd' or (ok == 'add' and PK.armed) then btxt = PK.armed and 'CANCEL THE ADD' or ('ADD PAIR ' .. o.k .. ': THEN TAP A TILE')
+  elseif ok == 'add' then btxt = (NSLOT >= MAX_SLOTS) and ('NO ROOM: ' .. MAX_SLOTS .. ' PAIRS IS THE MOST') or 'ADD A PAIR: THEN TAP A TILE'
+  elseif ok == 'close' then btxt = 'CLOSE THE PICKER'
+  elseif ok == 'pg' or ok == 'track' then btxt = 'PAGE ' .. L.pgs
+  elseif ok == 'all' then btxt = 'ALL GIVERS: ' .. #pickerGivers()
+  elseif ok == 'more' then btxt = 'MORE POSITIONS'
+  elseif ok == 'show' and L.pi then pre, bpi = (PK.armed and ('ADD AS PAIR ' .. PK.armed .. ': ')) or (slotOf(L.pi) and 'GO TO ') or 'SHOW ', L.pi
+  end
+  local left, lc = '', C.PAPER
+  local r1, r2, c2, r3, c3 = '', '', C.DIM, '', C.PAPER
+  if btxt or pre then
+    if PK.msgT > 0 then r2, c2 = string.upper(PK.msg), C.GOLD end
+  elseif PK.armed then
+    lc = COL.COLORS[PK.armed]
+    pre = 'ADD PAIR ' .. PK.armed .. ': '
+    if ok == 'tile' and pi then bpi = pi else btxt = 'ADD PAIR ' .. PK.armed .. ': TAP A TILE' end
+    if PK.msgT > 0 then r2, c2 = string.upper(PK.msg), C.GOLD end
+  elseif pi then
+    bpi = pi
+    r1 = #pkRows(L.g, pi) .. ' POS'
+    -- (Which pair she is on screen as: only with several.)
+    local k = slotOf(pi)
+    if k and NSLOT > 1 then r3, c3 = 'PAIR ' .. k, COL.COLORS[k] end
+    -- (The selected position's name: the cursor's pair only.)
+    local sel = nil
+    if pi == L.pi and L.rows then
+      local _, lab = UI.pkPosLabel(L.g, pi, PK.sc)
+      sel = lab
+    end
+    if PK.msgT > 0 then r2, c2 = string.upper(PK.msg), C.GOLD
+    elseif ok == 'chip' then r2, c2 = o.lab, C.PAPER
+    elseif PK.zone == 'pos' and sel then r2, c2 = sel, C.PAPER
+    elseif UI.hud.ma and not P.mouse and sel then r2, c2 = sel, C.SOFT
+    elseif UI.hud.ma then r2 = 'CLICK: SHOW  RIGHT-CLICK: PICK POS'
+    else
+      r2 = 'ENTER SHOW  INS ADD  DEL REMOVE  TAB CLOSE'
+      -- (A narrow screen: the keys a player could not guess.)
+      if gw < 400 then r2 = 'INS ADD  DEL REMOVE  TAB CLOSE' end
+    end
+  elseif gi then
+    local e = pickerGivers()[gi]
+    btxt = string.upper(e.name) .. '  ' .. #e.pairs .. ((#e.pairs == 1) and ' PAIR' or ' PAIRS')
+    if PK.msgT > 0 then r2, c2 = string.upper(PK.msg), C.GOLD end
+  end
+  -- (A position's name or a note: at most 40% / 60% of the line, or what
+  -- the names leave when that is more; "POSITION n" written "POS n" (also
+  -- when the names would be cut beside it whole), then cut at a word. Once
+  -- the names are cut, it takes what they left.)
+  local w1, w3 = (r1 ~= '') and UI.hw(r1) or 0, (r3 ~= '') and UI.hw(r3) or 0
+  local r2w = r2
+  local function fit2(m)
+    local t = r2w
+    if UI.hw(t) > m then t = string.gsub(t, 'POSITION (%d)', 'POS %1') end
+    if UI.hw(t) > m then
+      local cut = UI.hcutw(t, m)
+      t = (cut ~= '') and cut or UI.hcut(t, m)
+    end
+    return t
+  end
+  local function free(nw) return gw - 20 - w1 - w3 - ((w1 > 0) and 13 or 0) - ((w3 > 0) and 13 or 0) - nw end
+  if r2 ~= '' and c2 ~= C.DIM then
+    local nw = 0
+    if btxt then nw = UI.hw(btxt) elseif bpi then nw = UI.hw(pre or '') + UI.hw(UI.pkNames((ok == 'rm' or ok == 'slot') and nil or L.g, bpi, 9999)) end
+    if UI.hw(r2w) > free(nw) then r2w = string.gsub(r2w, 'POSITION (%d)', 'POS %1') end
+    r2 = fit2(math.max(gw * ((c2 == C.GOLD) and 0.6 or 0.4), free(nw)))
+  end
+  local w2 = (r2 ~= '') and UI.hw(r2) or 0
+  -- (The fields on the right are 13 apart, a thin rule between them, and
+  -- 8 from the names.)
+  local function roomOf()
+    local n = ((w1 > 0) and 1 or 0) + ((w2 > 0) and 1 or 0) + ((w3 > 0) and 1 or 0)
+    return gw - 12 - w1 - w2 - w3 - ((n > 0) and (13 * (n - 1) + 8) or 0)
+  end
+  local room = roomOf()
+  -- (A pair on screen is named by its own giver; one of the current entry
+  -- by the entry's, a companion's own name.)
+  local g = L.g
+  if ok == 'rm' or ok == 'slot' then g = nil end
+  -- (Short of room: the names are cut, the giver's first; the mouse's hint
+  -- goes before that, the keys' one only when not even her name would fit.)
+  local want = 0
+  if btxt then want = UI.hw(btxt) elseif bpi then want = UI.hw(pre or '') + UI.hw(UI.pkNames(g, bpi, 9999)) end
+  if c2 == C.DIM and r2 ~= '' and want > room and (UI.hud.ma or room < 70) then r2, w2 = '', 0; room = roomOf() end
+  room = math.max(40, room)
+  if btxt then left = UI.hcut(btxt, room)
+  elseif bpi then left = (pre or '') .. UI.pkNames(g, bpi, room - UI.hw(pre or '')) end
+  if r2 ~= r2w and c2 ~= C.DIM and free(UI.hw(left)) > w2 then r2 = fit2(free(UI.hw(left))); w2 = UI.hw(r2) end
+  I.left, I.lc, I.r1, I.r2, I.c2, I.w2, I.r3, I.c3, I.w3 = left, lc, r1, r2, c2, w2, r3, c3, w3
+  if LOG then print('[hgallery] picker info ' .. left .. ' | ' .. r1 .. ' | ' .. r3 .. ' | ' .. r2) end
+end
+function UI.pkDraw()
+  local C = UI.hc
+  local L = UI.pkLayout()
+  local fw = UI.hud.gw
+  local a = math.min(1, PK.t / 6)
+  local rs, ts = UI.pkSet('base')
+  UI.hr(rs, 1, 0, 0, fw, 240, C.BLACK, 0.55 * a)
+  -- (Header 0-33, the info line 34-48, the grid from 50, the footer from
+  -- 205; the rail's line ends at its last tile. The bands' ink all but
+  -- solid (.98 over the .55 shade): a bright stage, its floor or a pair's
+  -- marker never reads through them.)
+  UI.hr(rs, 2, 0, 0, fw, 33, C.INK, 0.98 * a)
+  local ac = PK.armed and COL.COLORS[PK.armed] or nil
+  UI.hr(rs, 3, 0, 33, fw, 34, ac or C.GOLD, (ac and 0.9 or 0.45) * a)
+  UI.hr(rs, 4, 0, 34, fw, 48, C.INK, 0.98 * a)
+  UI.hr(rs, 5, 0, 205, fw, 240, C.INK, 0.98 * a)
+  UI.hr(rs, 6, 0, 205, fw, 206, C.GOLD, 0.45 * a)
+  UI.hr(rs, 7, 43, L.gy, 44, L.railEnd, C.GOLD, 0.3 * a)
+  for _, b in ipairs(L.btns) do UI.pkBtn(b, L, a) end
+  for i, t in ipairs(L.rail) do UI.pkTile(100 + i, t, a) end
+  for v, t in ipairs(L.tiles) do UI.pkTile(v, t, a) end
+  UI.pkCursors(L, a)
+  UI.pkInfo(L, a)
+  if PK.all then UI.ht(ts, 1, UI.hcut('PICK A GIVER: HIS RECEIVERS COME NEXT', L.gw - 128), 4, 226, C.SOFT, a, 1)
+  elseif L.rows then UI.ht(ts, 1, 'POS', 4, 226, C.DIM, a, 1) end
+end
+-- ---- the map picker (the MAP tile) -------------------------------------------
+-- The build's stages as a list of tiles in the pair picker's own bands: the
+-- same ink header (a title, CLOSE), the same info line, the tiles on glass
+-- (a stripe, a gold frame and NOW on the one playing), the same page rail
+-- and wheel, a footer. Picking one loads the gallery again on that stage the
+-- way a pair's change does (reload: the same fade): the pairs stay where
+-- they are, at their scenes, dragged places and zoom. The pick is kept for
+-- the session (K.map), like the zoom and the hidden HUD, never saved.
+-- Keys: the arrows move, Enter (pad a, start) picks, PgUp / PgDn a page,
+-- Tab / Backspace (pad b) close. No key opens it (every key of the arrow
+-- cluster is taken): the MAP tile, mouse or touch.
+function UI.mpInit()
+  UI.mp = { list = nil, cur = 1, lk = nil, L = nil, cols = 2, vis = 5 }
+end
+UI.mpInit()
+-- The usable stages: DATA.stages that the build has on disk (a trimmed
+-- public build may lack some), the data's order (its first is the default).
+-- Less than two: no tile.
+function UI.mapList()
+  local M = UI.mp
+  if M.list then return M.list end
+  local list = {}
+  if type(DATA.stages) == 'table' then
+    for _, e in ipairs(DATA.stages) do
+      local ok = true
+      if main and type(main.f_fileExists) == 'function' then ok = main.f_fileExists(e.path) and true or false end
+      if ok then list[#list + 1] = e end
+    end
+  end
+  M.list = list
+  if LOG then
+    local n = {}
+    for i, e in ipairs(list) do n[#n + 1] = i .. '=' .. e.path end
+    print('[hgallery] maps ' .. #list .. ' of ' .. tostring(type(DATA.stages) == 'table' and #DATA.stages or 0) .. ': ' .. table.concat(n, ' | '))
+  end
+  return list
+end
+-- The one playing: the pick, else the data's stage.
+function UI.mapCur()
+  local list = UI.mapList()
+  if K.map and list[K.map] then return K.map end
+  local want = string.lower(DATA.stage or '')
+  for i, e in ipairs(list) do if string.lower(e.path) == want then return i end end
+  return 1
+end
+-- The select path the next match plays on.
+function UI.mapPath()
+  local list = UI.mapList()
+  local e = K.map and list[K.map]
+  return e and e.path or DATA.stage
+end
+function UI.mapName(e) return string.upper(e and e.name or '?') end
+-- Opened (HGalleryMaps): the cursor on the stage playing, its page.
+function UI.mpOpen()
+  local P, M = UI.pk, UI.mp
+  M.cur, M.lk, M.L = UI.mapCur(), nil, nil
+  PK.gtop = 0
+  P.was = UI.mouseOn() and UI.mouseHeld() or false
+  P.rwas = UI.pkRight()
+  P.hold, P.over, P.fid, P.ft, P.ck, P.sck, P.lk, P.first = nil, nil, nil, 0, nil, nil, nil, true
+end
+function HGalleryMaps()
+  if not ACTIVE or UI.hud.exit then return end
+  if PK.open then return pickerClose() end
+  if #UI.mapList() < 2 then return end
+  useSlot(SEL)
+  PK.msgT = 0
+  PK.maps = true
+  UI.mpOpen()
+  -- (Paused as the pair picker pauses: the fight waits behind it.)
+  PK.keepPaused = paused() and not PK.release
+  PK.release = false
+  PK.open = true
+  togglePause(true)
+  resetKey()
+  controls()
+  if LOG then print('[hgallery] maps open: ' .. #UI.mapList() .. ' maps, playing ' .. UI.mapCur()) end
+end
+-- The tiles: cols x vis (5) from the top row; 3 columns on a wide screen
+-- (16:9), else 2. The page rail only when there is more than a page.
+function UI.mpLayout()
+  local M = UI.mp
+  local gw = UI.hud.gwi
+  local list = UI.mapList()
+  local n = #list
+  local cols = (gw >= 400) and 3 or 2
+  local vis = 5
+  local rowsN = math.ceil(n / cols)
+  local maxTop = math.max(0, rowsN - vis)
+  M.cur = math.max(1, math.min(n, M.cur))
+  local crow = math.floor((M.cur - 1) / cols)
+  if crow < PK.gtop then PK.gtop = crow elseif crow > PK.gtop + vis - 1 then PK.gtop = crow - vis + 1 end
+  PK.gtop = math.max(0, math.min(maxTop, PK.gtop))
+  local key = gw .. '|' .. PK.gtop .. '|' .. M.cur .. '|' .. tostring(K.map) .. '|' .. n
+  if M.lk == key and M.L then return M.L end
+  local npg = math.max(1, math.ceil(rowsN / vis))
+  local L = { gw = gw, cols = cols, vis = vis, n = n, npg = npg, maxTop = maxTop, tiles = {}, btns = {}, rail = {}, gy = 52,
+    page = (maxTop > 0) and (math.floor(PK.gtop / maxTop * (npg - 1) + 0.5) + 1) or 1 }
+  L.pgs = L.page .. '/' .. npg
+  L.btns[#L.btns + 1] = { id = 'cl', kind = 'close', x1 = gw - 40, y1 = 3, x2 = gw - 4, y2 = 31 }
+  local avail = gw - 8 - ((npg > 1) and 30 or 0)
+  local tw = math.floor((avail - (cols - 1) * 4) / cols)
+  if npg > 1 then
+    L.btns[#L.btns + 1] = { id = 'pu', kind = 'pg', d = -1, x1 = gw - 30, y1 = 52, x2 = gw - 4, y2 = 88, dim = PK.gtop <= 0 }
+    L.btns[#L.btns + 1] = { id = 'pd', kind = 'pg', d = 1, x1 = gw - 30, y1 = 166, x2 = gw - 4, y2 = 202, dim = PK.gtop >= maxTop }
+    L.btns[#L.btns + 1] = { id = 'tr', kind = 'track', x1 = gw - 30, y1 = 90, x2 = gw - 4, y2 = 164 }
+  end
+  local cur = UI.mapCur()
+  for v = 1, vis * cols do
+    local i = PK.gtop * cols + v
+    if i > n then break end
+    local x, y = 4 + ((v - 1) % cols) * (tw + 4), 52 + math.floor((v - 1) / cols) * 30
+    L.tiles[#L.tiles + 1] = { id = 'm' .. i, kind = 'tile', i = i, v = v, x1 = x, y1 = y, x2 = x + tw, y2 = y + 26, name = UI.mapName(list[i]), now = i == cur }
+  end
+  M.L, M.lk = L, key
+  if LOG then
+    local s = {}
+    for _, t in ipairs(L.tiles) do s[#s + 1] = t.id .. ':' .. t.x1 .. ',' .. t.y1 .. '-' .. t.x2 .. ',' .. t.y2 .. '=' .. string.gsub(t.name, '%s', '_') .. (t.now and '@1' or '') end
+    for _, b in ipairs(L.btns) do s[#s + 1] = b.id .. ':' .. b.x1 .. ',' .. b.y1 .. '-' .. b.x2 .. ',' .. b.y2 end
+    print('[hgallery] maps layout ' .. gw .. 'x240 cols=' .. cols .. ' page=' .. L.pgs .. ' n=' .. n .. ' cur=' .. M.cur .. ' ' .. table.concat(s, ' '))
+  end
+  return L
+end
+function UI.mpHit(L, x, y)
+  if L == nil or x == nil or y == nil then return nil end
+  for _, set in ipairs({ L.btns, L.tiles }) do
+    for _, b in ipairs(set) do
+      if x >= b.x1 and x < b.x2 and y >= b.y1 and y < b.y2 then return b end
+    end
+  end
+  return nil
+end
+-- The tiles scrolled by d rows (the cursor left where it is).
+function UI.mpScroll(d)
+  local L = UI.mpLayout()
+  local t = math.max(0, math.min(L.maxTop, PK.gtop + d))
+  if t ~= PK.gtop then
+    -- (The cursor goes with the rows - else the layout would bring the view back to it.)
+    local M = UI.mp
+    M.cur = math.max(1, math.min(L.n, M.cur + (t - PK.gtop) * L.cols))
+    PK.gtop = t
+    if LOG then print('[hgallery] maps scroll ' .. d .. ': top row ' .. t .. ' of ' .. L.maxTop .. ', cursor ' .. M.cur) end
+  end
+end
+-- Pick stage i: the one playing only closes it; any other loads the
+-- gallery again on it (the same fade a pair's change plays).
+function UI.mpPick(i)
+  local list = UI.mapList()
+  local e = list[i]
+  if e == nil then return end
+  if i == UI.mapCur() then
+    PK.msg, PK.msgT = 'THAT MAP IS PLAYING ALREADY', 150
+    if LOG then print('[hgallery] maps pick ' .. i .. ': playing already') end
+    return
+  end
+  if CMD ~= nil then return end
+  if LOG then print('[hgallery] maps pick ' .. i .. ' ' .. e.name .. ' (' .. e.path .. ')') end
+  K.map = i
+  reload({ what = 'map' })
+end
+function UI.mpAct(t)
+  if t.dim then return end
+  if t.kind == 'tile' then UI.mpM(t.i); return UI.mpPick(t.i)
+  elseif t.kind == 'close' then return pickerClose()
+  elseif t.kind == 'pg' then return UI.mpScroll(t.d * UI.mp.vis)
+  end
+end
+function UI.mpM(i) UI.mp.cur = i end
+function UI.mpKeys()
+  local M = UI.mp
+  local k = getKey()
+  if k ~= '' then resetKey() end
+  local up, dn, lf, rt = hit('U'), hit('D'), hit('L'), hit('R')
+  local ok, back = hit('s') or hit('a'), hit('b') or k == 'BACKSPACE'
+  local L = UI.mpLayout()
+  local cols, n = L.cols, L.n
+  if k == 'PAGEUP' or k == 'PAGEDOWN' then
+    local d = (k == 'PAGEUP') and -1 or 1
+    M.cur = math.max(1, math.min(n, M.cur + d * L.vis * cols))
+    if LOG then print('[hgallery] maps page ' .. d .. ' cursor ' .. M.cur) end
+    return
+  end
+  if back then return pickerClose() end
+  if ok then return UI.mpPick(M.cur) end
+  if lf then M.cur = ((M.cur - 2) % n) + 1
+  elseif rt then M.cur = (M.cur % n) + 1
+  elseif up then M.cur = (M.cur - cols < 1) and math.min(n, M.cur + math.floor((n - M.cur) / cols) * cols) or (M.cur - cols)
+  elseif dn then M.cur = (M.cur + cols > n) and (((M.cur - 1) % cols) + 1) or (M.cur + cols)
+  else return end
+  if LOG then print('[hgallery] maps cursor ' .. M.cur) end
+end
+function UI.mpPointer()
+  local P = UI.pk
+  if not (UI.mouseOn() and type(mouseTake) == 'function') then return end
+  local L = UI.mpLayout()
+  local gw, gh = UI.hud.gw, UI.hud.gh
+  local held = UI.mouseHeld()
+  local press, rel = held and not P.was, P.was and not held
+  P.was = held
+  local moved = type(mouseMoved) == 'function' and mouseMoved()
+  if press or rel or held or moved or P.px == nil then P.px, P.py = UI.pointerX(gw, gh), UI.pointerY(gw, gh) end
+  if moved and not held then P.hov, P.mouse = true, true elseif press then P.hov = false end
+  local over = UI.mpHit(L, P.px, P.py)
+  P.over = over
+  if type(inputDeviceActionTime) == 'function' and P.py and not held then
+    local d = ((tonumber(inputDeviceActionTime(0, P.WD)) or 0) > 0 and 1) or ((tonumber(inputDeviceActionTime(0, P.WU)) or 0) > 0 and -1) or 0
+    if d ~= 0 then
+      if LOG then print(string.format('[hgallery] maps wheel %d at %.1f,%.1f', d, P.px or -1, P.py)) end
+      UI.mpScroll(d)
+    end
+  end
+  if press then
+    if LOG then print(string.format('[hgallery] maps pointer down at %.1f,%.1f on %s', P.px or -1, P.py or -1, over and over.id or 'nothing')) end
+    if over and mouseTake(P.TL) then P.hold, P.long, P.holdT = over.id, false, 0 end
+  elseif P.hold and not held then
+    local id = P.hold
+    P.hold = nil
+    if over and over.id == id then
+      P.fid, P.ft = id, 8
+      if LOG then print('[hgallery] maps tap ' .. id .. (over.dim and ' (dim)' or '')) end
+      UI.mpAct(over)
+    elseif LOG then print('[hgallery] maps cancel ' .. id .. ' (let go off it)') end
+  end
+end
+-- One tile: glass with the name; the one playing in a gold frame with NOW,
+-- the keys' cursor a pulsing white frame.
+function UI.mpTile(t, a)
+  local P, C = UI.pk, UI.hc
+  local rs, ts = UI.pkSet('mt' .. t.v)
+  local st = UI.pkState(t)
+  -- (A backing near solid, as the pair picker's tiles have, so a bright stage never washes the name out.)
+  if st ~= 'down' then UI.hr(rs, 21, t.x1, t.y1, t.x2, t.y2, C.INK, 0.85 * a) end
+  local x1, y1, x2, y2, ink, ia = UI.pkGlass(rs, t, t.now and C.GOLD or C.GREEN, st, a, 'l')
+  if t.now and st ~= 'down' then UI.hframe(rs, 20, x1, y1, x2, y2, 2, C.GOLD, a) end
+  local room = (x2 - x1) - 14 - (t.now and (UI.hw('NOW') + 8) or 0)
+  UI.ht(ts, 1, UI.hcut(t.name, room), x1 + 8, y1 + 17, ink, ia * a, 1)
+  if t.now then UI.ht(ts, 2, 'NOW', x2 - 5, y1 + 17, (st == 'down') and ink or C.GOLD, a, -1) end
+end
+function UI.mpDraw()
+  local C = UI.hc
+  local L = UI.mpLayout()
+  local M = UI.mp
+  local P = UI.pk
+  local fw = UI.hud.gw
+  local a = math.min(1, PK.t / 6)
+  local rs, ts = UI.pkSet('mbase')
+  UI.hr(rs, 1, 0, 0, fw, 240, C.BLACK, 0.55 * a)
+  -- (The pair picker's bands: header 0-33, info 34-48, footer from 205.)
+  UI.hr(rs, 2, 0, 0, fw, 33, C.INK, 0.98 * a)
+  UI.hr(rs, 3, 0, 33, fw, 34, C.GOLD, 0.45 * a)
+  UI.hr(rs, 4, 0, 34, fw, 48, C.INK, 0.98 * a)
+  UI.hr(rs, 5, 0, 205, fw, 240, C.INK, 0.98 * a)
+  UI.hr(rs, 6, 0, 205, fw, 206, C.GOLD, 0.45 * a)
+  UI.ht(ts, 1, 'MAP', 8, 21, C.GOLD, a, 1)
+  UI.ht(ts, 2, UI.mapCur() .. '/' .. L.n, 8 + UI.hw('MAP') + 10, 21, C.SOFT, a, 1)
+  for _, b in ipairs(L.btns) do UI.pkBtn(b, L, a) end
+  for _, t in ipairs(L.tiles) do UI.mpTile(t, a) end
+  -- The keys' cursor.
+  local rc = UI.pkSet('mcur')
+  local p = 0.7 + 0.3 * math.sin(PK.t * 6.2832 / 40)
+  for _, t in ipairs(L.tiles) do
+    if t.i == M.cur then
+      UI.hframe(rc, 1, t.x1 - 3, t.y1 - 3, t.x2 + 3, t.y2 + 3, 1, C.BLACK, 0.8 * a)
+      UI.hframe(rc, 5, t.x1 - 2, t.y1 - 2, t.x2 + 2, t.y2 + 2, 2, C.WHITE, ((P.hov and P.mouse) and 0.45 or p) * a)
+    end
+  end
+  -- The info line: the stage under the pointer (else the cursor's), and the
+  -- way to pick.
+  local list = UI.mapList()
+  local o = P.hov and P.over and P.over.kind == 'tile' and P.over.i or M.cur
+  local e = list[o]
+  local right = UI.hud.ma and 'TAP A MAP TO PLAY ON IT' or 'ENTER PICKS  TAB CLOSES'
+  if UI.hw(right) > fw * 0.45 then right = 'ENTER PICKS' end
+  local left = UI.mapName(e) .. ((o == UI.mapCur()) and '  (NOW)' or '')
+  left = UI.hcut(left, fw - 20 - UI.hw(right))
+  local ri = UI.pkSet('minfo')
+  local rsi, tsi = ri, P.ts['minfo']
+  UI.ht(tsi, 1, left, 4, 44, C.PAPER, a, 1)
+  UI.ht(tsi, 2, right, fw - 4, 44, C.DIM, a, -1)
+  -- The footer: what stays, or a note.
+  local rf, tf = UI.pkSet('mfoot')
+  if PK.msgT > 0 then UI.ht(tf, 1, UI.hcut(PK.msg, fw - 12), 4, 226, C.GOLD, a, 1)
+  else UI.ht(tf, 1, UI.hcut('THE PAIRS, THEIR PLACES AND THE ZOOM STAY', fw - 12), 4, 226, C.SOFT, a, 1) end
+end
+-- Every frame while it is open (pickerTick): the keys, the pointer, then
+-- the drawing. (Under -hgallerylog: its cost, into the HUD's cost line, and
+-- the first frame's alone.)
+function UI.pkFrame()
+  local P = UI.pk
+  local clock = LOG and type(os) == 'table' and type(os.clock) == 'function'
+  local c0 = clock and os.clock() or 0
+  local made, seek = P.made, P.seek
+  if P.ft > 0 then P.ft = P.ft - 1 end
+  if PK.msgT > 0 then PK.msgT = PK.msgT - 1 end
+  -- (The first frame searches no disk: it already builds the layout.)
+  local first = P.first
+  P.first = false
+  P.budget, P.disk = 6, first and 0 or 1
+  if PK.maps then UI.mpKeys() else UI.pkKeys() end
+  if PK.open then if PK.maps then UI.mpPointer() else UI.pkPointer() end end
+  if PK.open then if PK.maps then UI.mpDraw() else UI.pkDraw() end end
+  if clock then
+    local dt = os.clock() - c0
+    local C = UI.hud.cost
+    C.pk, C.pkn = (C.pk or 0) + dt, (C.pkn or 0) + 1
+    if first then
+      local L = P.L
+      print(string.format('[hgallery] picker first frame %.1f us (open to drawn %.1f us): %d icons made, view %d of %d (page %d/%d, %d givers, %d pairs)', dt * 1e6,
+        P.t0 and (os.clock() - P.t0) * 1e6 or -1, P.made - made, L and #L.tiles or 0, L and L.n or 0, L and L.page or 0, L and L.npg or 0, #pickerGivers(), #DATA.pairs))
+    elseif dt > 0.004 then
+      -- (A frame over 4 ms: its cost, for the paging proof.)
+      print(string.format('[hgallery] picker slow frame %.1f us: %d icons made, %d looked up', dt * 1e6, P.made - made, P.seek - seek))
+    end
+  end
+end
+
+` : ''}hook.add('loop#hgallery', 'hgallery', function()
   local ok, err = pcall(function()
     if not ACTIVE then return end
     LOOPF = LOOPF + 1
     if MSG.t > 0 then MSG.t = MSG.t - 1 end
-    tickMatch()
+${v2 ? '    if UI.font == nil then UI.font = UI.hudFont() end\n' : ''}    tickMatch()
     camTick()
     for k = 1, NSLOT do useSlot(k); tickSlot() end
     useSlot(SEL)
     -- (The overlay also where the active step's prototype mode plays outside
     -- round state 2.)
     if roundState() == 2 or MODE.liveOf(curStep()) then
-      if HINT then HINT = false; if HIDE then tell('Insert shows the overlay', 120) end end
+      if HINT then HINT = false; if HIDE then tell(${v2 ? "'controls hidden: SHOW or Insert'" : "'Insert shows the overlay'"}, 120) end end
       watch()
       markers()
-      overlay()
-    end
-    pickerRelease()
+${v2 ? '' : '      overlay()\n'}    end
+${v2 ? '    UI.hudFrame()\n' : ''}    pickerRelease()
     pickerTick()
     controls()
     inputWatch()
@@ -3941,7 +6993,7 @@ end)
 ${modeLua}-- ---- the mode ---------------------------------------------------------------
 local function run()
   ACTIVE, CMD, HINT = true, nil, HIDE
-  -- Every key is taken when the mode starts and acts only in the gallery
+${v2 ? '  UI.hud.exit, UI.hud.armT = false, 0\n' : ''}  -- Every key is taken when the mode starts and acts only in the gallery
   -- mode: a key keeps only its last binding (one per key and modifiers), and
   -- a later one would replace an earlier one. Tab opens the picker: the Scene
   -- Viewer mod (loaded after this file) binds it too, and gets it outside the
@@ -3959,12 +7011,19 @@ local function run()
   take('DELETE', 'HGalleryDelete()')
   take('INSERT', 'HGalleryInsert()')
   take('h', 'HGalleryOverlay()')
-  take('PAGEUP', 'HGalleryPair(-1)')
+${v2 ? `  -- / (and ? on it, with Shift): the keys' help, opened and closed.
+  take('SLASH', 'HGalleryHelp()')
+  take('SLASH', 'HGalleryHelp()', true)
+` : ''}  take('PAGEUP', 'HGalleryPair(-1)')
   take('PAGEDOWN', 'HGalleryPair(1)')
   for k = 1, MAX_SLOTS do take(tostring(k), 'HGallerySlot(' .. k .. ')') end
   -- (Tests: [ and ] step through the pair's steps in the data's order.)
   if LOG then take('LBRACKET', 'HGalleryScene(-1)'); take('RBRACKET', 'HGalleryScene(1)') end
-  for _, L in ipairs(LOAD) do L.si, L.fresh = 1, nil end
+${v2 ? `  -- (Tests: backslash turns the bars off and on: the controls go back in
+  -- the picture, as on an engine without uiWindowSpace.)
+  if LOG then take('BACKSLASH', 'HGalleryBarsTest()') end
+` : ''}  -- (A new visit: every pair at its slot again, nothing dragged.)
+  for _, L in ipairs(LOAD) do L.si, L.fresh, L.dx = 1, nil, nil end
   if SEL > #LOAD then SEL = 1 end
   -- The pair each place held last match: the same pair in the same place
   -- keeps its two characters loaded (existed=1: not loaded or compiled again).
@@ -4017,6 +7076,9 @@ ${v2 ? `  -- No side select: the local inputs are assigned as upstream's quick v
       table.insert(start.p[2].t_selected, { ref = r, pal = rp, pn = 2 * k })
       local c = newG()
       c.k, c.pi, c.phase = k, L.pi, 'start'
+      -- Where the mouse left it, while as many pairs are on screen (a pair
+      -- added or taken off makes new slots: every pair at its own again).
+      if L.dxn == n then c.dx = L.dx or 0 end
       c.si = (L.si and L.si >= 1 and L.si <= #p.steps) and L.si or 1
       SLOTS[k] = c
       names[#names + 1] = '[' .. k .. '] pair ' .. L.pi .. '/' .. #DATA.pairs .. ' ' .. p.giver.select .. ' x ' .. p.receiver.select
@@ -4034,8 +7096,14 @@ ${v2 ? `  -- No side select: the local inputs are assigned as upstream's quick v
       ZL = keep
     end
     CAM, STAGE = { key = nil, free = false, still = 0, fv = {} }, {}
+    UI.drag.k, UI.drag.after = nil, -1
     start.f_setRounds(-1, {})
-    if stage then start.f_setStage(stage, true) else start.f_setStage() end
+${v2 ? `    -- (The map: the one picked with the MAP tile, else the data's; asked
+    -- every match, so a pick plays from the next.)
+    local sp = UI.mapPath()
+    stage = (sp ~= '' and start.f_getStageRef(sp)) or nil
+    if LOG then print('[hgallery] map ' .. tostring(sp)) end
+` : ''}    if stage then start.f_setStage(stage, true) else start.f_setStage() end
     CMD = nil
     -- A match that brings pairs back (or has several): fast until each shows
     -- again, intros cut (tickMatch; every match purges what intros left).
@@ -4071,7 +7139,7 @@ ${v2 ? `  -- No side select: the local inputs are assigned as upstream's quick v
     -- A match that ended by itself (game() is -1 when Esc or a reload ended
     -- it): a prototype mode may ask for it again ({ what = 'again' }: a
     -- replay after the match).
-    if CMD == nil and won ~= -1 then
+    if CMD == nil and won ~= -1${v2 ? ' and not UI.hud.exit' : ''} then
       local again = MODE.call('after', won)
       if type(again) == 'table' and again.what == 'again' then CMD = again end
     end
@@ -4080,6 +7148,7 @@ ${v2 ? `  -- No side select: the local inputs are assigned as upstream's quick v
     for k, L in ipairs(LOAD) do
       before[k] = L.pi
       L.si, L.fresh = SLOTS[k].si, nil
+      L.dx, L.dxn = SLOTS[k].dx, NSLOT
       LAST[L.pi] = SLOTS[k].si
     end
     if CMD.what == 'pair' then
@@ -4090,7 +7159,10 @@ ${v2 ? `  -- No side select: the local inputs are assigned as upstream's quick v
     elseif CMD.what == 'del' and #LOAD > 1 then
       table.remove(LOAD, CMD.k)
       if SEL > #LOAD then SEL = #LOAD end
-    elseif CMD.what == 'again' then
+${v2 ? `    elseif CMD.what == 'map' then
+      -- (The same pairs again on the map picked: kept, each at its scene.)
+      if LOG then print('[hgallery] map change: the match is loaded again') end
+` : ''}    elseif CMD.what == 'again' then
       -- (The same pairs again, kept, each at the scene it was at.)
       if LOG then print('[hgallery] again: the match is loaded again') end
     end
@@ -4177,8 +7249,10 @@ function buildGalleryFiles(data, stage, modes, opts) {
   if (!trimmed.pairs.length) return null;
   return {
     lua: Buffer.from(buildGalleryLua(trimmed, use, opts), 'latin1'),
+    // Its font, for the modern-input text's on-screen controls (that text only).
+    font: (opts && opts.v2 !== undefined ? !!opts.v2 : !!process.env.IKEMEN_V2) ? Buffer.from(galleryFontDef(), 'latin1') : null,
     // latin1: a command name is the .cmd's own bytes (Shift-JIS names too).
-    zss: Buffer.from(buildGalleryZss(trimmed, use), 'latin1'),
+    zss: Buffer.from(buildGalleryZss(trimmed, use, opts), 'latin1'),
     pairs: trimmed.pairs.length,
     steps: trimmed.pairs.reduce((n, p) => n + p.steps.length, 0),
     commands: trimmed.commands.length,
@@ -4205,15 +7279,63 @@ function buildForRoster(roster) {
   }
   const first = roster && roster.stages && roster.stages[0];
   const stage = first ? 'stages/' + String(first.file || '').replace(/^stages\//i, '') : '';
+  // Every stage of the build, for the MAP tile: its select path and a name
+  // the 6x9 font can draw (ASCII; the stage's own name, else its file).
+  const stages = [];
+  for (const x of (roster && roster.stages) || []) {
+    const file = String((x && x.file) || '').replace(/^stages\//i, '');
+    if (!file) continue;
+    const name = String((x && x.name) || '').replace(/[^ -~]/g, '?').trim() || file.replace(/\.def$/i, '').replace(/[^ -~]/g, '?');
+    stages.push({ name, path: 'stages/' + file });
+  }
+  let hud = null;
+  try { hud = hudScan(roster, data); } catch (e) { console.warn('H gallery: HUD explods not read: ' + (e && e.message)); hud = null; }
   try {
-    return buildGalleryFiles(data, stage, modes);
+    return buildGalleryFiles(data, stage, modes, { hud: hud || undefined, stages: stages.length > 1 ? stages : undefined });
   } catch (e) {
     console.warn('H gallery: ' + (e && e.message));
     return null;
   }
 }
 
+// The HUD explods of every character on a pair (galhud.js), for the hook: a
+// giver's ids that also name an explod in a state his steps show (a cut-in
+// of a scene) are kept. Each character's list is logged once per build.
+function hudScan(roster, data) {
+  const gd = require('./gallerydata.js');
+  const galhud = require('./galhud.js');
+  const chars = gd.rosterChars(roster, require('./layout.js').dir('cache'));
+  const bySel = new Map(chars.map((c) => [c.select, c]));
+  const shown = new Map();
+  const nums = (v, set) => {
+    if (Number.isInteger(v)) set.add(v);
+    else if (Array.isArray(v)) v.forEach((x) => nums(x, set));
+    else if (v && typeof v === 'object') for (const k of ['entry', 'states', 'until', 'at', 'path']) if (k in v) nums(v[k], set);
+  };
+  const order = [];
+  for (const p of (data && data.pairs) || []) {
+    for (const who of [p.giver, p.receiver]) if (who && who.select && !order.includes(who.select)) order.push(who.select);
+    if (p.giver && p.giver.select) {
+      if (!shown.has(p.giver.select)) shown.set(p.giver.select, new Set());
+      for (const st of p.steps || []) nums(st, shown.get(p.giver.select));
+    }
+  }
+  const list = [];
+  for (const sel of order) {
+    const c = bySel.get(sel);
+    if (!c) continue;
+    const r = galhud.hudExplods(c.dir, c.def, shown.get(sel));
+    if (!r.ids.length && !r.kept.length) continue;
+    console.log('H gallery: HUD explods of ' + sel + ': hidden ' + (r.ids.join(',') || 'none') +
+      (r.both.length ? '; also in its other states (hidden there too) ' + r.both.join(',') : '') +
+      (r.kept.length ? '; kept (in a scene it shows) ' + r.kept.join(',') : '') +
+      (r.noId ? '; ' + r.noId + ' with no id (left)' : ''));
+    if (r.ids.length) list.push({ select: sel, ids: r.ids });
+  }
+  return { list };
+}
+
 module.exports = {
-  GALLERY_LUA_VPATH, GALLERY_ZSS_VPATH, GALLERY_STATES_KEY, MAX_SETUP, MAX_SETS, DEFAULT_PATIENCE,
-  buildGalleryLua, buildGalleryZss, buildGalleryFiles, buildForRoster, trimData, toLua,
+  GALLERY_LUA_VPATH, GALLERY_ZSS_VPATH, GALLERY_FONT_VPATH, GALLERY_STATES_KEY, MAX_SETUP, MAX_SETS, DEFAULT_PATIENCE, galleryFontDef,
+  buildGalleryLua, buildGalleryZss, buildGalleryFiles, buildForRoster, trimData, toLua, hudList, hudScan,
 };

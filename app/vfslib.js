@@ -660,6 +660,9 @@ function makeGeneratedFiles(roster, ext) {
     const g = require('./gallery.js');
     files[g.GALLERY_LUA_VPATH] = gallery.lua;
     files[g.GALLERY_ZSS_VPATH] = gallery.zss;
+    // Its font (the modern-input text's on-screen controls; gallery.js
+    // THE GALLERY'S FONT): the engine's 6x9 under a name no pack ships.
+    if (gallery.font) files[g.GALLERY_FONT_VPATH] = gallery.font;
   }
 
   // The screenpacks reference TrueType fonts (Open_Sans, infofont).
@@ -2695,7 +2698,9 @@ ${process.env.IKEMEN_V2 ? ONLINE_NAME_INPUT_V2 : ONLINE_NAME_INPUT_V1}	-- Trim, 
 	end
 	return nil
 end
-` + require('./queuemode').hookLua());
+` + require('./queuemode').hookLua()
+      // a lobby match plays the lobby's mode (queuemode.js)
+      + require('./queuemode').lobbyLua());
   }
 
   // A BLEND WRITTEN ONE FIELD LATE, repaired in the copy this build ships
@@ -2770,6 +2775,7 @@ end
           generated[hv] = Buffer.from(h.text, 'latin1');
           if (h.count) charFixes.push({ file: hv, kind: 'mugen-hit-priority', hitdefs: h.count });
           if (h.latches) charFixes.push({ file: hv, kind: 'ai-switch-release', switches: h.latches });
+          if (h.commas) charFixes.push({ file: hv, kind: 'stray-comma', commas: h.commas });
         }
         // a source that wears the costume is baked in the build's pal1: the order and the Studio's colors pick it
         const p = fits ? portraitfit.fitFor(mc.charDir, defName, fits, { pictures: layout.dir('portraits'),

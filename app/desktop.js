@@ -378,7 +378,7 @@ const TRAINING_TEAM_LUA = [
 // States1 line), where a Scene Viewer that only failed to generate leaves the
 // team mod and the hook in place.
 function sandboxAssets(generated, forkTrainingZss, roster) {
-  const out = { sceneviewer: null, team: TRAINING_TEAM_LUA, zss: null, teamPlay: null, menuSounds: null, galleryLua: null, galleryZss: null, selectAnn: null, netMenu: null, netMenuFont: null, trainingOff: false, framebar: null };
+  const out = { sceneviewer: null, team: TRAINING_TEAM_LUA, zss: null, teamPlay: null, menuSounds: null, galleryLua: null, galleryZss: null, galleryFont: null, selectAnn: null, netMenu: null, netMenuFont: null, trainingOff: false, framebar: null };
   const V = require('./modmgr.js').VPATHS;
   // The team play mod (teamplay.js) is the same text in both builds: nothing in
   // it is web-only, so it is carried as generated.
@@ -415,6 +415,9 @@ function sandboxAssets(generated, forkTrainingZss, roster) {
   if (gl && gz) {
     out.galleryLua = Buffer.isBuffer(gl) ? gl.toString('latin1') : String(gl);
     out.galleryZss = Buffer.isBuffer(gz) ? gz.toString('latin1') : String(gz);
+    // and its font, where the text has one (gallery.js THE GALLERY'S FONT)
+    const gf = generated[g.GALLERY_FONT_VPATH];
+    if (gf) out.galleryFont = Buffer.isBuffer(gf) ? gf.toString('latin1') : String(gf);
   }
   const svLua = generated && generated[V.sceneViewer];
   if (svLua) {
@@ -453,7 +456,7 @@ function sandboxAssets(generated, forkTrainingZss, roster) {
     if (off('framebar')) out.framebar = null;
     if (off('select-announcer')) out.selectAnn = null;
     if (off('net-menu')) { out.netMenu = null; out.netMenuFont = null; }
-    if (off('hgallery')) { out.galleryLua = null; out.galleryZss = null; }
+    if (off('hgallery')) { out.galleryLua = null; out.galleryZss = null; out.galleryFont = null; }
   }
   return out;
 }
@@ -545,6 +548,10 @@ function syncSandboxFiles(dest, assets) {
     rmFile(galLua);
     rmFile(galZss);
   }
+  // Its font goes with it (the gallery falls back to f-6x9.def without it).
+  const galFont = path.join(dest, ...g.GALLERY_FONT_VPATH.split('/'));
+  if (assets.galleryLua && assets.galleryZss && assets.galleryFont) { fs.mkdirSync(path.dirname(galFont), { recursive: true }); writeOut(galFont, assets.galleryFont, 'latin1'); written++; }
+  else rmFile(galFont);
   return { written, legacyRemoved: legacy, sandbox: {
     mod: assets.sceneviewer ? V.sceneViewer : null,
     team: assets.team ? V.trainingTeam : null,
@@ -1051,6 +1058,7 @@ function fixCopiedCharacters(copied) {
         writeOut(h.abs, h.text, 'latin1');
         if (h.count) changed.push({ file: 'chars/' + c.mountAs + '/' + h.rel, kind: 'mugen-hit-priority', hitdefs: h.count });
         if (h.latches) changed.push({ file: 'chars/' + c.mountAs + '/' + h.rel, kind: 'ai-switch-release', switches: h.latches });
+        if (h.commas) changed.push({ file: 'chars/' + c.mountAs + '/' + h.rel, kind: 'stray-comma', commas: h.commas });
       }
       let p = null;
       // a source that wears the costume is baked in the build's pal1: the order and the Studio's colors pick it
@@ -1329,7 +1337,8 @@ function exportDesktop(opts = {}) {
     // which reads the Plus-frames repair's fields - a new kind must be named
     // here (a missing one failed the export with "reading 'length'").
     if (c.kind === 'mugen-hit-priority' || c.kind === 'ai-switch-release' || c.kind === 'command-list') continue;
-    if (c.kind === 'palettes') console.log('desktop: ' + c.file + ' palettes added: ' + (c.slots.join(', ') || 'none') + (c.skipped.length ? ' (skipped ' + c.skipped.map((s) => s.slot + ': ' + s.why).join('; ') + ')' : ''));
+    if (c.kind === 'stray-comma') console.log('desktop: ' + c.file + ' ' + c.commas + (c.commas === 1 ? ' stray comma' : ' stray commas') + ' before a trigger\'s = dropped (straycomma.js), so this engine compiles the comparison the author meant');
+    else if (c.kind === 'palettes') console.log('desktop: ' + c.file + ' palettes added: ' + (c.slots.join(', ') || 'none') + (c.skipped.length ? ' (skipped ' + c.skipped.map((s) => s.slot + ': ' + s.why).join('; ') + ')' : ''));
     else if (c.kind === 'portrait-fit') console.log('desktop: ' + c.file + ' portraits fitted to this screenpack: ' + c.slots.map((s) => s.slot + ' ' + s.w + 'x' + s.h).join(', '));
     else if (c.kind === 'palette-order') console.log('desktop: ' + c.file + ' palette slots renumbered: ' + c.moved + ' moved');
     else if (c.kind === 'v2-own-palettes') console.log('desktop: ' + c.file + ' pal' + c.slots.join(', pal') + ' commented out: the sprite file has its own, which this engine would draw the def\'s files over');

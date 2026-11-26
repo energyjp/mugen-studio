@@ -51,7 +51,10 @@ computer.
 
 Updating to a new version
 -------------------------
-Close Mugen Studio first. Then either:
+This version and newer ones update themselves: About > Check for updates.
+The Studio checks GitHub once a day and asks before it downloads anything.
+
+To update by hand instead, close Mugen Studio first. Then either:
 
   - Right-click the new zip, choose Extract All, and choose the folder that
     CONTAINS your Mugen Studio folder - not the folder itself. Answer

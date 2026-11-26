@@ -36,6 +36,8 @@ const path = require('path');
 // noted, not an audit finding.
 const KINDS = {
   'ai-switch-release': 'audit',
+  // straycomma.js: a comma before a flag trigger's = that the 2.5 engine refuses
+  'stray-comma': 'audit',
   'v2-own-palettes': 'audit',
   'v1-base-palette': 'audit',
   'mugen-hit-priority': 'audit',
@@ -104,6 +106,7 @@ function forExport({ kind, roster, charFixes, budgetMs = 20000, audit } = {}) {
     if (rel && !row.files.includes(rel)) row.files.push(rel);
     if (f.kind === 'mugen-hit-priority') row.count += f.hitdefs || 0;
     else if (f.kind === 'ai-switch-release') row.count += f.switches || 0;
+    else if (f.kind === 'stray-comma') row.count += f.commas || 0;
     else if (f.kind === 'v2-own-palettes') { row.slots = (row.slots || []).concat(f.slots || []); row.count += (f.slots || []).length; }
     else if (f.kind === 'v1-base-palette') { row.count += f.replaced || 0; row.axis = (row.axis || 0) + ((f.axis || []).length); }
     else if (f.kind === 'plus-frames') { row.count += f.links || 0; row.unfixable = (row.unfixable || 0) + ((f.unfixable || []).length); }

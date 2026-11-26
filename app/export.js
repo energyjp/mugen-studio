@@ -97,6 +97,12 @@ function copyBranded(src, dest, roster, { isPublic = false, lobbyLook = null } =
   // (lobbylook.forExport), written only when the bundle has one, so a build
   // without it gets the very block it always did.
   if (lobbyLook) brand.lobbyLook = lobbyLook;
+  // THE LOBBY'S MATCH MODE (queuemode.js): the bundle's Match mode
+  // is where the lobby Create form starts ('simul3', 'tag2'...). Written only
+  // for a team mode in a build that can have lobbies (not Public), so a build
+  // without one gets the very block it always did.
+  const matchMode = require('./queuemode').lobbyMode(roster.queueMode);
+  if (!isPublic && matchMode !== 'single') brand.matchMode = matchMode;
   //
   // $' and $$ are patterns, and a title holding one broke the block and the
   // page. '<' is escaped so a title cannot close the <script> the block is in.

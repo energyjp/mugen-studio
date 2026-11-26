@@ -152,7 +152,7 @@
 //   STAGES: a variable his climax state or a held meter's firing adds to,
 //   set to nothing but 0, that his or her art compares with a number
 //   (Brian's var(4), DongHwan's var(32)) is held at 0, and each step whose
-//   art changes at one of those numbers gets a copy held there (", stage k",
+//   art changes at one of those numbers gets a copy held there (", mood k",
 //   nav.stage = k): his art starting in the step's states, a new picture of
 //   hers (frames, not numbers), or a scene of his a ChangeState of hers
 //   starts giving there.
@@ -4097,6 +4097,169 @@ function detectSetup(base, W) {
   base.finishCounters = finishCounters(base, W, hold);
 }
 
+// THE HOLD (timed one-shots). Some givers' scenes end on a clock of their own:
+// Minotaur's grope 1050 counts a restraint variable down (-2: VarAdd var(15)
+// -1 on his scene states, set to 250 by the grab) and lets her go at 0, her
+// 1055 leaves for 1095 at `time > 350`, his hub 1250 at `Time > 120`, his
+// climax 1814 at the end of its animation: after 5 seconds the gallery grabbed
+// her again, "his own timer". What the files say of that, read per giver:
+//   timer  a variable a negative VarAdd counts down and a leaving exit of his
+//          reads `<= 0` (`var(15) <= 0`): held by the hook at the value his
+//          VarSets give it, like the setup. -> [{ kind, index, value, why }]
+//   his    his states that LEAVE the scene on their own clock: a ChangeState
+//          whose trigger is time alone (`time > N`, `animtime = 0`) into a
+//          state that gives her no scene. -> { state: [kind, at] }, kind 't'
+//          (his state time reaches `at`) or 'a' (the end of his animation)
+//   her    her states that go the same way (1055 -> 1095): { state: at }
+// The runtime (gallery.js THE HOLD) goes back into the state a few ticks before
+// it would leave, so the scene plays on until the viewer moves. Nothing else
+// is held: a state that leaves on a button, a hit or a variable is no clock.
+const HOLD_CONST = new Set(['1', 'alive=1', 'roundstate=2']);
+const HOLD_TIME = /^(?:state)?time(>=|>|=)(\d+)$/;
+function detectHold(G) {
+  const { an, hScenes } = G;
+  const W = makeWalker(an, G.walkerOpts);
+  const isRel = (C) => { const sc = an.scenes.get(C); return !!(sc && sc.release); };
+  const lines = (sc) => [...sc.trig.all, ...sc.trig.groups.flat()];
+  const norm = (e) => String(e).toLowerCase().replace(/\s+/g, '');
+  const dests = (sc, no) => [...new Set(W.values(sc.params.get('value'), {}, no).filter(Number.isFinite))];
+  // Time alone: every atom of a trigger group (with the triggerall's) is a
+  // time, the end of his animation, or a thing the gallery holds true.
+  // -> { t } | { a: true } | null
+  const clock = (sc, g) => {
+    let t = null, a = false;
+    for (const e of [...sc.trig.all, ...g]) {
+      const n = norm(e);
+      if (n.includes('||')) return null;
+      for (const p of n.split('&&')) {
+        const m = HOLD_TIME.exec(p);
+        if (m) { const at = m[1] === '>' ? +m[2] + 1 : +m[2]; t = t === null ? at : Math.max(t, at); }
+        else if (p === 'animtime=0') a = true;
+        else if (!HOLD_CONST.has(p)) return null;
+      }
+    }
+    if (t !== null && a) return null;
+    return t !== null ? { t } : a ? { a: true } : null;
+  };
+  // He goes on from D with a scene of hers (it, or a state it leaves for by
+  // itself within three hops, gives her a scene state): the exit is no end.
+  const gives = new Map();
+  const bearing = (no) => {
+    if (!gives.has(no)) {
+      const s = an.states.get(no);
+      gives.set(no, !!s && s.sctrls.some((sc) => sc.type === 'targetstate' && dests(sc, no).some((v) => hScenes.has(v) && !isRel(v))));
+    }
+    return gives.get(no);
+  };
+  const goesOn = (D, depth, seen) => {
+    if (seen.has(D)) return false;
+    seen.add(D);
+    const s = an.states.get(D);
+    if (!s) return false;
+    if (bearing(D)) return true;
+    if (!depth) return false;
+    for (const sc of s.sctrls) {
+      if (sc.type !== 'changestate' && sc.type !== 'selfstate') continue;
+      for (const v of dests(sc, D)) if (v !== D && !isBasic(v) && goesOn(v, depth - 1, seen)) return true;
+    }
+    return false;
+  };
+  // His states that hold her (a TargetState of a scene) or wait for his helper
+  // to (7010 under the horse 7000): the ones whose clock matters while she shows.
+  const waits = (no) => an.states.get(no).sctrls.some((sc) => lines(sc).some((e) => /\b(?:num)?helper\s*\(/i.test(String(e))));
+  const his = {}, her = {};
+  const note = (map, no, kind, at) => {
+    const was = map[no];
+    if (!was) map[no] = [kind, at];
+    else if (kind === 't' && was[0] === 't') map[no] = ['t', Math.min(was[1], at)];
+    else if (kind === 't' && was[0] === 'a') map[no] = ['t', at];
+  };
+  for (const [no, st] of an.states) {
+    if (no < 200 || isBasic(no)) continue;
+    const hers = hScenes.has(no) && !isRel(no);
+    for (const sc of st.sctrls) {
+      if (sc.type !== 'changestate' && sc.type !== 'selfstate') continue;
+      const to = dests(sc, no);
+      if (!to.length || to.includes(no)) continue;
+      for (const g of sc.trig.groups.length ? sc.trig.groups : [[]]) {
+        const c = clock(sc, g);
+        if (!c) continue;
+        if (hers) {
+          // (Her way out: a state that is no scene of his.)
+          if (c.t !== undefined && to.every((v) => !hScenes.has(v) || isRel(v))) note(her, no, 't', c.t);
+        } else if ((bearing(no) || waits(no)) && to.every((v) => isBasic(v) || !goesOn(v, 3, new Set([no])))) {
+          note(his, no, c.t !== undefined ? 't' : 'a', c.t !== undefined ? c.t : 0);
+        }
+      }
+    }
+  }
+  // A state of his that chains animations is no hold. Minotaur's 1690 and 1890,
+  // the failed insertion: the kick's animation, at its end ChangeAnim 1509
+  // (his groin grab and roll), and the state leaves at the end of THAT one.
+  // The scene is a reaction and ends by nature: held at the end of the first
+  // animation, the kick played again and his reaction never did, and held at
+  // the end of the last, his cry came every pass. It plays through once and
+  // the gallery grabs again, as before. -> the clocks left out
+  const chained = (no) => {
+    const st = an.states.get(no);
+    if (!st) return false;
+    for (const sc of st.sctrls) {
+      if (sc.type !== 'changeanim') continue;
+      for (const g of sc.trig.groups.length ? sc.trig.groups : [[]]) {
+        const atoms = [...sc.trig.all, ...g].map(norm).flatMap((e) => e.split('&&'));
+        if (atoms.includes('animtime=0')) return true;
+      }
+    }
+    return false;
+  };
+  for (const no of Object.keys(his)) if (his[no][0] === 'a' && chained(+no)) delete his[no];
+  // The restraint timer: a variable a negative VarAdd counts down and a
+  // leaving exit of his reads at or below zero, which a VarSet fills.
+  const timer = [];
+  const down = new Set(), filled = new Map();
+  for (const st of an.states.values()) for (const sc of st.sctrls) {
+    if (sc.type !== 'varadd' && sc.type !== 'varset') continue;
+    for (const [nm, raw] of W.writesOf(sc)) {
+      if (!VARNAME.test(nm)) continue;
+      const v = S.lit(raw);
+      if (sc.type === 'varadd' && v !== null && v < 0) down.add(nm);
+      if (sc.type === 'varset' && v !== null && v > 0) filled.set(nm, Math.max(filled.get(nm) || 0, v));
+    }
+  }
+  const reads = new Set();
+  for (const [no, st] of an.states) {
+    if (no < 200 || isBasic(no)) continue;
+    for (const sc of st.sctrls) {
+      if ((sc.type !== 'changestate' && sc.type !== 'selfstate' && sc.type !== 'targetstate') || commandsIn(sc.trig).length) continue;
+      for (const e of lines(sc)) {
+        const m = /^(f?var\(\d+\))(?:<=0|<1)$/.exec(norm(e));
+        if (m && down.has(m[1]) && filled.has(m[1])) reads.add(m[1]);
+      }
+    }
+  }
+  for (const nm of [...reads].sort()) {
+    const ref = varRef(nm);
+    if (ref) timer.push({ kind: ref.kind, index: ref.index, value: filled.get(nm),
+      why: ('keeps ' + nm + ', his restraint timer (counted down, filled to ' + filled.get(nm) + '), from running out: his scenes let her go at 0').replace(/[^\x20-\x7e]/g, '?') });
+  }
+  return { timer, his, her };
+}
+
+// The hold a pair carries: only a giver with a restraint timer AND clocks of
+// hers (the family whose scenes end on a countdown and a release of her own,
+// Minotaur's) has it: measured over the corpus, Brian, Kur0maru, DongHwan and
+// the rest loop by their own states or have no such pair of clocks, and their
+// data stays what it was, byte for byte. -> { timer, pair: { his, her } } | null
+function pairHoldOf(G) {
+  if (G.holdMemo === undefined) {
+    const h = detectHold(G);
+    G.holdMemo = h.timer.length && Object.keys(h.her).length ? { timer: h.timer,
+      pair: { his: Object.entries(h.his).map(([s, [kind, at]]) => ({ state: +s, kind, at })).sort((a, b) => a.state - b.state),
+        her: Object.entries(h.her).map(([s, [, at]]) => ({ state: +s, at })).sort((a, b) => a.state - b.state) } } : null;
+  }
+  return G.holdMemo;
+}
+
 // A HELD METER'S FIRING, a step of its own. A meter the setup holds at 0
 // (above) whose negative states' TargetState puts her in a scene of his on a
 // value of it (Brian's -2 on `fvar(39) = 48`: her orgasm 6600, his own
@@ -5993,6 +6156,7 @@ function giverSteps(base, victimHasIn) {
     return sorted(out);
   };
   const ladderDone = new Map();
+  const leadOf = new Map();   // a ladder's x0 -> its lead (the way into the ladder, the mode on)
   const ladderOf = (c) => {
     if (c.kind !== 'position' && c.kind !== 'own') return null;
     const hits = [...base.ladders.values()].filter((L) => [1, 2, 3, 4].every((i) => c.until.includes(L.c0 + i)));
@@ -6046,14 +6210,42 @@ function giverSteps(base, victimHasIn) {
       const w = cmdInfo.get(lead[lead.length - 1].cmd).words;
       const also = sorted(new Set([...rest, L.c0].filter((C) => !rungs(L).includes(C))));
       const on = L.cont ? L.cont.on : null, off = L.cont ? L.cont.off : null;
-      out.push({ kind: 'position', name, n: L.n, label: w, until: rungs(L), also, path: leadSet(on) });
+      // THE LADDER IN BOTH DIRECTIONS. Where the continuous mode keeps a rung
+      // on screen, each rung is its own step: the lead gets him into the
+      // ladder (done at once when he is in it), then a jump into the rung's
+      // own state (x1, x2, x3: it puts her in her rung on its first tick)
+      // moves him there from any other rung, slower or faster, the mode set as
+      // the rung wants it. His press x runs only forward, from x1 and x2, and
+      // the base shown by any rung was no base: Delete from speed 2 left him in
+      // 1812 under a "speed 1" HUD. The base is her first rung alone.
+      const r = rungs(L);
+      const jmp = (k, until, v, pat) => Object.assign({ jump: L.x0 + k, until, patience: pat || 180 }, L.cont ? { set: [{ kind: L.cont.kind, index: L.cont.index, value: v }] } : {});
+      const walkBack = !!L.cont;
+      leadOf.set(L.x0, leadSet(on));
+      out.push({ kind: 'position', name, n: L.n, label: w, until: walkBack ? [r[0]] : rungs(L), also, path: walkBack ? [...leadSet(on), jmp(1, [r[0]], on)] : leadSet(on) });
       if (!L.own) continue;
       const ow = cmdInfo.get(L.own.cmd).words;
       const sp = (until, pat) => Object.assign({ cmd: L.own.cmd, mode: 'press', until }, L.own.from.length ? { from: L.own.from.slice() } : {}, pat ? { patience: pat } : {});
-      const r = rungs(L);
-      out.push({ kind: 'speed', name, n: L.n, label: 'speed 2 (' + ow + ')', until: [r[1]], path: [...leadSet(on), sp([r[1]], 180)] });
-      out.push({ kind: 'speed', name, n: L.n, label: 'speed 3 (' + ow + ')', until: [r[2]], path: [...leadSet(on), sp([r[1], r[2]], 180), sp([r[2]], 180)] });
-      out.push({ kind: 'climax', name, n: L.n, label: 'climax', until: [r[3]], path: [...leadSet(off), sp([r[1], r[2], r[3]], 180), sp([r[2], r[3]], 180), { until: [r[3]], patience: 400 }] });
+      out.push({ kind: 'speed', name, n: L.n, label: 'speed 2 (' + ow + ')', until: [r[1]], path: walkBack ? [...leadSet(on), jmp(2, [r[1]], on)] : [...leadSet(on), sp([r[1]], 180)] });
+      out.push({ kind: 'speed', name, n: L.n, label: 'speed 3 (' + ow + ')', until: [r[2]], path: walkBack ? [...leadSet(on), jmp(3, [r[2]], on)] : [...leadSet(on), sp([r[1], r[2]], 180), sp([r[2]], 180)] });
+      // (The climax's afterglow is hers too: his x4 puts her in another scene at
+      // an element of its own (1697 at 14) and the climax held plays on, so she
+      // is in it a tenth of the time: its scenes, and those they go on to.)
+      const glow = new Set(rest), seen = new Set(), gq = [];
+      for (const sc of (states.get(L.x0 + 4) || { sctrls: [] }).sctrls) {
+        if (sc.type === 'targetstate') for (const v of W.values(sc.params.get('value'), {}, L.x0 + 4)) if (hScenes.has(v) && v !== r[3]) gq.push(v);
+      }
+      while (gq.length) {
+        const v = gq.shift();
+        if (seen.has(v)) continue;
+        seen.add(v);
+        glow.add(v);
+        for (const sc of (states.get(v) || { sctrls: [] }).sctrls) {
+          if (sc.type === 'changestate') for (const w of W.values(sc.params.get('value'), {}, v)) if (hScenes.has(w) && !seen.has(w) && !isRelease(w) && w !== r[3]) gq.push(w);
+        }
+      }
+      out.push({ kind: 'climax', name, n: L.n, label: 'climax', until: [r[3]], also: sorted(glow), path: walkBack ? [...leadSet(off), jmp(3, [r[2], r[3]], off), { until: [r[3]], patience: 400 }]
+        : [...leadSet(off), sp([r[1], r[2], r[3]], 180), sp([r[2], r[3]], 180), { until: [r[3]], patience: 400 }] });
     }
     // A GAUGE GATE'S FAILURE (gateFails): where the insertion's first state
     // is one the setup's gauge gate sits in, the scene its TargetState gives
@@ -6067,8 +6259,10 @@ function giverSteps(base, victimHasIn) {
         const lp = out.find((x) => x.kind === 'position' && x.n === L.n);
         if (!lp) continue;
         failDone.add(c.entry + '|' + F.her.join());
-        const path = lp.path.map((a, i) => (i === lp.path.length - 1 ? Object.assign({}, a, { until: F.her.slice() }) : a));
-        for (let i = 0; i < path.length; i++) if (actionT.has(lp.path[i])) actionT.set(path[i], actionT.get(lp.path[i]));
+        // (The lead alone: the failure is the insertion's own first tick.)
+        const lead0 = leadOf.get(L.x0) || lp.path;
+        const path = lead0.map((a, i) => (i === lead0.length - 1 ? Object.assign({}, a, { until: F.her.slice() }) : a));
+        for (let i = 0; i < path.length; i++) if (actionT.has(lead0[i])) actionT.set(path[i], actionT.get(lead0[i]));
         const w = cmdInfo.get(path[path.length - 1].cmd).words;
         out.push({ kind: 'fail', name: lp.name, n: L.n, label: 'insertion fails (' + w + ')', until: F.her.slice(), also: [L.c0], path, fail: true,
           setup: [{ kind: F.kind, index: F.index, value: F.value, why: ('lets ' + F.line + ' fire in ' + F.state + ': at its round-start ' + F.value + ' his gauge sends the insertion into its failure branch').replace(/[^\x20-\x7e]/g, '?') }] });
@@ -8794,7 +8988,7 @@ const heldOf = (st) => new Map([...(st.held || []), ...(st.setup || []).filter((
 // (Bao's 16303 into her 65069 at `enemy,var(4) >= 4`: on the copy's way).
 // Her own lines are read with his other variables at the 0 his grab starts
 // them at, but those the step holds. `nav.stage` is the level's place among
-// the counter's levels, and the label says it ("..., stage 3").
+// the counter's levels, and the label says it ("..., mood 3").
 function pairStages(G, R, steps, verdict) {
   const counters = G.finishCounters || [];
   const shows = (C) => !G.broken.has(C) && ['tailored', 'renders', 'partial'].includes(verdict(C));
@@ -8879,7 +9073,7 @@ function pairStages(G, R, steps, verdict) {
         prev = L;
         if (!art && !scenes.length) return;
         const cp = JSON.parse(JSON.stringify(st));
-        cp.label = st.label + ', stage ' + (i + 1);
+        cp.label = st.label + ', mood ' + (i + 1);
         cp.setup = [...(st.setup || []).filter((x) => !(x.kind === V.kind && x.index === V.index)),
           { kind: V.kind, index: V.index, value: L, why: ('holds his ' + V.name + ' at ' + L + ': stage ' + (i + 1) + ' of his finish count, where '
             + (his ? 'his' : 'her') + ' art changes (the stages: ' + V.levels.join(', ') + ')').replace(/[^\x20-\x7e]/g, '?') }];
@@ -9464,6 +9658,13 @@ function buildGalleryDataNow(opts) {
         const own = core ? null : extra.find(([, x]) => x.setup);
         const setup = own ? own[1].setup : G.setup;
         if (setup.length) pair.setup = setup.map((x) => Object.assign({}, x));
+        // (THE HOLD: a giver whose scenes end on a countdown of his: it is
+        // held in the pair's setup, and the clocks go in the pair's hold.)
+        const hold = core ? pairHoldOf(G) : null;
+        if (hold) {
+          pair.setup = [...(pair.setup || []), ...hold.timer.filter((x) => !(pair.setup || []).some((e) => e.kind === x.kind && e.index === x.index)).map((x) => Object.assign({}, x))];
+          pair.hold = JSON.parse(JSON.stringify(hold.pair));
+        }
         const p1spr = mugenP1Spr(G, g.info);
         if (p1spr) pair.p1spr = p1spr;
         // (A cutscene intro of his: the runtime cuts it at once.)
@@ -9526,7 +9727,7 @@ function buildGalleryDataNow(opts) {
   return { version: 2, pairs };
 }
 
-module.exports = { buildGalleryData, deriveNav, validNav, navHintOf, giverBase, giverSteps, describeGiver, describeReceiver, sceneVerdict, sceneJudge, pieceFrames, helperSceneJudge, helperPair, helperGrabs, readInfo, readCommands,
+module.exports = { buildGalleryData, detectHold, pairHoldOf, deriveNav, validNav, navHintOf, giverBase, giverSteps, describeGiver, describeReceiver, sceneVerdict, sceneJudge, pieceFrames, helperSceneJudge, helperPair, helperGrabs, readInfo, readCommands,
   readAirTimes, readAirTicks, readPowerMax, singleInput, commandWords, isPlayable, rosterChars, isHNumber, isHGroup, makeWalker, rewriteAtoms, commandsIn,
   pairSteps, finishPair, cachedIn, cutsceneIntro, codeVersionOf };
 

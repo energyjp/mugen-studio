@@ -28,7 +28,7 @@
 //                             {t:'deny', reason:'badcode'|'badpass'|'full'|'busy'}
 //   ?create=1&watchers=1[&pass=...]  a room that takes watchers
 //   ?watch=CODE[&pass=...] -> a watcher (WATCHERS, at the Room class)
-//   ?lobby=new|CODE&build=..&nc=1&name=..[&pass=][&streak=N][&bid=]
+//   ?lobby=new|CODE&build=..&nc=1&name=..[&pass=][&streak=N][&bid=][&title=][&mode=][&hb=1][&modes=1]
 //                          -> a winner-stays lobby (the LOBBY CORE below)
 //   ?queue=1&mode=ranked|casual&build=HEX&nc=0|1&name=NAME&code=RECOVERYCODE
 //                          -> {t:'qcount', n} while waiting
@@ -40,8 +40,9 @@
 //   from either peer marks the handoff to the game and is never relayed.
 //   Room and lobby codes are lowercased. One Queue object per mode+build+netcode.
 // And on plain HTTP (router.js serves it): GET /lobbies -> {t:'lobbies', list},
-// GET /lobbies?build=HEX16 -> {t:'lobbies', build, other, list}
-// (THE LIST, below).
+// GET /lobbies?build=HEX16 -> {t:'lobbies', build, other, list}; either one
+// with &modes=1 -> team-mode lobbies too (THE LIST, below; THE MATCH MODE in
+// the LOBBY CORE).
 //
 // THE SAME AS THE REFERENCE SERVER. The rooms with watchers, the lobbies and
 // the list are the reference relay's (its worker.js), with the same limits:
@@ -261,8 +262,9 @@ function randomHex() {
 }
 export { randomHex };
 // The list by build (LOBBY CORE, lobbyListBuild): router.js reads ?build= the
-// same way and keeps its cache per build the same way.
-export { lobbyListBuild, LOBBY_LIST_BUILDS };
+// same way and keeps its cache per build and &modes=1 the same way
+// (lobbyListKey).
+export { lobbyListBuild, lobbyListKey, LOBBY_LIST_BUILDS };
 // The salted hash of the connecting address, by its prefix (memory only, see
 // LIMITS).
 export async function addrHash(request, salt) {
@@ -297,7 +299,7 @@ export async function handleRelay(request, env) {
   if (lobby) {
     const fwd = new URL('https://do/ws');
     fwd.searchParams.set('role', 'lobby');
-    for (const k of ['build', 'nc', 'name', 'pass', 'streak', 'bid', 'title']) fwd.searchParams.set(k, (url.searchParams.get(k) || '').slice(0, 256));
+    for (const k of ['build', 'nc', 'name', 'pass', 'streak', 'bid', 'title', 'hb', 'mode', 'modes']) fwd.searchParams.set(k, (url.searchParams.get(k) || '').slice(0, 256));
     if (lobby === 'new') {
       for (let i = 0; i < 8; i++) {
         const code = newCode();
@@ -801,25 +803,97 @@ const LOBBY_ONLY = ['room', 'joined', 'peer', 'deny', 'watching', 'watcher', 'wb
 // however many addresses try. LOBBY_JOIN_PER_MIN caps the members a lobby
 // ADMITS a minute (join/leave churn), whoever they are.
 //
+// LIVENESS (2026-11-24; the field report: a host waiting alone lost his lobby
+// socket twice and hosted again under the same title, and the list showed
+// all three lobbies). A lobby must not outlive the people in it:
+//   - every LOBBY_SWEEP_MS (the servers' alarm or timer) lobbySweep takes out,
+//     the way a close does, every member whose socket the server no longer
+//     holds open. A runtime that lost a socket without telling the lobby (a
+//     dropped connection, a restarted object) used to leave the member, and
+//     with it a listed lobby refreshed every few minutes, until the idle cap
+//     (an hour);
+//   - the same sweep sends every member {t:'hb'} (an older page ignores it),
+//     so a lobby socket never carries nothing for long: proxies close a
+//     WebSocket that stays silent (Cloudflare's edge after about 100 s), and
+//     a host waiting alone had nothing on his socket;
+//   - a page that opens with &hb=1 promises a heartbeat: the text LOBBY_HB
+//     every LOBBY_HB_MS ({t:'lobby'} gives the cadence as hb, and a page sends
+//     nothing before it reads it, so a server without this never gets one).
+//     The server answers LOBBY_HB (worker.js: the runtime's automatic reply,
+//     which does not wake a hibernated lobby). A member that promised and
+//     stayed silent for LOBBY_HB_DEAD_MS (lobbyAlive) is either a page gone
+//     behind a socket that still looks open, or a tab its browser froze in
+//     the background (Chrome's Energy Saver, a phone that switched apps), and
+//     the server cannot tell which. So the sweep closes (1001) and takes out
+//     silent members only when nobody in the lobby is heard: a lobby nobody
+//     is left in (the field report's host waiting alone) ends, and a lobby
+//     with someone in it keeps a silent member the way it always did (the
+//     ready and away rules above move it to spectate only when it is called
+//     to play). LOBBY_HB_DEAD_MS leaves room for a background tab's timers,
+//     which browsers slow to one run a minute. A page without &hb=1 (2.5.1
+//     and older) is never held to it, and counts as heard.
+//   LIMIT: a page without &hb=1 that is gone behind a socket that still looks
+//   open (the network went away with no close) is kept like any open socket,
+//   and its lobby stays listed until that socket closes (when the runtime
+//   notices the dead connection: not measured) or the idle cap. Only the same
+//   browser hosting again hides it (below). Quick removal of such a member
+//   needs a page that sends the heartbeat.
+// THE LIST shows one lobby per host browser (lobbyHostKey, the browser id of
+// the lobby's host: the directory keeps it beside the entry and never sends
+// it): an entry with only its host in it gives way to a newer entry with the
+// same key (lobbyOnePerHost), so a host who hosts again is listed once,
+// whatever became of the old lobby. A lobby with other people in it is never
+// hidden this way.
+//
+// THE MATCH MODE (2026-11-24). A lobby plays one mode,
+// set once by its creator (&mode=, the page's Create form, whose default is
+// the build's Match mode): 'single' (1 vs 1), or a team mode at a team size,
+// 'simul2'..'simul4', 'tag2'..'tag4', 'turns2'..'turns4' (lobbyMode: exactly
+// these, anything else is 'single'). {t:'state'} and the lobby's list entry
+// carry it as mode, and both players' pages hand it to their engines, which
+// set it before the character select, so both play it.
+//   A page that knows modes says so with &modes=1 on every lobby socket it
+// opens and on every GET /lobbies. An older page (2.5, 2.5.1) plays 1 vs 1
+// whatever a lobby says, so it must never be in a team-mode lobby: it is
+// refused one with 'build' (the reason it already explains to its player: its
+// page is not this lobby's build; nothing else it could be told is true), and
+// the list it reads leaves team-mode lobbies out (and out of its count of
+// lobbies on other builds). A 1 vs 1 lobby stays open to every page. A create
+// without &modes=1 is a 1 vs 1 lobby whatever its &mode= says: its own page
+// could not play anything else. A record made before modes has none: 1 vs 1.
+//   A server before this (host kit 1.2.1 and older, a worker not redeployed)
+// ignores &mode= and &modes=1 and sends no mode: the page plays 1 vs 1 there,
+// which every page in such a lobby does, and tells its creator when it asked
+// for a team mode.
+//
 // THE LIST OF OPEN LOBBIES. lobbyEntry(L) is what the servers' directory shows
 // of a lobby, and all it shows: the code, its title (empty if the creator gave
-// none), the lobby host's name, members n/8,
+// none), its match mode, the lobby host's name, members n/8,
 // the two playing now and the streak, whether a seat is free, and its Build ID
 // (the one every join is checked against). A lobby with a password has no
 // entry (never listed), nor does an empty one. GET /lobbies?build=HEX16 lists
 // only the lobbies on that build, plus how many are on other builds
-// (lobbyListBody); without it the list is everyone's, as before.
+// (lobbyListBody); without it the list is everyone's, as before. Without
+// &modes=1 (an older page) neither has a team-mode lobby in it (THE MATCH MODE).
 //
 // PROTOCOL (JSON text frames on the lobby socket).
-//   open  ?lobby=new&build=HEX16&nc=1&name=NAME[&pass=P][&streak=N][&bid=HEX][&title=T]
-//         ?lobby=CODE&build=HEX16&nc=1&name=NAME[&pass=P][&bid=HEX]   joins
+//   open  ?lobby=new&build=HEX16&nc=1&name=NAME[&pass=P][&streak=N][&bid=HEX][&title=T][&mode=M][&hb=1][&modes=1]
+//         ?lobby=CODE&build=HEX16&nc=1&name=NAME[&pass=P][&bid=HEX][&hb=1][&modes=1]   joins
+//         hb=1: this page sends the heartbeat (LIVENESS)
+//         modes=1: this page plays a lobby's match mode; mode: the mode of
+//         the lobby it creates (THE MATCH MODE; a join's is ignored)
 //         title: the lobby's title, set once by its creator (plain text, up to
 //         LOBBY_TITLE_MAX; a join's is ignored); the list and the panel show it
-//         refused with {t:'deny', reason} then closed: badcode, badpass, build,
-//         netcode, full, name, kicked, slowdown, busy
+//         refused with {t:'deny', reason} then closed: badcode, badpass, build
+//         (also: a page without modes=1 joining a team-mode lobby), netcode,
+//         full, name, kicked, slowdown, busy
 //   server -> member
-//     {t:'lobby', code, you}                 once, on entry
+//     {t:'lobby', code, you, hb}             once, on entry (hb: the heartbeat
+//                                            cadence in ms, LIVENESS)
+//     {t:'hb'}                               every sweep, and the answer to a
+//                                            heartbeat (nothing to do)
 //     {t:'state', ...lobbyView}              after every change, to everyone
+//                                            (mode: THE MATCH MODE)
 //     {t:'sys', k, ...}                      a line for the chat: join, leave,
 //                                            kick, host, spec, limit, match,
 //                                            result, draw, void, rotate, drop,
@@ -835,6 +909,8 @@ const LOBBY_ONLY = ['room', 'joined', 'peer', 'deny', 'watching', 'watcher', 'wb
 //     {t:'slow'}                             a chat line dropped by the rate limit
 //   member -> server (anything else, or not allowed for its role now, is junk;
 //   more than LOBBY_JUNK_MAX junk messages in a minute closes the member)
+//     {"t":"hb"}                this exact text (LOBBY_HB), every hb ms, from a
+//                               page that opened with &hb=1; never junk
 //     {t:'sdp', sdp}            a player to the other player; a watcher of the
 //                               match to its host
 //     {t:'sdp', to, sdp}        the match host to one of its watchers
@@ -886,7 +962,17 @@ const LOBBY_MATCH_MS = 15 * 60 * 1000;
 const LOBBY_IDLE_MS = 60 * 60 * 1000;
 const LOBBY_LIFE_MS = 12 * 60 * 60 * 1000;
 const LOBBY_KICK_MEMORY = 32;
+const LOBBY_HB = '{"t":"hb"}';
+const LOBBY_HB_MS = 30 * 1000;
+const LOBBY_HB_DEAD_MS = 3 * 60 * 1000;
+const LOBBY_SWEEP_MS = 60 * 1000;
 const LOBBY_WDENY = ['watchfull', 'nowatch', 'build', 'netcode', 'mode', 'denied'];
+
+// A lobby's match mode (THE MATCH MODE): one of these exactly, or 'single'.
+function lobbyMode(v) {
+  const s = typeof v === 'string' ? v : '';
+  return /^(simul|tag|turns)[234]$/.test(s) ? s : 'single';
+}
 
 // Plain one-line text: control, bidi and zero-width characters become spaces.
 function lobbyClean(s, max) {
@@ -920,6 +1006,11 @@ function lobbyParams(get) {
     pass: String(get('pass') || ''),
     limit: Number.isInteger(n) ? Math.max(0, Math.min(LOBBY_STREAK_MAX, n)) : 0,
     bid: /^[0-9a-f]{16,32}$/.test(bid) ? bid : '',
+    hb: get('hb') === '1',
+    // THE MATCH MODE: modes = this page plays a lobby's mode; mode = the one
+    // it asks for when it creates
+    modes: get('modes') === '1',
+    mode: lobbyMode(get('mode')),
   };
 }
 
@@ -985,6 +1076,8 @@ function lobbyAdmit(L, p) {
   if (p.pass.length > LOBBY_PASS_MAX) return 'badpass';
   if (L && L.pass && L.pass !== p.pass) return 'badpass';
   if (!/^[0-9a-f]{16}$/.test(p.build) || (L && L.build !== p.build)) return 'build';
+  // an older page cannot play a team mode (THE MATCH MODE)
+  if (L && lobbyMode(L.mode) !== 'single' && !p.modes) return 'build';
   if (p.nc !== '1') return 'netcode';
   if (!p.name) return 'name';
   if (L && L.members.length >= LOBBY_MAX) return 'full';
@@ -993,7 +1086,7 @@ function lobbyAdmit(L, p) {
 }
 
 function lobbyCreate(code, p, now) {
-  return { code, title: p.title || '', pass: p.pass, build: p.build, limit: p.limit, born: now, seen: now,
+  return { code, title: p.title || '', mode: p.modes ? lobbyMode(p.mode) : 'single', pass: p.pass, build: p.build, limit: p.limit, born: now, seen: now,
     seq: 0, mseq: 0, host: 0, members: [], line: [], stay: 0, streak: { id: 0, n: 0 },
     match: null, kicked: [], kbid: [], okbid: [] };
 }
@@ -1257,7 +1350,7 @@ function lobbyPreview(L) {
 
 function lobbyView(L) {
   const m = L.match;
-  return { t: 'state', code: L.code, title: L.title || '', host: L.host, limit: L.limit, pass: !!L.pass, max: LOBBY_MAX,
+  return { t: 'state', code: L.code, title: L.title || '', mode: lobbyMode(L.mode), host: L.host, limit: L.limit, pass: !!L.pass, max: LOBBY_MAX,
     members: L.members.map((x) => ({ id: x.id, name: x.name, spec: x.spec })),
     line: L.line.slice(), stay: L.stay, streak: { id: L.streak.id, n: L.streak.n },
     match: m ? { id: m.id, a: m.a, b: m.b, ready: (m.ready || []).slice(), away: (m.away || []).slice() } : null,
@@ -1270,7 +1363,7 @@ function lobbyEntry(L) {
   if (!L || L.pass || !L.members.length) return null;
   const nm = (id) => { const x = lobbyMember(L, id); return x ? x.name : ''; };
   const m = L.match;
-  return { code: L.code, title: L.title || '', host: nm(L.host), n: L.members.length, max: LOBBY_MAX,
+  return { code: L.code, title: L.title || '', mode: lobbyMode(L.mode), host: nm(L.host), n: L.members.length, max: LOBBY_MAX,
     a: m ? nm(m.a) : '', b: m ? nm(m.b) : '',
     streak: L.streak.n && lobbyMember(L, L.streak.id) ? { name: nm(L.streak.id), n: L.streak.n } : null,
     free: L.members.length < LOBBY_MAX, build: L.build };
@@ -1291,16 +1384,29 @@ function lobbyList(items) {
 // none or not one shaped like a Build ID (an older page: the whole list, as
 // before). lobbyListBody is the reply: with a build, only that build's
 // lobbies (sorted and capped as above) and `other`, how many listed lobbies
-// are on another build; without, every lobby. A server keeps the reply per
-// build for its cache time, for at most LOBBY_LIST_BUILDS builds at once (the
-// oldest made goes first).
-const LOBBY_LIST_BUILDS = 64;
+// are on another build; without, every lobby. modes: the request said
+// &modes=1; without it the reply has no team-mode lobby at all (THE MATCH
+// MODE: an older page cannot join one). A server keeps the reply per build and
+// modes (lobbyListKey) for its cache time, for at most LOBBY_LIST_BUILDS keys
+// at once (the oldest made goes first).
+const LOBBY_LIST_BUILDS = 128;
 function lobbyListBuild(v) {
   const s = String(v || '').toLowerCase();
   return /^[0-9a-f]{16}$/.test(s) ? s : '';
 }
-function lobbyListBody(items, build) {
-  const all = items.filter((x) => x && x.e);
+// One lobby per host browser (LIVENESS): an item ({e, born, hk}) whose entry
+// has only its host in it is left out when a newer item has the same host key.
+function lobbyOnePerHost(items) {
+  const newest = new Map();
+  for (const x of items) if (x.hk && (!newest.has(x.hk) || x.born > newest.get(x.hk))) newest.set(x.hk, x.born);
+  return items.filter((x) => !x.hk || x.e.n > 1 || x.born >= newest.get(x.hk));
+}
+// The cache key of one reply: the build ('' = all) and whether it has modes.
+function lobbyListKey(build, modes) { return build + (modes ? '|modes' : ''); }
+function lobbyListBody(items, build, modes) {
+  // one per host browser first, so a host's older lobby a newer team-mode one
+  // hid stays hidden from an older page too
+  const all = lobbyOnePerHost(items.filter((x) => x && x.e)).filter((x) => modes || lobbyMode(x.e.mode) === 'single');
   if (!build) return { t: 'lobbies', list: lobbyList(all) };
   const mine = all.filter((x) => x.e.build === build);
   return { t: 'lobbies', build, other: all.length - mine.length, list: lobbyList(mine) };
@@ -1347,7 +1453,7 @@ function lobbyEnter(L, name, now, out, bid) {
     if (!L.okbid.includes(bid)) L.okbid.push(bid);
     while (L.okbid.length > LOBBY_KNOWN_MEMORY) L.okbid.shift();
   }
-  out.send.push([id, { t: 'lobby', code: L.code, you: id }]);
+  out.send.push([id, { t: 'lobby', code: L.code, you: id, hb: LOBBY_HB_MS }]);
   out.ev.push({ k: 'join', id, name: lobbyMember(L, id).name });
   if (L.match) {
     // Arriving mid-match: pointed at it like everyone else; the match host
@@ -1368,10 +1474,44 @@ function lobbyLeave(L, id, why, now, out) {
   out.changed = true;
 }
 
+// ---- LIVENESS (see the header). A member's own counters (the server keeps
+// them with its socket) start with its heartbeat promise and its arrival.
+function lobbySt(p, now) { return p.hb ? { hb: 1, at: now } : {}; }
+// Whether a member's page is still there as far as the heartbeat goes: yes
+// unless it promised one and none came for LOBBY_HB_DEAD_MS. heard: the last
+// heartbeat the server's runtime answered by itself (0 when none or unknown).
+function lobbyAlive(st, now, heard) {
+  if (!st || !st.hb) return true;
+  return now - Math.max(st.at || 0, st.hbat || 0, heard || 0) < LOBBY_HB_DEAD_MS;
+}
+// The sweep: open(id) is whether the server still holds a member's socket
+// open, heard(id) whether its page is there as far as the heartbeat goes
+// (lobbyAlive). A member whose socket is gone leaves as if it had closed. A
+// silent member leaves too (the server closes its socket with 1001), but only
+// when nobody in the lobby is heard (see the header: a frozen tab is silent
+// too). Everyone who stays gets {t:'hb'}. The server then commits `out` as
+// after any message.
+function lobbySweep(L, open, heard, now, out) {
+  const someone = L.members.some((x) => open(x.id) && heard(x.id));
+  for (const x of L.members) {
+    if ((!open(x.id) || (!someone && !heard(x.id))) && !out.close.some((c) => c[0] === x.id)) out.close.push([x.id, 1001]);
+  }
+  for (const x of L.members) if (!out.close.some((c) => c[0] === x.id)) out.send.push([x.id, { t: 'hb' }]);
+  return out;
+}
+// The browser id of the lobby's host ('' when none), kept by the directory
+// for the list's one lobby per host browser; never sent to anyone.
+function lobbyHostKey(L) {
+  const x = L && lobbyMember(L, L.host);
+  return (x && x.bid) || '';
+}
+
 function lobbyMessage(L, id, st, raw, now) {
   const out = lobbyOut();
   const me = lobbyMember(L, id);
   if (!me) return out;
+  // a heartbeat that reached the lobby (a server without an automatic reply)
+  if (raw === LOBBY_HB) { st.hbat = now; out.send.push([id, { t: 'hb' }]); return out; }
   let msg = null;
   if (typeof raw === 'string' && raw.length <= LOBBY_MSG_MAX) {
     try { msg = JSON.parse(raw); } catch (e) { msg = null; }
@@ -1533,7 +1673,7 @@ function dirClean(code, e) {
   if (!n) return null;
   const st = e.streak && typeof e.streak === 'object' && Number.isInteger(e.streak.n) && e.streak.n >= 1 && e.streak.n <= 9999
     ? { name: s(e.streak.name), n: e.streak.n } : null;
-  const out = { code, title: lobbyClean(e.title, LOBBY_TITLE_MAX), host: s(e.host), n, max: LOBBY_MAX, a: s(e.a), b: s(e.b), streak: st, free: n < LOBBY_MAX };
+  const out = { code, title: lobbyClean(e.title, LOBBY_TITLE_MAX), mode: lobbyMode(e.mode), host: s(e.host), n, max: LOBBY_MAX, a: s(e.a), b: s(e.b), streak: st, free: n < LOBBY_MAX };
   if (typeof e.build === 'string' && /^[0-9a-f]{16}$/.test(e.build)) out.build = e.build;
   return out;
 }
@@ -1555,6 +1695,15 @@ export class Room {
     // the salt for those hashes: memory only, never stored.
     this.book = new Map();
     this.salt = '';
+    // LIVENESS (LOBBY CORE): the runtime answers a lobby page's heartbeat by
+    // itself, without waking a hibernated lobby; the sweep reads when it last
+    // did (lobbyLive). Without the API the heartbeat reaches lobbyMessage,
+    // which answers it the same way.
+    try {
+      if (typeof WebSocketRequestResponsePair === 'function' && typeof state.setWebSocketAutoResponse === 'function') {
+        state.setWebSocketAutoResponse(new WebSocketRequestResponsePair(LOBBY_HB, LOBBY_HB));
+      }
+    } catch { /* the message path answers instead */ }
   }
   async addr(request) {
     if (!this.salt) this.salt = randomHex();
@@ -1837,7 +1986,7 @@ export class Room {
     }
     const put = this.dirWant(L, now);
     if (out.dirty || put) await this.state.storage.put('lobby', L).catch(() => {});
-    if (out.dirty || rearm || put) await this.state.storage.setAlarm(this.lobbyWake(L)).catch(() => {});
+    if (out.dirty || rearm || put) await this.state.storage.setAlarm(this.lobbyWake(L, now)).catch(() => {});
     if (put) await this.dirPut(L, put);
   }
 
@@ -1847,22 +1996,42 @@ export class Room {
   // writes. A put that fails is retried at the next change or refresh.
   dirWant(L, now) {
     const e = lobbyEntry(L);
-    const sig = JSON.stringify(e);
+    // the host key rides along (one lobby per host browser, LIVENESS)
+    const hk = e ? lobbyHostKey(L) : '';
+    const sig = JSON.stringify(e) + (hk ? '#' + hk : '');
     if (sig === (L.dirSig || 'null') && (!e || now - (L.dirAt || 0) < DIR_REFRESH_MS)) return null;
     L.dirSig = sig;
     L.dirAt = now;
     L.dirV = (L.dirV || 0) + 1;
-    return { e, v: L.dirV };
+    return { e, v: L.dirV, hk };
   }
-  lobbyWake(L) {
-    return Math.min(lobbyDue(L), L.dirSig && L.dirSig !== 'null' ? (L.dirAt || 0) + DIR_REFRESH_MS : Infinity);
+  // the next alarm: the core's deadlines, the list refresh, and the sweep
+  // (LIVENESS: at most LOBBY_SWEEP_MS away while the lobby lives)
+  lobbyWake(L, now) {
+    return Math.min(lobbyDue(L), L.dirSig && L.dirSig !== 'null' ? (L.dirAt || 0) + DIR_REFRESH_MS : Infinity, now + LOBBY_SWEEP_MS);
+  }
+  // For the sweep: the members whose socket is still open, each with whether
+  // its page is heard (lobbyAlive: for a page that promised a heartbeat, one
+  // heard within LOBBY_HB_DEAD_MS, by the runtime's automatic reply or by
+  // lobbyMessage).
+  lobbyLive(now) {
+    const ids = new Map();
+    for (const [id, w] of this.lobbySocks()) {
+      let heard = 0;
+      try {
+        const t = typeof this.state.getWebSocketAutoResponseTimestamp === 'function' ? this.state.getWebSocketAutoResponseTimestamp(w) : null;
+        if (t) heard = +t;
+      } catch { heard = 0; }
+      ids.set(id, lobbyAlive(this.info(w).st, now, heard));
+    }
+    return ids;
   }
   async dirPut(L, put) {
     const ns = this.env.ROOM;
     if (!ns) return;
     try {
       await ns.get(ns.idFromName(DIR_NAME)).fetch(new Request('https://do/dir/put', {
-        method: 'POST', body: JSON.stringify({ code: L.code, born: L.born, v: put.v, e: put.e }) }));
+        method: 'POST', body: JSON.stringify({ code: L.code, born: L.born, v: put.v, e: put.e, hk: put.hk || '' }) }));
     } catch { /* the next change or refresh puts it again */ }
   }
   // The lobby ended: off the list now (the TTL would take it off anyway).
@@ -1920,8 +2089,12 @@ export class Room {
       if (cur && (cur.born > b.born || (cur.born === b.born && cur.v >= b.v))) return json({ ok: true, stale: true });
       const e = b.e === null ? null : dirClean(b.code, b.e);
       if (b.e !== null && !e) return json({ ok: false }, 400);
+      // the host's browser id, for one lobby per host browser (LIVENESS)
+      const hk = e && typeof b.hk === 'string' && /^[0-9a-f]{16,32}$/.test(b.hk) ? b.hk : '';
       if (e && !(cur && cur.e)) {
-        const listed = Array.from(D.entries()).filter(([, x]) => x.e);
+        // a host's older lobby with only the host in it is hidden by this one,
+        // so it does not count here either
+        const listed = Array.from(D.entries()).filter(([, x]) => x.e && !(hk && x.hk === hk && x.e.n <= 1 && x.born < b.born));
         if (listed.length >= DIR_MAX) return json({ ok: false, full: true });
         // at most DIR_PER_CREATOR listed per creating address (see LIMITS)
         const who = this.owners && this.owners.get(b.code);
@@ -1931,17 +2104,21 @@ export class Room {
       // null is kept as a marker until its TTL, so a late put from the same
       // lobby (an older version) cannot bring it back
       const x = { e, born: b.born, v: b.v, exp: now + DIR_TTL_MS };
+      if (hk) x.hk = hk;
       D.set(b.code, x);
       await this.state.storage.put('d:' + b.code, x).catch(() => {});
       this.lists = null;
       return json({ ok: true });
     }
     if (url.pathname === '/dir/list') {
-      // ?build= (lobbyListBuild): one build's lobbies; each build's body is
-      // kept apart and rebuilt at most every 2 s, all of them dropped on a change
+      // ?build= (lobbyListBuild): one build's lobbies; &modes=1: team-mode
+      // lobbies too (THE MATCH MODE); each reply's body is kept apart
+      // (lobbyListKey) and rebuilt at most every 2 s, all of them dropped on a
+      // change
       const build = lobbyListBuild(url.searchParams.get('build'));
+      const modes = url.searchParams.get('modes') === '1';
       if (!this.lists) this.lists = new Map();
-      const body = lobbyListCache(this.lists, build, now, 2000, () => JSON.stringify(lobbyListBody(Array.from(D.values()), build)));
+      const body = lobbyListCache(this.lists, lobbyListKey(build, modes), now, 2000, () => JSON.stringify(lobbyListBody(Array.from(D.values()), build, modes)));
       return new Response(body, { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response('not found', { status: 404 });
@@ -1975,7 +2152,7 @@ export class Room {
     const out = lobbyOut();
     const id = lobbyEnter(L, p.name, now, out, p.bid);
     this.state.acceptWebSocket(server, ['lobby']);
-    this.save(server, { role: 'member', id, st: {} });
+    this.save(server, { role: 'member', id, st: lobbySt(p, now) });
     await this.lobbyCommit(out, now);
   }
 
@@ -2009,7 +2186,10 @@ export class Room {
       await this.dirGone(L);
       return;
     }
-    await this.lobbyCommit(lobbyOut(), now, true);
+    // the sweep (LIVENESS): members the lobby no longer reaches leave
+    const live = this.lobbyLive(now);
+    const out = lobbySweep(L, (id) => live.has(id), (id) => live.get(id) === true, now, lobbyOut());
+    await this.lobbyCommit(out, now, true);
   }
 
   // The caps of a room (this.waitMs unjoined, ROOM_SESSION_MS for a joined

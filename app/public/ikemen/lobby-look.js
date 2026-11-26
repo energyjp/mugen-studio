@@ -104,16 +104,22 @@
       P + ' .lb-body { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; padding: 8px; }',
       P + ' .lb-body > * { flex: 1 1 100%; order: 7; }',
       P + ' .lb-now { order: 1; text-align: center; color: var(--lob-dim); font-size: 11px; letter-spacing: .14em; }',
-      P + ' .lb-mem[data-st="play"] { order: 2; flex: 1 1 0; min-width: 0; flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 10px 8px 8px; border: 0;',
+      // the lobby's match mode heads the card, over NOW (it comes first in the panel)
+      P + ' .lb-mode { order: 1; text-align: center; color: var(--lob-accent); font-weight: bold; font-size: 11px; letter-spacing: .14em; }',
+      // a plate's MUTE / KICK sit in a row under its status, at the plate's
+      // straight edge (P1's left, P2's right), clear of its slant; they never
+      // wrap into a column of their own past the plate's edge
+      P + ' .lb-mem[data-st="play"] { order: 2; flex: 1 1 0; min-width: 0; flex-direction: row; align-items: flex-start; align-content: space-between; gap: 4px; padding: 12px 10px 8px 8px; border: 0;',
       '    background: var(--lob-accent); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }',
       P + ' .lb-body:has(.lb-mem[data-st="play"])::before { content: "VS"; order: 3; flex: none; align-self: center; transform: skewX(-12deg); font: bold 18px var(--lob-head-font); color: var(--lob-accent); }',
-      P + ' .lb-mem[data-p="2"] { order: 4; background: var(--lob-text); clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%); padding: 12px 8px 8px 10px; text-align: right; }',
+      P + ' .lb-mem[data-p="2"] { order: 4; background: var(--lob-text); clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%); padding: 12px 8px 8px 10px; text-align: right; justify-content: flex-end; }',
       P + ' .lb-mem[data-st="play"] .lb-nm { font: bold 16px var(--lob-head-font); color: var(--lob-accent-text); white-space: normal; }',
       P + ' .lb-mem[data-st="play"] .lb-st { color: var(--lob-accent-text); }',
       P + ' .lb-mem[data-st="play"] .lb-tag { background: var(--lob-accent-text); color: var(--lob-accent); }',
       P + ' .lb-mem[data-p="2"] .lb-nm, ' + P + ' .lb-mem[data-p="2"] .lb-st { color: var(--lob-bg); }',
       P + ' .lb-mem[data-p="2"] .lb-tag { background: var(--lob-bg); color: var(--lob-text); }',
-      P + ' .lb-mem[data-st="play"] button { align-self: flex-start; border-color: var(--lob-accent-text); }',
+      // P1's MUTE / KICK in the plate's own ink, as P2's are
+      P + ' .lb-mem[data-st="play"] button { align-self: flex-start; border-color: var(--lob-accent-text); color: var(--lob-accent-text); background: transparent; }',
       P + ' .lb-mem[data-p="2"] button { align-self: flex-end; border-color: var(--lob-bg); color: var(--lob-bg); background: transparent; }',
       P + ' .lb-next { order: 5; margin-top: 4px; padding: 4px 8px; background: var(--lob-panel); border-left: 4px solid var(--lob-accent); color: var(--lob-text); }',
       P + ' .lb-streak { order: 5; padding: 3px 8px; color: var(--lob-accent); font-weight: bold; }',
@@ -135,8 +141,12 @@
       '    text-shadow: 1px 0 0 var(--lob-chat-bg), -1px 0 0 var(--lob-chat-bg), 0 1px 0 var(--lob-chat-bg), 0 -1px 0 var(--lob-chat-bg); }',
       P + '::after { content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none;',
       '    background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--lob-chat-bg) 55%, transparent) 0 1px, transparent 1px 3px); }',
-      // a panel picture shows faintly through the screen, whatever its darkness
+      // a panel picture shows faintly through the screen, whatever its darkness;
+      // the sections over it stay positioned but stack in the panel itself
+      // (they paint over the picture by order), so the players' names can
+      // rise above the scan lines with a picture too
       P + ' > .lb-art > div:last-child { background: var(--lob-chat-bg) !important; opacity: .84 !important; }',
+      P + ' > :not(.lb-art) { z-index: auto; }',
       P + ' .lb-head { background: transparent; color: var(--lob-accent); border-bottom: 1px dashed var(--lob-accent); padding: 6px 4px 6px 8px; }',
       P + ' .lb-t::before { content: "[ "; } ' + P + ' .lb-t::after { content: " ]"; }',
       P + ' button, ' + P + ' .lb-head button { background: transparent; color: var(--lob-accent); border: 0; padding: 1px 2px; }',
@@ -155,9 +165,13 @@
       P + ' .lb-mem .lb-nm::before { content: "> "; color: var(--lob-accent); }',
       P + ' .lb-mem .lb-st { flex: 1; display: flex; align-items: baseline; font-size: 10px; color: var(--lob-accent); white-space: nowrap; overflow: hidden; }',
       P + ' .lb-mem .lb-st::before { content: ""; flex: 1; min-width: 8px; border-bottom: 1px dotted currentColor; margin: 0 4px; }',
-      P + ' .lb-mem[data-st="play"] .lb-nm { color: var(--lob-chat-bg); background: var(--lob-accent); }',
-      P + ' .lb-mem[data-st="play"] .lb-nm::before { color: var(--lob-chat-bg); }',
+      // the players' names in reverse video: the accent as the block, its ink
+      // (--lob-accent-ink, derive) dark or light by the accent's own
+      // luminance, and above the scan lines with no outline, so it reads at
+      // 4.5:1 or better on any accent
       P + ' .lb-tag, ' + P + ' .lb-tag.lb-you { background: transparent; color: var(--lob-accent); border: 1px solid currentColor; }',
+      P + ' .lb-mem[data-st="play"] .lb-nm { position: relative; z-index: 6; color: var(--lob-accent-ink, #05070a); background: var(--lob-accent); text-shadow: none; }',
+      P + ' .lb-mem[data-st="play"] .lb-nm::before, ' + P + ' .lb-mem[data-st="play"] .lb-tag { color: var(--lob-accent-ink, #05070a); }',
       P + ' .lb-chat { border-top: 1px dashed var(--lob-accent); }',
       P + ' .lb-log { background: transparent; color: var(--lob-text); }',
       P + ' .lb-log .lb-sys { color: var(--lob-accent); }',
@@ -195,13 +209,15 @@
       P + ' .lb-body > * { position: relative; }',
       // the code: a cut-out coupon
       P + ' .lb-code b { background: var(--lob-chat-bg); border: 2px dashed var(--lob-dim); text-align: center; font-size: 16px; letter-spacing: .06em; padding: 6px; }',
-      // 01: the match lines in a tip box with its tab
-      P + ' .lb-now, ' + P + ' .lb-next, ' + P + ' .lb-streak, ' + P + ' .lb-pass { background: var(--lob-chat-bg); color: var(--lob-text);',
+      // 01: the match lines in a tip box with its tab (the password line when
+      // there is one, the mode, now, next, then the streak closes it)
+      P + ' .lb-mode, ' + P + ' .lb-now, ' + P + ' .lb-next, ' + P + ' .lb-streak, ' + P + ' .lb-pass { background: var(--lob-chat-bg); color: var(--lob-text);',
       '    border: 2px solid var(--lob-accent); border-width: 0 2px; padding: 2px 8px 2px 10px; }',
       P + ' .lb-code + .lb-line { margin-top: 14px; border-top-width: 2px; padding-top: 20px; }',
       P + ' .lb-code + .lb-line::before { content: "01"; position: absolute; top: -2px; left: -2px; padding: 1px 8px 1px 6px;',
       '    background: var(--lob-accent); color: var(--lob-accent-text); font: italic 900 11px var(--lob-head-font); clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }',
       P + ' .lb-now { color: var(--lob-accent); font-weight: bold; }',
+      P + ' .lb-mode { font-weight: bold; letter-spacing: .06em; }',
       P + ' .lb-streak { border-bottom-width: 2px; padding-bottom: 6px; font-weight: bold; }',
       // 02: the roster's chapter head, an outlined number and a dashed speed rule
       P + ' .lb-sec { margin: 16px 0 6px; padding: 2px 4px 4px 38px; border: 0; background: var(--lob-panel); color: var(--lob-text); font: italic 900 13px var(--lob-head-font); letter-spacing: .08em; }',
@@ -220,8 +236,14 @@
       P + ' .lb-mem[data-st="play"] .lb-nm, ' + P + ' .lb-mem[data-st="play"] .lb-st { color: var(--lob-accent-text); }',
       P + ' .lb-mem[data-st="play"] .lb-tag { background: var(--lob-accent-text); color: var(--lob-accent); }',
       P + ' .lb-mem[data-st="play"] button { background: var(--lob-accent); color: var(--lob-accent-text); border-color: var(--lob-accent-text); }',
-      P + ' .lb-mem[data-p]::after { content: "P" attr(data-p); position: absolute; right: 64px; top: 50%; transform: translateY(-50%);',
-      '    font: italic 900 28px var(--lob-head-font); color: transparent; -webkit-text-stroke: 1px var(--lob-accent-text); pointer-events: none; }',
+      // the P1 / P2 mark: an item of its own between the name and the
+      // buttons, so it never sits over a button or the name (a long status
+      // wraps beside it instead); a plate with no buttons keeps it where it
+      // always sat
+      P + ' .lb-mem[data-p]::after { content: "P" attr(data-p); order: 1; flex: none; align-self: center; white-space: nowrap;',
+      '    font: italic 900 28px/24px var(--lob-head-font); color: transparent; -webkit-text-stroke: 1px var(--lob-accent-text); pointer-events: none; }',
+      P + ' .lb-mem[data-p] button { order: 2; }',
+      P + ' .lb-mem[data-p]:not(:has(button))::after { margin-right: 46px; }',
       P + ' .lb-mem[data-st="spec"] .lb-nm { font-style: italic; }',
       P + ' .lb-check i { border: 2px solid var(--lob-text); background: var(--lob-chat-bg); }',
       P + ' .lb-check { border-color: var(--lob-text); }',
@@ -305,10 +327,20 @@
     var c = rgb(h).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   }
-  // The six tokens nobody picks, mixed from the eight in the proportions the
+  // Text on a block of the accent that must read whatever the accent is (the
+  // terminal theme's players): the chat color, else the text color, when it
+  // reaches 4.5:1 on the accent (WCAG AA), else black or white, whichever
+  // contrasts more (always over 4.5:1).
+  function contrast(a, b) { var x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function ink(c) {
+    if (contrast(c.chatBg, c.accent) >= 4.5) return c.chatBg;
+    if (contrast(c.text, c.accent) >= 4.5) return c.text;
+    return contrast('#000000', c.accent) >= contrast('#ffffff', c.accent) ? '#000000' : '#ffffff';
+  }
+  // The tokens nobody picks: six mixed from the eight in the proportions the
   // classic sidebar's own lines and faint text have (#1e2a3a is about 18% of
   // its accent over its background, and so on). The warning line is amber,
-  // darker on a light background.
+  // darker on a light background. The accent's ink: ink() above.
   function derive(c) {
     return {
       '--lob-rule': mix(c.accent, c.bg, 0.18),
@@ -317,6 +349,7 @@
       '--lob-off-border': mix(c.accent, c.bg, 0.3),
       '--lob-off-text': mix(c.accent, c.bg, 0.5),
       '--lob-warn': luminance(c.bg) > 0.35 ? '#8a5a00' : '#ffcc66',
+      '--lob-accent-ink': ink(c),
     };
   }
   function sameColors(a, b) { return KEYS.every(function (k) { return a[k] === b[k]; }); }
@@ -379,7 +412,7 @@
   }
 
   var api = { KEYS: KEYS, VARS: VARS, PRESETS: PRESETS, HEADERS: HEADERS, STYLES: STYLES, SEE: SEE, FITS: FITS, DIM_DEFAULT: DIM_DEFAULT, DIM_MAX: DIM_MAX,
-    BG_FILE: BG_FILE, clean: clean, cleanBg: cleanBg, cleanSee: cleanSee, colorsOf: colorsOf, derive: derive, mix: mix, css: css };
+    BG_FILE: BG_FILE, clean: clean, cleanBg: cleanBg, cleanSee: cleanSee, colorsOf: colorsOf, derive: derive, mix: mix, contrast: contrast, ink: ink, css: css };
   if (typeof module === 'object' && module.exports) { module.exports = api; return; }
 
   // ---------------------------------------------------------------- page

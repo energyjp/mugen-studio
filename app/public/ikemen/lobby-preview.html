@@ -19,7 +19,9 @@
 // lobby beside a screenshot of the game (lobby-preview-game.png, the owner's
 // own Ikemen GO capture, the game alone at 4:3). ?look= is the look as the Studio
 // keeps it (lobbylook.js); its fonts and background come from where the
-// Studio serves them. The Website export never ships this page.
+// Studio serves them. ?mode= is the bundle's Match mode as a lobby carries it
+// ('single', 'simul3', 'tag2'...: queuemode.lobbyMode), so the panel's MODE
+// line shows where a new lobby starts. The Website export never ships this page.
 (function () {
   var q = new URLSearchParams(location.search);
   var look = null;
@@ -71,6 +73,7 @@
       { id: 7, name: 'Paco' }, { id: 8, name: 'Revy' },
     ],
     match: { id: 7, a: 1, b: 2 }, next: { a: 0, b: 4 }, line: [4, 3, 6, 7, 8], stay: 0, streak: { id: 1, n: 3 },
+    mode: q.get('mode') || 'single',
   };
   if (window.ikemenLobbyPreview) {
     window.ikemenLobbyPreview({
